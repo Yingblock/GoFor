@@ -225,7 +225,8 @@
 interface PrintTemplate {
   id: string;
   name: string;
-  paper: 'A4' | 'A5' | 'B5' | 'index-card' | 'sticker-50x30';
+  // 9 种，见 core/print/paper.ts；B5 分 JIS(182×257) 与 ISO(176×250)
+  paper: 'A4' | 'A5' | 'A6' | 'B5' | 'B5-ISO' | 'B6' | 'letter' | 'index-card' | 'sticker-50x30';
   orientation: 'portrait' | 'landscape';
   margin: { top: number; right: number; bottom: number; left: number }; // mm
   columns?: number;                       // 分栏（口袋卡用 2–4 栏）
