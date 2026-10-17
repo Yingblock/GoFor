@@ -61,7 +61,7 @@
 | 首次安装 Playwright 浏览器 | 1 m 31 s |
 | `pnpm install`（新增依赖） | 10 s – 1 m |
 | Android **首次** gradle 构建 | 29 m 45 s |
-| Android **增量**构建 | 2–5 min |
+| Android **增量**构建 | 8 s – 5 min |
 | Electron 包重建 | 1–3 min |
 
 > 注意：前四项看起来很快，但**它们经常被串在一起**，且首次执行会下载东西。

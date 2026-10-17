@@ -28,11 +28,12 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 | 产物 | 状态 | 说明 |
 |---|---|---|
-| `release/GoFor-win-x64.zip` | ✅ 已验证启动 | Electron v33 壳，双击 `GoFor.exe`；DevTools 确认页面标题 GoFor、URL 指向内置 127.0.0.1 服务 |
-| `release/GoFor-debug.apk` | ✅ 已构建验证 | 4.2MB，`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
+| `release/GoFor-win-x64.zip` | ✅ 已重建校验 | 99.8 MB / 30 文件 / CRC 通过；Electron v33，双击 `GoFor.exe` |
+| `release/GoFor-debug.apk` | ✅ 已重建校验 | 4.3 MB，`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
 | `release/README.md` | ✅ | 安装说明与已知限制 |
 
 两者都只是"看一眼"，不是发布形态。正式渠道仍是 PWA。
+包内 JS 已核对含「拍照录入」「P1·M2」、不含「专注格」。
 
 ## 下一步做什么（P1）
 
