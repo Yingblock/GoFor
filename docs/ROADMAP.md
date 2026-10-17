@@ -177,6 +177,9 @@
 
 ### P6 — Android 原生（150h / 8 周）
 
+> 已有 **Capacitor 纯 WebView 壳**（`apps/web/android/`，见 `DECISIONS/0002`）。
+> P6 是在这个工程上加 Kotlin 插件，不需要从零搭。
+
 | # | 任务 | 工时 |
 |---|---|---|
 | 6.1 | Capacitor 接入 + 构建链 + 真机调试 | 15 |

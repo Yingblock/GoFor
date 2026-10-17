@@ -1,7 +1,18 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/.vite", "!**/coverage"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/.vite",
+      "!**/coverage",
+      "!**/release",
+      "!apps/web/android",
+      "!**/*.java",
+      "!**/*.kt",
+      "!**/*.gradle"
+    ]
   },
   "formatter": {
     "enabled": true,

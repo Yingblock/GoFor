@@ -24,6 +24,16 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 - ✅ **命令面板**（⌘K）：打印 / 切纸张 / 导出 / 导入
 - ✅ **首张可打印的纸**：`pnpm build && pnpm e2e` 会生成 `e2e/out/day-sheet.pdf`
 
+## 打包产物（一次性，见 DECISIONS/0002）
+
+| 产物 | 状态 | 说明 |
+|---|---|---|
+| `release/GoFor-win-x64.zip` | ✅ 已验证启动 | Electron 壳，双击 `GoFor.exe` |
+| `release/GoFor-debug.apk` | ⏳ 构建中 | Capacitor 纯 WebView 壳，无原生插件 |
+| `release/README.md` | ✅ | 安装说明与已知限制 |
+
+两者都只是"看一眼"，不是发布形态。正式渠道仍是 PWA。
+
 ## 下一步做什么（P1 起点，做完一条划掉一条）
 
 1. **番茄钟状态机**（P1-1.1，20h）：时间戳差值、暂停/恢复、中断恢复、分心冲动记录

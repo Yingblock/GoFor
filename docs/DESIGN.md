@@ -405,7 +405,7 @@ TS 全线 / React+Vite+Tailwind+shadcn / Dexie / CodeMirror6+KaTeX / Excalidraw 
 | **`packages/vision`** | 新增：边缘检测、透视矫正、光照均衡、局部采样（OpenCV.js 或 Rust/WASM） | 扫描与二维码回填共用同一套 CV 管线 |
 | **块文档模型** | TextBlock / ImageBlock 统一 | P4 混排 + P5 笔记共用编辑器 |
 | 错题本 | 全 OCR → **扫描 + 混排** | 你的方案，校对成本大幅下降 |
-| 桌面端 | **不做 Electron，Tauri 推迟** | 学生电脑内存吃紧，且 PWA 已覆盖 |
+| 桌面端 | **不做 Electron，Tauri 推迟** | 学生电脑内存吃紧，且 PWA 已覆盖。⚠️ 曾在 `tools/package-windows/` 做过一次性 Electron 壳用于看一眼，见 `DECISIONS/0002` |
 | 私服数据库 | PostgreSQL → **SQLite** | 私服规模下运维量≈0 |
 | 同步 | 服务端懂数据 → **客户端加密 vault blob** | 实现量减半、隐私更强、schema 演化自由 |
 | 热力图 | 知识点热力图 → **章节错题密度** | 见 §4.2 |
