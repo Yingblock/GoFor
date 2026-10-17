@@ -7,6 +7,10 @@
 
 **P0 完成。产品已经能用：能记作业、涂专注格、把「我的一天」打成一张 A4。**
 
+GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
+里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
+任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
+
 验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 9 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
@@ -62,4 +66,6 @@ pnpm verify      # typecheck + test + build + e2e
 
 ## 最近一次更新
 
-P0 收尾：Dexie 数据层 + 配置迁移 + PWA + 命令面板 + 首张可打印纸，e2e 9 项全过。
+建立 GitHub 仓库（private）、P0–P8 milestones 与 labels；P0 的 7 个 issue 已关闭，
+P1 拆成 16 个 open issue（#8–#23）。补了 README，并把 Android Capacitor 壳与
+Windows 便携打包试验入库（都只是验证壳，不是正式分发方案）。
