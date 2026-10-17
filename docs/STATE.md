@@ -19,7 +19,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 - ✅ **配置层**：zod schema、默认值、深合并、课时从作息表推导（中位数）、专注格换算
 - ✅ **纸面时间解析**：`19:30` / `1930` / `19点30分` / 跨零点；歧义靠分栏消除
 - ✅ **打印版式引擎**：mm 单位、12 列网格、固定高度、自动分页、归一化坐标
-- ✅ **Dexie 数据层**：config / tasks / subjects / sessions / templates，含配置迁移与导入导出
+- ✅ **Dexie 数据层**：config / subjects / tags / tasks / sessions / timetable / templates / habits / habitLogs；v1→v4 三次迁移各有测试
 - ✅ **PWA**：manifest + service worker + 图标，可安装、离线可用
 - ✅ **命令面板**（⌘K）：打印 / 切纸张 / 导出 / 导入
 - ✅ **首张可打印的纸**：`pnpm build && pnpm e2e` 会生成 `e2e/out/day-sheet.pdf`
@@ -47,14 +47,14 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.3 分心记录 | ✅ | 单键 +1，随 run 持久化 |
 | 1.4 会话归类 | ✅ | 番茄绑定科目/任务，首页展示今日记录 |
 | 1.5 作业清单增强 | ✅ | 截止、必做/选做、子任务、上移下移 |
-| 1.6 课表模型 | ✅ | 31 测试；Occurrence 算出来不落库 |
+| 1.6 课表模型 | ✅ | 36 测试；Occurrence 算出来不落库 |
 | 1.7 课表视图 | ✅ | 学期/作息表/课程/规则录入 + 周视图（连堂跨行） |
-| 1.8 每日打卡 | ✅ | 14 天网格，有番茄记录自动算 |
+| 1.8 每日打卡 | ✅ | 14 天网格 + 周几重复/起止日期；**只读 habitLogs，与番茄钟无关** |
 | 1.9 打印引擎 | ✅ | 版式引擎 + 预览 + 分页 |
 | 1.10 模板 ×5 | ✅ | day / week / checkin / index-card / countdown；19 测试 |
 | 1.11 模板编辑器 v0 | ✅ | 选模板 / 增删区块 / 行数 / 换纸 / 预览 / 保存 |
 | 1.12 打印校准页 | ✅ | 近似刻度（精确毫米尺需新增 `ruler` block） |
-| 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续打卡） |
+| 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续学习） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
 测试：core 172 + store 21 = **193 单测**；e2e **29 项**。
