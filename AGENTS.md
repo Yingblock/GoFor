@@ -123,6 +123,22 @@ docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS
 7. **不做合规/隐私相关功能**，本阶段不处理。
 8. **不要做 ROADMAP 当前阶段之外的功能**，新想法写进 `docs/LATER.md`。
 9. 单个任务控制在 8 小时内；超了就拆。
+10. **新增页面/独立区块必须包 `ScreenBoundary`**（`apps/web/src/components/ErrorBoundary.tsx`）。
+    根边界只能保证"不白屏"，按页包一层才能做到"这一页崩了，导航和其他页还能用"。
+    边界兜不住事件处理器和异步回调里的异常，所以 `liveQuery` 只读这条规则仍然必须遵守。
+
+## CI（GitHub Actions）
+
+硬性规则 5 现在有机器兜底了：`.github/workflows/verify.yml` 在 push 到 `main`、
+每个 PR、以及手动触发时跑 `pnpm verify`（typecheck + test + build + e2e）。
+e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务，所以 CI 里
+先装了 Playwright 的 Chromium（带系统依赖）——Node 里测不出 IndexedDB、打印 CSS、
+全屏遮罩这些东西。
+
+- **红 = 阻塞合并。** 类型、单测、构建、e2e 任何一环挂了都算这次改动有问题，
+  不是 CI 抽风。先在本地跑 `pnpm verify` 复现：本地和 CI 跑的是同一条命令，不用猜。
+- **不要在没有绿的情况下合并。** PR 的 verify check 全绿再合，不要「先合再修」。
+- CI 只做校验：不部署、不发 release、不读 secrets。
 
 ## 存储约定
 
@@ -133,6 +149,11 @@ docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS
 - **Dexie 的版本号一旦发布就冻结。** 新增表必须新开 `version(N+1)`，
   绝不能往已有版本的 `stores({...})` 里加一行——Dexie 只按版本号决定跑不跑升级，
   停在旧版本的浏览器库不会补建表，运行时会直接报「表不存在」。
+- **新增表必须同时进 `exportAll` / `importAll`。** 备份（一键导出 JSON）和迁移都靠这两个函数，
+  漏一张表意味着"备份成功、恢复少一半数据"。加了表就在 `store.test.ts` 补一条往返用例。
+- **数据只在本机时，任何"新存一类东西"的功能都要想一遍丢了怎么办。**
+  现在的兜底是：启动时 `navigator.storage.persist()`、`backup.reminderDays` 到了提醒备份、
+  导入导出有 e2e 覆盖。详见 `docs/DESIGN.md` §15。
 
 ## 领域约定
 

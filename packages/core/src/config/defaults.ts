@@ -1,4 +1,4 @@
-import type { AppConfig } from './schema.ts';
+import { type AppConfig, DEFAULT_BACKUP_REMINDER_DAYS } from './schema.ts';
 
 /**
  * 作息表为空时的兜底课时长度。
@@ -34,5 +34,9 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   scan: {
     inkThreshold: 0.12,
     autoApply: false,
+  },
+  backup: {
+    // 每周提醒一次：一个学期大约 20 周，7 天既能提醒到又不至于天天烦人。
+    reminderDays: DEFAULT_BACKUP_REMINDER_DAYS,
   },
 };

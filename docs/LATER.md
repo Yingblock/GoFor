@@ -52,6 +52,15 @@
       3. 删除 `apps/web/src/components/Sidebar.tsx` 里的 `<DebugPanel />` 挂载点。
       所有入口都标了 `TODO(debug-clock): 上线前删除`，`grep -rn "TODO(debug-clock)" apps/web/src` 可定位。
 
+## 数据安全：还没做的
+
+- [ ] **无人值守的自动备份** —— 现在只有"提醒 + 一键导出 JSON"。
+      真正的自动备份在浏览器里得靠 File System Access API（用户授权一次目录句柄后反复写），
+      Chrome/Edge 可以，Android WebView 与部分内核不支持；跨设备备份本质是服务端功能，属于 P7。
+      结论：P1 不做，等云存档阶段一起做。
+- [ ] **备份文件加密** —— 导出的 JSON 是明文。本阶段不做合规/隐私处理（AGENTS 规则 7），
+      但自己存网盘时要知道这一点。
+
 ## 待确认
 
 - [ ] 学校课时节奏：一节课 40 还是 45 分钟？一天几个番茄格？

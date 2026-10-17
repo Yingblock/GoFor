@@ -1,7 +1,7 @@
 import { type AppConfig, mergeConfig } from '@gofor/core/config';
 import { dateKey, type Subject, type Task } from '@gofor/core/domain';
 import { type Block, materialize, type PaperId, paperFor } from '@gofor/core/print';
-import { occurrencesOn, type TimetableData } from '@gofor/core/timetable';
+import { occurrencesOn, parseTimetable } from '@gofor/core/timetable';
 import {
   currentConfigOrDefault,
   db,
@@ -15,8 +15,11 @@ import {
 } from '@gofor/store';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { requestPersistentStorage } from './backup.ts';
 import { appClock } from './clock.ts';
+import { BackupBanner } from './components/BackupBanner.tsx';
 import { type Command, CommandPalette } from './components/CommandPalette.tsx';
+import { ScreenBoundary } from './components/ErrorBoundary.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { groupOf, type ScreenId, titleOf } from './nav.ts';
 import { PrintLayer } from './print/PrintSheet.tsx';
@@ -51,38 +54,6 @@ function clockLabel(minute: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-/**
- * 库里的课表可能是导入的坏 JSON，所以读取必须防御：形状不对就当「没有课表」。
- *
- * 除了需求点名的 `term` / `periods` / `rules`，这里还要求 `courses` / `overrides` /
- * `weekPatterns` 是数组——`occurrencesOn` 会直接遍历后两者，缺了会抛异常。
- * `startDate` 只做 `YYYY-MM-DD` 形态检查，真正的日期合法性由展开函数兜住。
- */
-function asTimetable(raw: unknown): TimetableData | null {
-  if (typeof raw !== 'object' || raw === null) return null;
-  const candidate = raw as Partial<TimetableData>;
-  if (!Array.isArray(candidate.periods)) return null;
-  const term = candidate.term;
-  if (typeof term !== 'object' || term === null) return null;
-  if (typeof term.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(term.startDate)) {
-    return null;
-  }
-  if (typeof term.weeks !== 'number') return null;
-
-  // 其余数组**缺了就补空**，而不是整份作废。
-  // 早期版本的课表数据没有 `courses` / `weekPatterns` 这些键，
-  // 严格校验会把用户的真实课表判成坏数据，纸面上就一片空白——
-  // 这正是"课程表没有读取真实课表"那次反馈的根因。
-  return {
-    term,
-    periods: candidate.periods,
-    courses: Array.isArray(candidate.courses) ? candidate.courses : [],
-    rules: Array.isArray(candidate.rules) ? candidate.rules : [],
-    overrides: Array.isArray(candidate.overrides) ? candidate.overrides : [],
-    weekPatterns: Array.isArray(candidate.weekPatterns) ? candidate.weekPatterns : [],
-  } as TimetableData;
-}
-
 export function App() {
   const today = dateKey(appClock);
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -105,7 +76,7 @@ export function App() {
    * 而不是报错或跳过这块版式（版式高度是固定的）。
    */
   const schedule = useMemo<ScheduleEntry[]>(() => {
-    const data = asTimetable(timetable);
+    const data = parseTimetable(timetable);
     if (!data) return [];
 
     const subjectNames = new Map(subjects.map((subject) => [subject.id, subject.name]));
@@ -135,6 +106,9 @@ export function App() {
     // 科目是全局共享的（课表 / 番茄钟 / 作业都用它）。
     // 在启动时统一播种，避免"先打开哪个页面决定有没有科目"的不一致。
     void ensureSubjects(db);
+    // 申请持久化存储：否则浏览器在存储压力下可以静默清掉 IndexedDB。
+    // 不支持 / 被拒绝只影响「浏览器承诺保留」，绝不能影响启动（内部已吞掉异常）。
+    void requestPersistentStorage();
   }, []);
 
   useEffect(() => {
@@ -299,7 +273,16 @@ export function App() {
             </div>
           ) : null}
 
-          <div className="flex-1 px-4 py-6 md:px-8">{body}</div>
+          <BackupBanner reminderDays={config.backup.reminderDays} />
+
+          <div className="flex-1 px-4 py-6 md:px-8">
+            {/*
+              按页包一层边界：单页渲染崩溃时只显示错误卡片，
+              导航、命令面板、打印层都还在（AGENTS 规则 10）。
+              resetKey 用 screen，切页自动解除错误，不会把人困在错误页。
+            */}
+            <ScreenBoundary resetKey={screen}>{body}</ScreenBoundary>
+          </div>
         </div>
       </div>
 

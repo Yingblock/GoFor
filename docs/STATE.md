@@ -11,7 +11,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
 任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
 
-验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 29 项浏览器 e2e）：
+验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 42 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
 - ✅ TypeScript 7.0.2 strict
@@ -57,7 +57,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续学习） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
-测试：core 172 + store 21 = **193 单测**；e2e **29 项**。
+测试：core 208 + store 26 = **234 单测**；e2e **42 项**。
 
 ### 第三批反馈修复（2026-xx）
 
@@ -96,6 +96,20 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 要更多纸张尺寸 | 9 种（含 B5 JIS 182×257 与 B5 ISO 176×250 单列） |
 | 首页复选框不可选 | 换成真 checkbox，勾掉即从列表消失 |
 
+### P1 收尾：把「能跑」补成「敢长期用」（2026-xx）
+
+功能做完之后回头审，修的全是**承重件**，没有加新功能。设计依据见 `docs/DESIGN.md` §15。
+
+| 缺口 | 处理 | 证据 |
+|---|---|---|
+| 数据只在 IndexedDB，浏览器存储紧张时会静默清掉 | 启动申请 `navigator.storage.persist()`；距上次备份 ≥ `backup.reminderDays`（默认 7 天）时顶部提醒，一键导出 JSON | `apps/web/src/backup.ts`、`BackupBanner.tsx`；e2e 覆盖「下载 → 结构 → lastAt → 横幅消失 → 再导入 → 坏文件」 |
+| `exportAll` 漏了 5 张表（打卡 / 打卡日志 / 课表 / 标签池 / 番茄运行） | 导出导入改成全量表；旧备份文件缺字段时按空数组兼容 | `store.test.ts` 往返用例真的建了 5 张表；e2e 断言备份文件含全部表 |
+| 渲染异常直接白屏（历史上因 `liveQuery` 写库发生过） | 根 `ErrorBoundary` + 按页 `ScreenBoundary`（切页自动解除错误） | 临时注入异常 → fallback 文案出现 → 重试恢复 → 回滚后 dist 无残留 |
+| 没有 CI，「提交必须绿」只靠自觉 | `.github/workflows/verify.yml`：push / PR / 手动都跑 `pnpm verify` | 6 步（pnpm → node → install → Playwright Chromium → verify） |
+| `Timetable.tsx` 1102 行，最复杂的逻辑没有测试 | 纯计算搬进 `core/timetable`（`draft` / `grid` / `edit`），JSX 拆成 Term / Courses / Week 三个 section | 214 行；新增 31 条 core 测试（连堂合并、占格、作息表增删改、解析兜底） |
+| `listHabitLogs` / `listActiveFocusRuns` 整表读进内存再 filter | 改走 `date` / `status` 索引 | store 测试 +3（闭区间、多项、空库） |
+| STATE 里打卡还写着「有番茄记录自动算」 | 改成与实现一致的说法（只读 `habitLogs`） | 本轮顺带修的两行文档漂移 |
+
 ### P1 期间的已知简化（写进 LATER，不是缺陷）
 
 - 课表调课只做「停课一次」，`move` / `replace` 未接 UI
@@ -105,17 +119,13 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 - **调试时钟（临时）**：宿主层 `appClock` 可前后拨「现在」（localStorage 持久化），上线前删除；
   见 `docs/LATER.md` →「待删除：调试时钟」，代码里有 `TODO(debug-clock)` 标记
 
-## 下一步做什么（P1 收尾后）
+## 下一步做什么
 
-**P1 已重新基线并有完整方案：`docs/P1-PLAN.md`**（剩余约 146h ≈ 7.3 周，分三个可验收切片）。
-开工前需确认该文档 §7 的四个决策点。
+P1 的 15 项已全部落地，收尾质量问题也修完了（见上）。下一阶段按 `docs/ROADMAP.md` 走 P2「纸的回流」：
 
-
-
-1. **番茄钟状态机**（P1-1.1，20h）：时间戳差值、暂停/恢复、中断恢复、分心冲动记录
-2. **作业清单补全**（P1-1.5）：截止时间、必做/选做、子任务、拖拽排序
-3. **课表数据模型**（P1-1.6/1.7）：Course / Rule / Override / WeekPattern + 周视图
-4. **模板编辑器 v0**（P1-1.11，14h）：组件面板拖入、排序、span/行数、实时溢出提示
+1. **拍照录入**（离线·M2 的入口已经在，功能未实现）：CV 管线（透视矫正、光照均衡、局部采样）+ 二维码/笔迹回填
+2. **OCR 校对**：解析结果必须在界面上可改，不追求一次识别正确
+3. 之后再进 P3/P4；`docs/LATER.md` 里那些"想做的"不要提前做
 
 ## 踩过并修掉的坑（别再犯）
 
@@ -126,12 +136,13 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | `@gofor/core` 根导出带 zod | 只用到时钟的宿主也打进 46KB zod | 子路径导出：`@gofor/core/config`、`/print`、`/paper`、`/domain` |
 | 往已发布的 Dexie 版本里加表 | 老库不会补建，运行时「表不存在」 | 必须新开 `version(N+1)`；已补 v2→v3 迁移测试 |
 | 主 session 里跑 build/e2e/下载 | 用户白等 10–40 分钟，上下文被日志淹没 | **长任务一律子代理或后台作业**，见 AGENTS.md §0 |
+| e2e 只 `server.kill()` 父进程 | 每跑一次漏一个 `vite preview` 占着 4173；下一次 e2e 连上**旧构建**的服务，照样"全绿"（假绿） | `spawn(..., { detached: true })` 后按进程组清；开跑前先查端口，有人应答就直接报错 |
 | Biome 扫到 Capacitor 生成的 Java/XML | 4000+ 假错误，`pnpm check` 直接失败 | `biome.json` 的 `files.includes` 排除 `apps/web/android` |
 
 ## 什么坏了 / 什么没做完
 
 - 无已知崩溃。`apps/web` 还没接路由与 shadcn/ui 组件库（当前是手写 Tailwind）。
-- 首屏 bundle 433KB（gzip 137KB），后面可按路由拆包；现在不值得优化。
+- 首屏 bundle 515KB（gzip 158KB），单包、无路由分包；现在不值得优化（PWA 首次加载后走 Service Worker）。
 - A4 纸面底部约 1/4 留白（留给手写），不是 bug。
 
 ## 怎么跑起来

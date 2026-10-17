@@ -15,12 +15,17 @@ import {
   importAll,
   listActiveFocusRuns,
   listCheckins,
+  listHabitLogs,
   listTasks,
   loadFocusRun,
   saveConfig,
   saveFocusRun,
+  saveHabit,
+  saveTagPool,
+  saveTimetable,
   sessionFromRun,
   setCheckin,
+  setHabitLog,
   setTaskDone,
 } from './repositories.ts';
 
@@ -146,6 +151,82 @@ describe('存储：导入导出', () => {
     expect((await listTasks(target))[0]?.title).toBe('化学实验报告');
     expect((await ensureSubjects(target))[0]?.name).toBe('语文');
     await source.close();
+    await target.close();
+  });
+
+  it('导出必须包含所有会持久化的表（打卡 / 课表 / 标签池 / 番茄运行）', async () => {
+    const source = freshDb('export-all-tables');
+    await currentConfigOrDefault(source);
+    await createTask(source, { id: 't1', title: '化学实验报告', now: 10 });
+    await saveHabit(source, {
+      id: 'h1',
+      name: '背单词',
+      weekdays: [],
+      startDate: '2026-03-01',
+      endDate: null,
+      order: 0,
+      createdAt: 1,
+    });
+    await setHabitLog(source, 'h1', '2026-03-02', true, 2);
+    await saveTimetable(
+      source,
+      'default',
+      {
+        term: { id: 'default', startDate: '2026-03-02', weeks: 20 },
+        courses: [],
+        rules: [],
+        overrides: [],
+        periods: [{ index: 1, start: '08:00', end: '08:45' }],
+        weekPatterns: [],
+      },
+      3,
+    );
+    await saveTagPool(source, 'pool-1', '学校', ['晚自习']);
+    await saveFocusRun(source, sampleRun());
+
+    const bundle = await exportAll(source);
+    expect(bundle.habits).toHaveLength(1);
+    expect(bundle.habitLogs).toHaveLength(1);
+    expect(bundle.timetables).toHaveLength(1);
+    expect(bundle.tagPools).toHaveLength(1);
+    expect(bundle.focusRuns).toHaveLength(1);
+
+    const target = freshDb('export-all-tables-dst');
+    const result = await importAll(target, bundle);
+    expect(result.imported).toMatchObject({
+      habits: 1,
+      habitLogs: 1,
+      timetables: 1,
+      tagPools: 1,
+      focusRuns: 1,
+    });
+    // 真的落库了才算数：只断言计数的话，importAll 里漏写一张表也能过。
+    expect((await target.habits.get('h1'))?.name).toBe('背单词');
+    expect(await target.habitLogs.count()).toBe(1);
+    expect(await target.timetables.count()).toBe(1);
+    expect(await target.tagPools.count()).toBe(1);
+    expect(await target.focusRuns.count()).toBe(1);
+    await source.close();
+    await target.close();
+  });
+
+  it('旧版本导出文件（没有新表）照常导入，不算错误', async () => {
+    const target = freshDb('export-legacy-import');
+    await createTask(target, { id: 'keep', title: '已有任务', now: 1 });
+
+    const legacy = {
+      format: 'gofor-export',
+      formatVersion: 1,
+      exportedAt: 1,
+      subjects: [],
+      tasks: [],
+      sessions: [],
+      templates: [],
+    };
+    const result = await importAll(target, legacy as never);
+    expect(result.imported.habits).toBe(0);
+    // 合并语义：导入空包不能把已有数据清空
+    expect(await target.tasks.count()).toBe(1);
     await target.close();
   });
 
@@ -419,6 +500,39 @@ describe('存储：每日打卡', () => {
   it('没打卡的日期查不到', async () => {
     const db = freshDb('checkin-empty');
     expect(await getCheckin(db, '2026-03-05')).toBeUndefined();
+    await db.close();
+  });
+});
+
+describe('存储：打卡日志（走 date 索引）', () => {
+  it('闭区间含两端，范围外不返回，且按日期升序', async () => {
+    const db = freshDb('habit-logs-range');
+    for (const date of ['2026-03-01', '2026-03-03', '2026-03-05', '2026-03-09']) {
+      await setHabitLog(db, 'h1', date, true, 1);
+    }
+
+    const logs = await listHabitLogs(db, '2026-03-03', '2026-03-05');
+    expect(logs.map((log) => log.date)).toEqual(['2026-03-03', '2026-03-05']);
+    await db.close();
+  });
+
+  it('一次返回所有打卡项在该区间的记录（调用方自己按 habitId 分组）', async () => {
+    const db = freshDb('habit-logs-multi');
+    await setHabitLog(db, 'h1', '2026-03-03', true, 1);
+    await setHabitLog(db, 'h2', '2026-03-03', true, 1);
+    await setHabitLog(db, 'h2', '2026-03-04', false, 1);
+
+    const logs = await listHabitLogs(db, '2026-03-03', '2026-03-03');
+    expect(logs.map((log) => log.habitId).sort()).toEqual(['h1', 'h2']);
+    // done=false 也是一条记录，不能被区间查询吞掉
+    const all = await listHabitLogs(db, '2026-03-03', '2026-03-04');
+    expect(all).toHaveLength(3);
+    await db.close();
+  });
+
+  it('空库里返回空数组而不是抛错', async () => {
+    const db = freshDb('habit-logs-empty');
+    expect(await listHabitLogs(db, '2026-01-01', '2026-12-31')).toEqual([]);
     await db.close();
   });
 });

@@ -6,6 +6,27 @@
  */
 
 export {
+  addDays,
+  DAY_LABELS,
+  DEFAULT_PERIODS,
+  DEFAULT_TERM_WEEKS,
+  defaultTimetable,
+  mondayOf,
+  parseTimetable,
+  weekDatesOf,
+} from './draft.ts';
+export {
+  addCancelOverride,
+  addRule,
+  addRuleForCell,
+  appendPeriod,
+  type NewRuleInput,
+  removePeriodAt,
+  removeRule,
+  updatePeriodAt,
+} from './edit.ts';
+export { buildWeekGrid, cellKeyOf, occupiedCellKeys } from './grid.ts';
+export {
   isOddWeek,
   mergeAdjacent,
   occurrencesInWeek,

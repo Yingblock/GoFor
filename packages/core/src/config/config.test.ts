@@ -5,6 +5,7 @@ import {
   derivePeriodMinutes,
   FALLBACK_PERIOD_MINUTES,
   mergeConfig,
+  migrateConfig,
   minutesForCells,
   parseClockTime,
   parseConfig,
@@ -130,5 +131,45 @@ describe('配置：合并与校验', () => {
         periods: [{ index: 1, start: '8:00', end: '08:45' }],
       }),
     ).toThrow();
+  });
+});
+
+describe('配置：备份提醒', () => {
+  it('默认每 7 天提醒备份', () => {
+    expect(DEFAULT_APP_CONFIG.backup.reminderDays).toBe(7);
+  });
+
+  it('深合并可单独改提醒间隔', () => {
+    const merged = mergeConfig(DEFAULT_APP_CONFIG, { backup: { reminderDays: 14 } });
+    expect(merged.backup.reminderDays).toBe(14);
+    // 同级的其它配置必须原样保留（深合并而不是整份替换）
+    expect(merged.print.paper).toBe(DEFAULT_APP_CONFIG.print.paper);
+    expect(merged.scan.inkThreshold).toBe(DEFAULT_APP_CONFIG.scan.inkThreshold);
+  });
+
+  it('旧配置缺少 backup 时补默认值，而不是整份回退', () => {
+    // 模拟「用户几个月前存的配置」：schemaVersion 还是 1，但没有 backup 这一节，
+    // 而且用户改过纸张（用来证明迁移没有把整份配置重置成出厂默认）。
+    const oldConfig = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG)) as Record<string, unknown>;
+    delete oldConfig.backup;
+    oldConfig.print = { ...(oldConfig.print as Record<string, unknown>), paper: 'A5' };
+
+    const result = migrateConfig(oldConfig);
+    expect(result.fellBack).toBe(false);
+    expect(result.config.backup.reminderDays).toBe(7);
+    expect(result.config.print.paper).toBe('A5');
+  });
+
+  it('backup 内部缺字段时也补默认值', () => {
+    const parsed = parseConfig({
+      ...DEFAULT_APP_CONFIG,
+      backup: {},
+    });
+    expect(parsed.backup.reminderDays).toBe(7);
+  });
+
+  it('提醒间隔超出合理范围被拒', () => {
+    expect(() => mergeConfig(DEFAULT_APP_CONFIG, { backup: { reminderDays: 0 } })).toThrow();
+    expect(() => mergeConfig(DEFAULT_APP_CONFIG, { backup: { reminderDays: 366 } })).toThrow();
   });
 });

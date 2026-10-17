@@ -40,6 +40,21 @@ export const scanSchema = z.object({
   autoApply: z.boolean(),
 });
 
+/**
+ * 备份提醒间隔的出厂默认值（天）。
+ *
+ * 这是现实世界会变的量（有人想每周备份、有人想每月），所以必须走配置，
+ * 不能在备份代码里写死。这里同时作为 schema 缺省值：**旧版本配置里没有
+ * `backup` 字段时，zod 用它补齐而不是让整份配置校验失败**——否则升级后
+ * 用户的作息表、纸张、阈值会全部退回出厂默认。
+ */
+export const DEFAULT_BACKUP_REMINDER_DAYS = 7;
+
+export const backupSchema = z.object({
+  /** 距上次成功备份多少天后再次提醒。 */
+  reminderDays: z.number().int().min(1).max(365).default(DEFAULT_BACKUP_REMINDER_DAYS),
+});
+
 export const appConfigSchema = z.object({
   schemaVersion: z.number().int().positive(),
   /** 作息表。所有「课时长度」都从这里推导，不在代码里写死。 */
@@ -52,6 +67,8 @@ export const appConfigSchema = z.object({
   }),
   print: printSchema,
   scan: scanSchema,
+  /** 备份提醒。旧配置没有这一节时由这里的 default 补出，见 backupSchema。 */
+  backup: backupSchema.default({ reminderDays: DEFAULT_BACKUP_REMINDER_DAYS }),
 });
 
 export type AppConfig = z.infer<typeof appConfigSchema>;

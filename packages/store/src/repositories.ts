@@ -219,14 +219,19 @@ export async function deleteHabit(database: GoForDb, id: string): Promise<void> 
   });
 }
 
-/** 某个打卡项在闭区间内的记录。 */
+/**
+ * 闭区间内的打卡记录（所有打卡项）。
+ *
+ * 走 `date` 索引而不是 `toArray()` 后再 filter：后者会把整张表读进内存。
+ * 打卡记录一天最多几行、一年也就几百行，现在还无所谓；但它是唯一会无界增长的表，
+ * 等用满一学期再改就要动数据层了，不如现在就写对。
+ */
 export async function listHabitLogs(
   database: GoForDb,
   from: string,
   to: string,
 ): Promise<HabitLog[]> {
-  const logs = await database.habitLogs.toArray();
-  return logs.filter((log) => log.date >= from && log.date <= to);
+  return database.habitLogs.where('date').between(from, to, true, true).toArray();
 }
 
 /** 写入/覆盖某天某项的打卡状态。 */
@@ -302,10 +307,9 @@ export async function loadFocusRun(
   return database.focusRuns.get(id);
 }
 
-/** 找出未结算的运行（用于启动时恢复）。 */
+/** 找出未结算的运行（用于启动时恢复）。走 `status` 索引，不整表读。 */
 export async function listActiveFocusRuns(database: GoForDb): Promise<PomodoroRun[]> {
-  const runs = await database.focusRuns.toArray();
-  return runs.filter((run) => run.status === 'running' || run.status === 'paused');
+  return database.focusRuns.where('status').anyOf('running', 'paused').toArray();
 }
 
 export async function deleteFocusRun(database: GoForDb, id: string): Promise<void> {
@@ -326,6 +330,15 @@ export async function putTemplate(database: GoForDb, template: StoredTemplate): 
 
 export const EXPORT_FORMAT_VERSION = 1;
 
+/**
+ * 导出包：**所有会持久化的表都在这里**。
+ *
+ * 这条规则写进了 AGENTS：新增表必须同时进 exportAll / importAll。
+ * 漏一张表的后果是"备份成功、恢复少一半数据"——用户不会看得出来，
+ * 直到他真的丢了数据。P1 收尾时这里就漏过 habits/habitLogs/timetables/tagPools/focusRuns。
+ *
+ * 后四个字段是可选的：旧版本导出的文件没有它们，导入时按空数组处理。
+ */
 export interface ExportBundle {
   format: 'gofor-export';
   formatVersion: number;
@@ -335,16 +348,27 @@ export interface ExportBundle {
   tasks: Task[];
   sessions: StudySession[];
   templates: StoredTemplate[];
+  habits?: Habit[];
+  habitLogs?: HabitLog[];
+  timetables?: StoredTimetable[];
+  tagPools?: TagPool[];
+  focusRuns?: PomodoroRun[];
 }
 
 export async function exportAll(database: GoForDb): Promise<ExportBundle> {
   const { config } = await loadConfig(database);
-  const [subjects, tasks, sessions, templates] = await Promise.all([
-    listSubjects(database),
-    listTasks(database),
-    database.sessions.toArray(),
-    listTemplates(database),
-  ]);
+  const [subjects, tasks, sessions, templates, habits, habitLogs, timetables, tagPools, focusRuns] =
+    await Promise.all([
+      listSubjects(database),
+      listTasks(database),
+      database.sessions.toArray(),
+      listTemplates(database),
+      listHabits(database),
+      database.habitLogs.toArray(),
+      database.timetables.toArray(),
+      database.tagPools.toArray(),
+      database.focusRuns.toArray(),
+    ]);
   return {
     format: 'gofor-export',
     formatVersion: EXPORT_FORMAT_VERSION,
@@ -354,11 +378,26 @@ export async function exportAll(database: GoForDb): Promise<ExportBundle> {
     tasks,
     sessions,
     templates,
+    habits,
+    habitLogs,
+    timetables,
+    tagPools,
+    focusRuns,
   };
 }
 
 export interface ImportResult {
-  imported: { subjects: number; tasks: number; sessions: number; templates: number };
+  imported: {
+    subjects: number;
+    tasks: number;
+    sessions: number;
+    templates: number;
+    habits: number;
+    habitLogs: number;
+    timetables: number;
+    tagPools: number;
+    focusRuns: number;
+  };
   warnings: string[];
 }
 
@@ -380,13 +419,30 @@ export async function importAll(database: GoForDb, bundle: ExportBundle): Promis
 
   await database.transaction(
     'rw',
-    [database.config, database.subjects, database.tasks, database.sessions, database.templates],
+    [
+      database.config,
+      database.subjects,
+      database.tasks,
+      database.sessions,
+      database.templates,
+      database.habits,
+      database.habitLogs,
+      database.timetables,
+      database.tagPools,
+      database.focusRuns,
+    ],
     async () => {
       if (bundle.config) await saveConfig(database, bundle.config);
       await database.subjects.bulkPut(bundle.subjects ?? []);
       await database.tasks.bulkPut(bundle.tasks ?? []);
       await database.sessions.bulkPut(bundle.sessions ?? []);
       await database.templates.bulkPut(bundle.templates ?? []);
+      // 旧版本导出的文件没有下面这些字段：`?? []` 让它们照常导入，而不是报错。
+      await database.habits.bulkPut(bundle.habits ?? []);
+      await database.habitLogs.bulkPut(bundle.habitLogs ?? []);
+      await database.timetables.bulkPut(bundle.timetables ?? []);
+      await database.tagPools.bulkPut(bundle.tagPools ?? []);
+      await database.focusRuns.bulkPut(bundle.focusRuns ?? []);
     },
   );
 
@@ -396,6 +452,11 @@ export async function importAll(database: GoForDb, bundle: ExportBundle): Promis
       tasks: bundle.tasks?.length ?? 0,
       sessions: bundle.sessions?.length ?? 0,
       templates: bundle.templates?.length ?? 0,
+      habits: bundle.habits?.length ?? 0,
+      habitLogs: bundle.habitLogs?.length ?? 0,
+      timetables: bundle.timetables?.length ?? 0,
+      tagPools: bundle.tagPools?.length ?? 0,
+      focusRuns: bundle.focusRuns?.length ?? 0,
     },
     warnings,
   };

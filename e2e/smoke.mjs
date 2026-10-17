@@ -8,6 +8,7 @@
  * 在 Node 里都测不出来。
  */
 import { spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from 'playwright';
 
@@ -21,11 +22,45 @@ function check(name, ok, detail = '') {
   if (!ok) failed = true;
 }
 
+/**
+ * 起一个 preview 服务。
+ *
+ * `detached: true` 是为了让整个进程组成一个独立的进程组：
+ * `server.kill()` 只能杀掉 `pnpm`，它下面的 `vite preview` 会被留下——以前每跑一次
+ * e2e 就漏一个 4173 上的服务，下一次 e2e 会连上那个**旧构建**的服务并照样"全绿"，
+ * 变成假绿。所以这里按进程组清，并且开跑前先查端口。
+ */
 const server = spawn(
   'pnpm',
   ['--filter', '@gofor/web', 'preview', '--port', String(PORT), '--strictPort'],
-  { stdio: 'ignore' },
+  { stdio: 'ignore', detached: true },
 );
+
+/** 端口上已经有人应答了（说明有遗留服务，绝不能连上去）。 */
+async function portAlreadyServing() {
+  try {
+    const response = await fetch(BASE);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** 按进程组清掉 preview；单杀 pnpm 会留下 vite 孤儿进程。 */
+async function stopServer() {
+  if (server.pid === undefined) return;
+  try {
+    process.kill(-server.pid, 'SIGTERM');
+  } catch {
+    // 已经退出了
+  }
+  await sleep(300);
+  try {
+    process.kill(-server.pid, 'SIGKILL');
+  } catch {
+    // 同上：SIGTERM 就够了
+  }
+}
 
 async function waitForServer(attempts = 40) {
   for (let i = 0; i < attempts; i++) {
@@ -53,6 +88,12 @@ async function clickItem(page, title) {
 }
 
 try {
+  if (await portAlreadyServing()) {
+    throw new Error(
+      `端口 ${PORT} 已被占用（多半是上次 e2e 留下的 preview）。先结束它再跑，` +
+        '否则会连到旧构建上，测出来的"全绿"是假的。',
+    );
+  }
   if (!(await waitForServer())) throw new Error('preview 服务未启动，先跑 pnpm build');
 
   const browser = await chromium.launch();
@@ -69,6 +110,11 @@ try {
 
   await page.waitForSelector('text=拍照录入', { timeout: 15000 });
   check('首页两个主行动', (await page.getByText('打印 checklist').count()) > 0);
+
+  // 全新浏览器上下文里没有 gofor.backup.lastAt，首次打开必须看到备份提醒。
+  const backupBanner = page.locator('[data-testid="backup-banner"]');
+  await backupBanner.waitFor({ timeout: 5000 });
+  check('首次打开显示备份提醒', (await backupBanner.getByText('数据只在这台设备上').count()) > 0);
 
   const groups = await page.locator('aside button[aria-expanded]').count();
   check('侧栏 6 个模块分组', groups === 6, `实际 ${groups}`);
@@ -208,6 +254,41 @@ try {
     .waitFor({ timeout: 5000 });
   check('课程表可录入并在周视图显示', true);
 
+  /*
+   * 编辑模式：点空白格子加课 → 课程块出现在周视图 → 点块删除 → 块消失。
+   * 这条链路是课表拆分时搬动最多的逻辑（浮层定位、占格判断、增删规则），
+   * 单测只能覆盖纯函数，真实的点击/浮层必须由浏览器兜。
+   */
+  await page.getByRole('button', { name: '编辑模式' }).click();
+  await page.waitForSelector('text=点空白格子加课', { timeout: 5000 });
+  await page.locator('button[aria-label="周日 第 8 节加课"]').click();
+  const addDialog = page.getByRole('dialog', { name: '编辑格子' });
+  await addDialog.waitFor({ timeout: 5000 });
+  await addDialog.getByRole('button', { name: '地理', exact: true }).click();
+
+  const weekGrid = page.locator('[data-testid="week-grid"]');
+  const addedByCell = await weekGrid
+    .getByText('地理', { exact: true })
+    .first()
+    .waitFor({ timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  check('编辑模式点格子可加课', addedByCell);
+
+  await weekGrid.getByRole('button', { name: '地理' }).first().click();
+  await page
+    .getByRole('dialog', { name: '编辑格子' })
+    .getByRole('button', { name: '删除这节' })
+    .click();
+  const removedByCell = await weekGrid
+    .getByText('地理', { exact: true })
+    .first()
+    .waitFor({ state: 'detached', timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  check('编辑模式可删除这一节', removedByCell);
+  await page.getByRole('button', { name: '退出编辑' }).click();
+
   await page.getByRole('button', { name: '保存课表' }).click();
   await page.waitForSelector('text=已保存', { timeout: 5000 });
   check('课表可保存', true);
@@ -275,6 +356,89 @@ try {
   check('命令面板可唤起', true);
   await page.keyboard.press('Escape');
 
+  /* ------------------------------------------------ 备份导出与导入往返 */
+
+  // 回到首页，横幅应该还在（这一轮从未备份过）。
+  await page.getByRole('button', { name: 'GoFor', exact: true }).click();
+  await backupBanner.waitFor({ timeout: 5000 });
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: '立即备份' }).click();
+  const download = await downloadPromise;
+  const backupName = download.suggestedFilename();
+  check('一键备份触发下载', /^gofor-backup-\d{4}-\d{2}-\d{2}\.json$/.test(backupName), backupName);
+
+  // 下载出来的文件必须能当备份用：合法 JSON + GoFor 导出结构。
+  const downloadPath = await download.path();
+  const backupText = downloadPath ? await readFile(downloadPath, 'utf8') : '';
+  let bundle = null;
+  try {
+    bundle = JSON.parse(backupText);
+  } catch {
+    bundle = null;
+  }
+  check(
+    '备份文件是合法 JSON',
+    bundle !== null &&
+      bundle.format === 'gofor-export' &&
+      typeof bundle.formatVersion === 'number' &&
+      Array.isArray(bundle.subjects) &&
+      Array.isArray(bundle.tasks) &&
+      Array.isArray(bundle.sessions) &&
+      Array.isArray(bundle.templates),
+    bundle ? `formatVersion=${bundle.formatVersion}` : 'JSON 解析失败',
+  );
+
+  /*
+   * 备份必须是"全量"：漏一张表就是"备份成功、恢复少一半数据"，而用户看不出来。
+   * 这几张表曾经真的漏在 exportAll 外面（打卡 / 课表 / 标签池 / 番茄运行）。
+   */
+  check(
+    '备份包含全部会持久化的表',
+    bundle !== null &&
+      Array.isArray(bundle.habits) &&
+      Array.isArray(bundle.habitLogs) &&
+      Array.isArray(bundle.timetables) &&
+      Array.isArray(bundle.tagPools) &&
+      Array.isArray(bundle.focusRuns),
+    bundle
+      ? `habits=${bundle.habits?.length} timetables=${bundle.timetables?.length} tagPools=${bundle.tagPools?.length}`
+      : 'JSON 解析失败',
+  );
+
+  const lastBackup = await page.evaluate(() => localStorage.getItem('gofor.backup.lastAt'));
+  check('备份写入 lastAt', lastBackup !== null && Number.isFinite(Number(lastBackup)));
+
+  // 给用户的结果提示出现后，横幅自动收起。
+  await page.waitForSelector('text=/已备份 \\d+ 个任务/', { timeout: 5000 });
+  check('备份后显示备份结果', true);
+  const bannerGone = await backupBanner
+    .waitFor({ state: 'detached', timeout: 8000 })
+    .then(() => true)
+    .catch(() => false);
+  check('备份成功后横幅消失', bannerGone);
+
+  // 用刚下载的文件走一遍真实导入：同 id 覆盖、不同 id 追加，提示里要有任务数。
+  const fileInput = page.locator('input[type="file"]');
+  await fileInput.setInputFiles({
+    name: 'gofor-backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(backupText),
+  });
+  await page.waitForSelector('text=/已导入 \\d+ 个任务/', { timeout: 8000 });
+  check('导出文件可再导入', true);
+
+  // 坏文件必须给出提示，而不是白屏或整页崩溃。
+  await fileInput.setInputFiles({
+    name: 'broken.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{ 这不是 JSON'),
+  });
+  await page.waitForSelector('text=/导入失败/', { timeout: 8000 });
+  check('非法 JSON 提示导入失败', true);
+
+  /* ------------------------------------------------------ 打印 PDF */
+
   await page.pdf({
     path: 'e2e/out/day-sheet.pdf',
     printBackground: true,
@@ -286,7 +450,7 @@ try {
 
   await browser.close();
 } finally {
-  server.kill('SIGTERM');
+  await stopServer();
 }
 
 console.log(results.join('\n'));
