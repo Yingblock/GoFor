@@ -10,3 +10,13 @@ coverage/
 .env.*
 !.env.example
 e2e/out/
+
+# 打包产物（体积大，不入库）
+release/
+
+# Android / Gradle
+apps/web/android/local.properties
+apps/web/android/.gradle/
+apps/web/android/build/
+apps/web/android/app/build/
+apps/web/android/capacitor-cordova-android-plugins/build/

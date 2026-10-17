@@ -1,0 +1,7 @@
+{
+  "name": "gofor-windows-shell",
+  "productName": "GoFor",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.cjs"
+}
