@@ -142,7 +142,10 @@ try {
     .getByRole('button', { name: /开始专注 30 分钟/ })
     .first()
     .click();
-  await page.waitForSelector('text=/\\d{2}:\\d{2}/', { timeout: 5000 });
+  // 侧栏「调试 · 当前时间」里的 `YYYY-MM-DD HH:mm` 也含 `\d{2}:\d{2}`，
+  // 而它在收起的 <details> 里不可见：裸正则先命中的是它，会一直等可见性。
+  // 锚定整串，只命中这个倒计时。
+  await page.waitForSelector('text=/^\\d{2}:\\d{2}$/', { timeout: 5000 });
   check('番茄钟支持自定义时长并进入专注', true);
 
   await page.getByRole('button', { name: '暂停' }).first().click();

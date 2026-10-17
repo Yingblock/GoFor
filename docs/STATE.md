@@ -5,13 +5,13 @@
 
 ## 现在在哪
 
-**P0 完成。产品已经能用：能记作业、涂专注格、把「我的一天」打成一张 A4。**
+**P1 完成。产品已经能用：记作业（步骤/标签/截止/选做）、番茄钟、课表、多打卡项，按模板把「我的一天」打成一张纸。**
 
 GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
 任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
 
-验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 9 项浏览器 e2e）：
+验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 29 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
 - ✅ TypeScript 7.0.2 strict
@@ -57,7 +57,16 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续打卡） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
-测试：core 161 + store 19 = **180 单测**；e2e **16 项**。
+测试：core 172 + store 21 = **193 单测**；e2e **29 项**。
+
+### 第三批反馈修复（2026-xx）
+
+| 反馈 | 处理 |
+|---|---|
+| 选完标签建完任务会自动清空标签 | 提交后不清空（面板展开状态也不动）；标签会带到下一条，随时可点掉。e2e 断言「新任务真的继承了标签」，只测界面计数会漏掉"界面留着、数据没写" |
+| 要能改「当前时间」调试（后期删） | 宿主层 `appClock` + 侧栏「调试 · 当前时间」面板：只偏 `now()`，`monotonic`/定时器原样转发（偏了会算坏运行中的番茄钟）；偏移存 localStorage，应用后 reload；`TODO(debug-clock)` 可 grep，三步删除法在 `docs/LATER.md` |
+| 首页要打卡提示 | 首页「打卡提示」：今天该打未打的项，可就地勾完并显示 `已完成 x/y`；**只读 `habitLogs`**，不看番茄钟 |
+| 首页要看当天课表 | 首页「今日课表」：起止时间 + 科目，复用 App 里给打印层算好的同一份 schedule；今天没课明确写「今天没有课」 |
 
 ### 第二批反馈修复（2026-xx）
 
