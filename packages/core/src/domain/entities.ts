@@ -79,6 +79,13 @@ export interface StudySession {
   subjectId: string | null;
   taskId: string | null;
   source: SessionSource;
+  /**
+   * 这次专注里点了多少次「我分心了」（番茄钟的 +1 记录）。
+   *
+   * 是结算那一刻从番茄运行态抄过来的**快照**：`focusRuns` 在结算后会被删掉，
+   * 不抄进学习记录的话分心历史就丢了。旧数据没有这个字段，按 0 处理。
+   */
+  interruptions?: number;
   createdAt: number;
 }
 

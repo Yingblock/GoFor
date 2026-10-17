@@ -554,6 +554,8 @@ export function sessionFromRun(run: PomodoroRun, date: string): StudySession {
     subjectId: run.subjectId,
     taskId: run.taskId,
     source: 'appTimer',
+    // 分心历史跟着学习记录走：focusRuns 结算后会被删，不抄过来周报就永远读不到。
+    interruptions: run.interruptions,
     createdAt: run.createdAt,
   };
 }

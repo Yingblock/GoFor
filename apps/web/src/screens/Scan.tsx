@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '../clock.ts';
 
+import { CameraCapture } from './scan/CameraCapture.tsx';
 import { CornerPicker } from './scan/CornerPicker.tsx';
 import { type LoadedPhoto, loadPhotoFile } from './scan/capture.ts';
 import { readSheet, sampleTargets } from './scan/pipeline.ts';
@@ -33,6 +34,7 @@ export function ScanScreen() {
   const [initialQuad, setInitialQuad] = useState<Quad | undefined>(undefined);
   const [batch, setBatch] = useState<ScanBatch | null>(null);
   const [recent, setRecent] = useState<ScanBatch[]>([]);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,21 +46,32 @@ export function ScanScreen() {
     void refreshRecent();
   }, [refreshRecent]);
 
+  /** 拿到照片后的公共入口：选文件和相机拍都走这一条，后面流程完全一致。 */
+  const enterCorner = (loaded: LoadedPhoto) => {
+    // 自动找纸只用来给一个初始猜测；找错了用户拖一下就行，找不到就内缩矩形。
+    const guess = detectPageQuad(binarize(toGray(loaded.image)), loaded.width, loaded.height);
+    setPhoto(loaded);
+    setInitialQuad(guess ?? undefined);
+    setStage('corner');
+  };
+
   const onFile = async (file: File) => {
     setError(null);
     setBusy(true);
     try {
-      const loaded = await loadPhotoFile(file);
-      // 自动找纸只用来给一个初始猜测；找错了用户拖一下就行，找不到就内缩矩形。
-      const guess = detectPageQuad(binarize(toGray(loaded.image)), loaded.width, loaded.height);
-      setPhoto(loaded);
-      setInitialQuad(guess ?? undefined);
-      setStage('corner');
+      enterCorner(await loadPhotoFile(file));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '这张照片打不开');
     } finally {
       setBusy(false);
     }
+  };
+
+  const onCaptured = (loaded: LoadedPhoto) => {
+    setError(null);
+    // enterCorner 在前：万一自动找纸抛错，覆盖层还开着，CameraCapture 能把原因显示出来。
+    enterCorner(loaded);
+    setCameraOpen(false);
   };
 
   const onQuad = async (quad: Quad) => {
@@ -112,6 +125,7 @@ export function ScanScreen() {
     setPhoto(null);
     setInitialQuad(undefined);
     setBatch(null);
+    setCameraOpen(false);
     setError(null);
   };
 
@@ -131,7 +145,17 @@ export function ScanScreen() {
 
         {stage === 'pick' ? (
           <div className="flex flex-wrap items-center gap-2">
-            <label className="cursor-pointer rounded-lg bg-[var(--color-ink)] px-4 py-2 text-xs text-white">
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setCameraOpen(true);
+              }}
+              className="rounded-lg bg-[var(--color-ink)] px-4 py-2 text-xs text-white"
+            >
+              用相机拍
+            </button>
+            <label className="cursor-pointer rounded-lg border border-black/10 bg-white/60 px-4 py-2 text-xs">
               选一张照片
               <input
                 type="file"
@@ -259,6 +283,10 @@ export function ScanScreen() {
           今天：{dateKey(appClock)}。回填只写这张纸上的日期，不改其它天。
         </p>
       </section>
+
+      {cameraOpen ? (
+        <CameraCapture onCaptured={onCaptured} onCancel={() => setCameraOpen(false)} />
+      ) : null}
     </div>
   );
 }

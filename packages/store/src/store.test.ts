@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { currentConfigOrDefault, DEFAULT_CONFIG_KEY, readConfig } from './config.ts';
 import { GoForDb } from './db.ts';
 import {
+  addSession,
   addToolboxRun,
   applyScanResults,
   createTask,
@@ -29,6 +30,7 @@ import {
   listHabitLogs,
   listMoodLogs,
   listScanBatches,
+  listSessionsByDate,
   listTasks,
   listToolboxRuns,
   loadFocusRun,
@@ -366,9 +368,10 @@ describe('存储：番茄钟运行态', () => {
 });
 
 describe('存储：番茄转学习记录', () => {
-  it('按实际用时生成 session', () => {
+  it('按实际用时生成 session，并把分心次数带进学习记录', async () => {
+    const db = freshDb('session-from-run');
     const session = sessionFromRun(
-      sampleRun({ accumulatedMs: 45 * 60_000, subjectId: 'subject-2' }),
+      sampleRun({ accumulatedMs: 45 * 60_000, subjectId: 'subject-2', interruptions: 3 }),
       '2026-03-05',
     );
 
@@ -376,6 +379,14 @@ describe('存储：番茄转学习记录', () => {
     expect(session.end - session.start).toBe(45);
     expect(session.subjectId).toBe('subject-2');
     expect(session.source).toBe('appTimer');
+    expect(session.interruptions).toBe(3);
+
+    // 真正落库后还能读回来：focusRuns 结算后会被删，分心历史只能靠这一份快照。
+    await addSession(db, session);
+    const stored = await listSessionsByDate(db, '2026-03-05');
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.interruptions).toBe(3);
+    await db.close();
   });
 });
 

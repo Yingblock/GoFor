@@ -26,6 +26,7 @@ import { PrintLayer } from './print/PrintSheet.tsx';
 import { CheckinScreen } from './screens/Checkin.tsx';
 import { ChecklistScreen } from './screens/Checklist.tsx';
 import { ComingSoon } from './screens/ComingSoon.tsx';
+import { DataScreen } from './screens/DataScreen.tsx';
 import { DiaryScreen } from './screens/Diary.tsx';
 import { Home } from './screens/Home.tsx';
 import { MoodScreen } from './screens/Mood.tsx';
@@ -261,6 +262,8 @@ export function App() {
         return <ChecklistScreen />;
       case 'diary':
         return <DiaryScreen />;
+      case 'data':
+        return <DataScreen onNotice={setNotice} />;
       case 'mind':
         return <ToolboxScreen />;
       default:
@@ -363,6 +366,7 @@ export function App() {
         ref={fileInputRef}
         type="file"
         accept="application/json"
+        aria-label="导入数据文件"
         className="hidden"
         onChange={async (event) => {
           const file = event.target.files?.[0];

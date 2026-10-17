@@ -19,6 +19,8 @@ export type ScreenId =
   | 'usage'
   | 'print'
   | 'templates'
+  /** 数据与备份：导出/导入、存储状态。 */
+  | 'data'
   /** P2：扫描回填（纸的回流）。 */
   | 'scan'
   | 'mood'
@@ -94,6 +96,7 @@ export const NAV: NavGroup[] = [
     items: [
       { id: 'print', title: '打印 checklist', ready: true, icon: '🖨️' },
       { id: 'templates', title: '模板与校准页', ready: true, icon: '📐' },
+      { id: 'data', title: '数据与备份', ready: true, icon: '💾' },
     ],
   },
   {

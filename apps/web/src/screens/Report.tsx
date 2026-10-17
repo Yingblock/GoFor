@@ -185,6 +185,36 @@ export function ReportScreen() {
     [weekRuns],
   );
 
+  /**
+   * 本周分心次数。
+   *
+   * 只在番茄钟（`source === 'appTimer'`）的学习记录里找：分心是用户主动点「我分心了」
+   * 的 +1，结算时从运行态抄进 `session.interruptions`。它回答的是「这周有几次想走神」，
+   * 不是屏幕时长，也不代表学了多久。
+   */
+  const distraction = useMemo(() => {
+    const byDate = new Map<string, number>();
+    let sessionCount = 0;
+    let total = 0;
+    for (const session of sessions) {
+      if (session.source !== 'appTimer') continue;
+      if (session.date < weekStart || session.date > today) continue;
+      sessionCount += 1;
+      // 旧版本的学习记录没有这个字段：按 0 处理，不猜。
+      const count = Math.max(0, Math.floor(session.interruptions ?? 0));
+      byDate.set(session.date, (byDate.get(session.date) ?? 0) + count);
+      total += count;
+    }
+    const daily = days.map((date) => ({
+      date,
+      count: byDate.get(date) ?? 0,
+      /** 当天到底有没有番茄记录：没有就显示「—」，不拿 0 冒充数据。 */
+      hasRun: byDate.has(date),
+    }));
+    const maxDaily = daily.reduce((max, entry) => Math.max(max, entry.count), 0);
+    return { sessionCount, total, daily, maxDaily };
+  }, [sessions, days, weekStart, today]);
+
   const checkinRate =
     checkin !== null && checkin.expected > 0
       ? Math.round((checkin.completed / checkin.expected) * 100)
@@ -261,6 +291,46 @@ export function ReportScreen() {
                 </span>
               </div>
             ))}
+          </div>
+        )}
+      </Section>
+
+      <Section title="分心次数（番茄钟 +1）">
+        {distraction.sessionCount === 0 ? (
+          <div className="space-y-1 rounded-xl border border-black/[0.08] bg-white/50 px-4 py-6 text-center text-[11px] opacity-35">
+            <p>还没有数据</p>
+            <p className="text-[10px] leading-relaxed opacity-80">
+              番茄钟里点「我分心了」并完成番茄后，这里才有记录。
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2 rounded-xl border border-black/[0.08] bg-white/50 px-4 py-3">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="text-xl font-semibold tabular-nums">{distraction.total} 次</span>
+              <span className="text-[11px] opacity-40">本周（周一到今天）累计</span>
+            </div>
+            {distraction.daily.map((entry) => (
+              <div key={entry.date} className="flex items-center gap-2 text-[11px]">
+                <span className="w-20 shrink-0 opacity-45">
+                  {weekdayLabel(entry.date)} {entry.date.slice(5)}
+                </span>
+                <div className="h-3 flex-1 overflow-hidden rounded-full bg-black/[0.05]">
+                  <div
+                    className="h-full rounded-full bg-[var(--color-ink)] opacity-70"
+                    style={{
+                      width: `${distraction.maxDaily === 0 ? 0 : Math.round((entry.count / distraction.maxDaily) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <span className="w-16 shrink-0 text-right tabular-nums opacity-60">
+                  {entry.hasRun ? `${entry.count} 次` : '—'}
+                </span>
+              </div>
+            ))}
+            <p className="text-[10px] leading-relaxed opacity-30">
+              只来自番茄钟里点「我分心了」的 +1 记录，结算时并入学习记录、按学习日期归到当天；
+              不跟屏幕使用时长混为一谈。当天没有番茄记录时显示「—」，不补 0。
+            </p>
           </div>
         )}
       </Section>
@@ -344,7 +414,8 @@ export function ReportScreen() {
 
       <p className="text-[10px] leading-relaxed opacity-30">
         周报只读本机数据：学习分钟来自 `sessions`，打卡来自 `habitLogs`，三滑块来自 `moodLogs`，
-        练习来自 `toolboxRuns`，日记来自 `diaryEntries`。没有数据的项一律写「还没有数据」。
+        练习来自 `toolboxRuns`，日记来自 `diaryEntries`，分心来自番茄钟结算时并入 `sessions` 的 +1
+        记录。没有数据的项一律写「还没有数据」。
       </p>
     </div>
   );

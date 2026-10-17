@@ -427,7 +427,12 @@ try {
     const context = canvas.getContext('2d');
     context.drawImage(image, 0, 0);
     context.fillStyle = '#000000';
-    context.fillRect(0, Math.floor(image.height * 0.78), image.width, Math.ceil(image.height * 0.16));
+    context.fillRect(
+      0,
+      Math.floor(image.height * 0.78),
+      image.width,
+      Math.ceil(image.height * 0.16),
+    );
     return canvas.toDataURL('image/png').split(',')[1];
   }, sheetPng.toString('base64'));
   await canvasPage.close();
@@ -435,13 +440,11 @@ try {
   await openGroup(page, '记录');
   await clickItem(page, '扫描回填');
   await page.waitForSelector('text=拍一张纸', { timeout: 8000 });
-  await page
-    .locator('input[aria-label="选择纸的照片"]')
-    .setInputFiles({
-      name: 'sheet.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from(inkedBase64, 'base64'),
-    });
+  await page.locator('input[aria-label="选择纸的照片"]').setInputFiles({
+    name: 'sheet.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(inkedBase64, 'base64'),
+  });
 
   // 自动找角会把底部那条墨迹带当成背景边界，所以先点「重置四角」用确定性内缩矩形。
   await page.getByRole('button', { name: '重置四角' }).click();
@@ -464,7 +467,8 @@ try {
     await page.waitForSelector('text=今天的三格', { timeout: 8000 });
     const moodLoaded = await page
       .waitForFunction(
-        () => [...document.querySelectorAll('input[type="range"]')].some((node) => node.value === '5'),
+        () =>
+          [...document.querySelectorAll('input[type="range"]')].some((node) => node.value === '5'),
         { timeout: 8000 },
       )
       .then(() => true)
@@ -576,7 +580,8 @@ try {
   check('备份成功后横幅消失', bannerGone);
 
   // 用刚下载的文件走一遍真实导入：同 id 覆盖、不同 id 追加，提示里要有任务数。
-  const fileInput = page.locator('input[type="file"]');
+  // 现在页面上有多个文件输入（命令面板导入、备份横幅导入、数据页导入），按 aria-label 精确定位
+  const fileInput = page.locator('input[aria-label="导入数据文件"]');
   await fileInput.setInputFiles({
     name: 'gofor-backup.json',
     mimeType: 'application/json',
@@ -703,6 +708,38 @@ try {
   check('窄屏抽屉关闭逻辑不变', drawerReclosed);
   await page.setViewportSize({ width: 1100, height: 1400 });
   await sleep(300);
+
+  /* ---------------------------------------------------- 数据与备份页 */
+
+  await openGroup(page, '导出');
+  await clickItem(page, '数据与备份');
+  await page.waitForSelector('text=数据在哪', { timeout: 8000 });
+  check('数据与备份页可打开', true);
+  check(
+    '数据页有导出与导入按钮',
+    (await page.getByRole('button', { name: '导出备份（JSON）' }).count()) > 0 &&
+      (await page.getByRole('button', { name: '从备份导入' }).count()) > 0,
+  );
+
+  const dataDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出备份（JSON）' }).click();
+  const dataFile = await dataDownload;
+  check(
+    '数据页可导出备份',
+    /^gofor-backup-\d{4}-\d{2}-\d{2}\.json$/.test(dataFile.suggestedFilename()),
+    dataFile.suggestedFilename(),
+  );
+
+  // 数据页也能直接导入：用刚导出的文件走一遍，验证"丢数据能自己救回来"。
+  const dataPath = await dataFile.path();
+  const dataText = dataPath ? await readFile(dataPath, 'utf8') : '{}';
+  await page.locator('input[aria-label="选择备份文件"]').last().setInputFiles({
+    name: 'gofor-backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(dataText),
+  });
+  await page.waitForSelector('text=/已导入 \\d+ 个任务/', { timeout: 10000 });
+  check('数据页可导入备份', true);
 
   /* ------------------------------------------------------ 打印 PDF */
 

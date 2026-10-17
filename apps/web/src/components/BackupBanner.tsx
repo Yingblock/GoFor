@@ -5,8 +5,8 @@
  * 数据只存在这台设备的 IndexedDB 里，所以这里必须把话说明白，但不能吓人：
  * 讲清风险 + 给一个一键动作（导出 JSON），而不是弹窗教育。
  */
-import { db } from '@gofor/store';
-import { useEffect, useState } from 'react';
+import { db, importAll } from '@gofor/store';
+import { useEffect, useRef, useState } from 'react';
 import {
   type BackupCounts,
   dismissBackupToday,
@@ -48,6 +48,7 @@ export function BackupBanner({ reminderDays }: BackupBannerProps) {
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [storage, setStorage] = useState<PersistentStorageState | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -96,6 +97,20 @@ export function BackupBanner({ reminderDays }: BackupBannerProps) {
     }
   };
 
+  /** 从备份恢复：放在这里是因为"没备份过"的人最需要先导入一份旧的。 */
+  const importBackup = async (file: File) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await importAll(db, JSON.parse(await file.text()));
+      setResult(`已导入 ${result.imported.tasks} 个任务、${result.imported.sessions} 条学习记录`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '文件不是 GoFor 备份');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const dismiss = () => {
     dismissBackupToday(now);
     setDismissed(true);
@@ -128,6 +143,26 @@ export function BackupBanner({ reminderDays }: BackupBannerProps) {
           >
             {busy ? '正在备份…' : '立即备份'}
           </button>
+          <button
+            type="button"
+            onClick={() => importRef.current?.click()}
+            disabled={busy}
+            className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs transition hover:bg-black/[0.04] disabled:opacity-50"
+          >
+            从备份导入
+          </button>
+          <input
+            ref={importRef}
+            type="file"
+            accept="application/json,.json"
+            aria-label="选择备份文件"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void importBackup(file);
+              event.target.value = '';
+            }}
+          />
           <button
             type="button"
             onClick={dismiss}

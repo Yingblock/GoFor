@@ -9,6 +9,52 @@ import { appClock } from '../clock.ts';
 /** 列表只回看 30 天：再早的日记不删，只是不挤在这里。 */
 const RECENT_DAYS = 30;
 
+/** 趋势图看最近 14 天：再长会在手机宽度下挤成一团。 */
+const TREND_DAYS = 14;
+
+/**
+ * 折线图的坐标系。
+ *
+ * 宽高固定写在 `viewBox` 里，渲染时用 `w-full h-20` 拉伸：宽度自适应、
+ * 高度保持 ~80px。`preserveAspectRatio="none"` 会让圆点横向变扁，
+ * 所以线宽用 `vectorEffect="non-scaling-stroke"` 固定，圆点只是很小的标记。
+ */
+const TREND_WIDTH = 300;
+const TREND_HEIGHT = 80;
+const TREND_PAD_X = 8;
+const TREND_TOP = 8;
+const TREND_BOTTOM = TREND_HEIGHT - 8;
+
+const MOOD_MIN = 1;
+const MOOD_MAX = 5;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+interface TrendPoint {
+  /** `YYYY-MM-DD`（本地日期）。 */
+  date: string;
+  /** 当天平均值，四舍五入到 0.1。 */
+  value: number;
+  /** 距窗口第一天几天，0–13。 */
+  dayIndex: number;
+}
+
+/** 两个日期键之间差几天。走 UTC，避开夏令时下 23/25 小时的一天。 */
+function dayIndexBetween(from: string, date: string): number {
+  return Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
+}
+
+/** 心情 → 图上的 y。1 分在底、5 分在顶；脏数据先钳到合法区间。 */
+function trendY(value: number): number {
+  const clamped = Math.min(MOOD_MAX, Math.max(MOOD_MIN, value));
+  return TREND_BOTTOM - ((clamped - MOOD_MIN) / (MOOD_MAX - MOOD_MIN)) * (TREND_BOTTOM - TREND_TOP);
+}
+
+/** 第 dayIndex 天 → 图上的 x（窗口首尾各留 8 单位内边距）。 */
+function trendX(dayIndex: number): number {
+  return TREND_PAD_X + (dayIndex / (TREND_DAYS - 1)) * (TREND_WIDTH - TREND_PAD_X * 2);
+}
+
 const MOOD_VALUES = [1, 2, 3, 4, 5] as const;
 
 const chipOn = 'rounded-full bg-[var(--color-ink)] px-2.5 py-1 text-[11px] text-white';
@@ -39,6 +85,55 @@ export function DiaryScreen() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  /**
+   * 最近 14 天的心情趋势。
+   *
+   * 同一天多条取平均（四舍五入到 0.1）；没记录的日子直接跳过，**不补 0**，
+   * 否则空白会变成「心情跌到最低」，图会撒谎。折线按「连续日期」切段，
+   * 中间断档就断开，不把第 1 天和第 3 天连成一条假线。
+   */
+  const trend = useMemo(() => {
+    const windowFrom = addDays(today, -(TREND_DAYS - 1));
+    const buckets = new Map<string, { sum: number; count: number }>();
+    for (const entry of entries) {
+      if (entry.mood === null || !Number.isFinite(entry.mood)) continue;
+      if (entry.date < windowFrom || entry.date > today) continue;
+      const bucket = buckets.get(entry.date) ?? { sum: 0, count: 0 };
+      bucket.sum += entry.mood;
+      bucket.count += 1;
+      buckets.set(entry.date, bucket);
+    }
+
+    const points: TrendPoint[] = [];
+    for (let cursor = windowFrom; cursor <= today; cursor = addDays(cursor, 1)) {
+      const bucket = buckets.get(cursor);
+      if (bucket === undefined) continue;
+      points.push({
+        date: cursor,
+        value: Math.round((bucket.sum / bucket.count) * 10) / 10,
+        dayIndex: dayIndexBetween(windowFrom, cursor),
+      });
+    }
+
+    // 连续日期才连线段：断档处另起一段，折线自然断开。
+    const segments: TrendPoint[][] = [];
+    for (const point of points) {
+      const last = segments[segments.length - 1];
+      const previous = last === undefined ? undefined : last[last.length - 1];
+      if (
+        last !== undefined &&
+        previous !== undefined &&
+        previous.dayIndex + 1 === point.dayIndex
+      ) {
+        last.push(point);
+      } else {
+        segments.push([point]);
+      }
+    }
+
+    return { from: windowFrom, points, segments };
+  }, [entries, today]);
 
   /** 已有标签 = 最近 30 天日记里出现过的标签，去重后排序。 */
   const knownTags = useMemo(() => {
@@ -221,6 +316,83 @@ export function DiaryScreen() {
             </span>
           ) : null}
         </div>
+      </section>
+
+      <section className="space-y-2">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-sm font-medium opacity-50">最近 {TREND_DAYS} 天心情趋势</h2>
+          <span className="text-[11px] opacity-35">{trend.points.length} 天有记录</span>
+        </div>
+
+        {trend.points.length === 0 ? (
+          <p className="rounded-xl border border-black/[0.08] bg-white/50 px-4 py-8 text-center text-[11px] opacity-35">
+            还没有心情记录。
+          </p>
+        ) : (
+          <div className="rounded-xl border border-black/[0.08] bg-white/50 px-4 py-3">
+            <svg
+              viewBox={`0 0 ${TREND_WIDTH} ${TREND_HEIGHT}`}
+              preserveAspectRatio="none"
+              className="block h-20 w-full"
+              role="img"
+              aria-label={`最近 ${TREND_DAYS} 天心情趋势`}
+            >
+              {/* 5 条参考线对应 1–5 分；1 分在最下面。 */}
+              {[MOOD_MIN, 2, 3, 4, MOOD_MAX].map((level) => (
+                <line
+                  key={level}
+                  x1={TREND_PAD_X}
+                  x2={TREND_WIDTH - TREND_PAD_X}
+                  y1={trendY(level)}
+                  y2={trendY(level)}
+                  stroke="rgba(0, 0, 0, 0.10)"
+                  strokeWidth={1}
+                />
+              ))}
+
+              {trend.segments.map((segment) => {
+                const first = segment[0];
+                if (first === undefined) return null;
+                if (segment.length === 1) {
+                  // 只有一天记录时画不成线，给一个点，否则用户会以为没画出来。
+                  return (
+                    <circle
+                      key={first.date}
+                      cx={trendX(first.dayIndex)}
+                      cy={trendY(first.value)}
+                      r={2.2}
+                      fill="var(--color-ink)"
+                      opacity={0.7}
+                    />
+                  );
+                }
+                return (
+                  <polyline
+                    key={first.date}
+                    points={segment
+                      .map((point) => `${trendX(point.dayIndex)},${trendY(point.value)}`)
+                      .join(' ')}
+                    fill="none"
+                    stroke="var(--color-ink)"
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    opacity={0.7}
+                  />
+                );
+              })}
+            </svg>
+
+            <div className="mt-1 flex items-baseline justify-between text-[10px] tabular-nums opacity-30">
+              <span>{trend.from.slice(5)}</span>
+              <span>{today.slice(5)}</span>
+            </div>
+            <p className="mt-1 text-[10px] leading-relaxed opacity-30">
+              一天写多条就取平均；没记录的日子留空，不补 0。
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="space-y-2">

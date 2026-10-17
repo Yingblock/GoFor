@@ -125,7 +125,7 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
           <span className="text-2xl">📷</span>
           <span>
             <span className="block text-sm font-medium">拍照录入</span>
-            <span className="block text-[11px] opacity-45">把纸上的记录扫进来 · P2</span>
+            <span className="block text-[11px] opacity-45">把纸上勾的扫回来 · 二维码定位</span>
           </span>
         </button>
 
