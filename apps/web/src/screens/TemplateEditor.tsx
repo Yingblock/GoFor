@@ -53,6 +53,8 @@ const BLOCK_PRESETS: Record<string, () => Block> = {
     span: 12,
     labels: ['睡眠', '心情', '专注'],
   }),
+  // 渲染层在打印那一刻取时刻，区块只存前缀文案，所以默认值只给 label。
+  timestamp: () => ({ id: newId(), kind: 'timestamp', span: 12, label: '打印于' }),
 };
 
 function todayLabel(date: string): string {
@@ -76,8 +78,287 @@ function parseTemplate(json: string): PrintTemplate | null {
   return candidate as PrintTemplate;
 }
 
-function hasRows(block: Block): block is Block & { rows: number } {
-  return 'rows' in block && typeof (block as { rows?: unknown }).rows === 'number';
+/** 数字输入框：解析失败就丢弃这次输入，草稿里永远不会出现 NaN 或负值。 */
+function NumberField({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="flex items-center gap-1 opacity-70">
+      <span className="shrink-0">{label}</span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(event) => {
+          const parsed = Number.parseInt(event.target.value, 10);
+          if (!Number.isFinite(parsed)) return;
+          onChange(Math.min(max, Math.max(min, parsed)));
+        }}
+        className="w-14 rounded border border-black/10 bg-white/70 px-1.5 py-0.5"
+      />
+    </label>
+  );
+}
+
+/** 单行文本输入，宽度由调用方按字段长度给。 */
+function TextField({
+  label,
+  value,
+  onChange,
+  className = 'w-40',
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <label className="flex items-center gap-1 opacity-70">
+      <span className="shrink-0">{label}</span>
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={`rounded border border-black/10 bg-white/70 px-1.5 py-0.5 ${className}`}
+      />
+    </label>
+  );
+}
+
+/**
+ * `slots.labels` 是数组，不能每个按键都 split 回数组：
+ * 用户刚敲下逗号时 split 会产出空串，光标和已输入内容都会被受控值改掉。
+ * 所以本地保留原始文本，回车或失焦时才提交成干净的数组。
+ */
+function SlotsLabelsField({
+  labels,
+  onChange,
+}: {
+  labels: string[];
+  onChange: (labels: string[]) => void;
+}) {
+  const [text, setText] = useState(() => labels.join('，'));
+
+  // 只有外部真的换了 labels（切模板/重载）才回填；打字时 labels 引用不变，不会被覆盖。
+  useEffect(() => {
+    setText(labels.join('，'));
+  }, [labels]);
+
+  const commit = () => {
+    // 中文输入法打出来的是全角逗号，两种都当分隔符，否则用户得手动切半角。
+    onChange(
+      text
+        .split(/[,，]/)
+        .map((item) => item.trim())
+        .filter((item) => item !== ''),
+    );
+  };
+
+  return (
+    <label className="flex items-center gap-1 opacity-70">
+      <span className="shrink-0">格名</span>
+      <input
+        type="text"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit();
+        }}
+        className="w-48 rounded border border-black/10 bg-white/70 px-1.5 py-0.5"
+      />
+    </label>
+  );
+}
+
+const DAY_PARTS = ['morning', 'afternoon', 'evening'] as const;
+
+const DAY_PART_LABELS: Record<(typeof DAY_PARTS)[number], string> = {
+  morning: '早',
+  afternoon: '午',
+  evening: '晚',
+};
+
+/**
+ * 按区块 kind 给出可编辑字段。
+ *
+ * 为什么用 switch 而不是通用「改属性」控件：每种区块的字段是声明式版式的一部分，
+ * 用 switch 能在编译期保证只写该 kind 存在的字段（例如 footer 没有 rows），
+ * 避免手滑改出一个 layout/渲染层处理不了的区块。
+ */
+function BlockFields({ block, onChange }: { block: Block; onChange: (next: Block) => void }) {
+  switch (block.kind) {
+    case 'title':
+      return (
+        <TextField
+          label="文本"
+          value={block.text}
+          onChange={(text) => onChange({ ...block, text })}
+          className="w-56"
+        />
+      );
+    case 'hintLine':
+    case 'footer':
+      return (
+        <TextField
+          label="文本"
+          value={block.text}
+          onChange={(text) => onChange({ ...block, text })}
+          className="w-56"
+        />
+      );
+    case 'linedBox':
+      return (
+        <>
+          <TextField
+            label="标题"
+            value={block.label}
+            onChange={(label) => onChange({ ...block, label })}
+          />
+          <NumberField
+            label="行"
+            value={block.lines}
+            min={0}
+            max={20}
+            onChange={(lines) => onChange({ ...block, lines })}
+          />
+        </>
+      );
+    case 'timeLog':
+      return (
+        <>
+          <TextField
+            label="标题"
+            value={block.label}
+            onChange={(label) => onChange({ ...block, label })}
+            className="w-32"
+          />
+          <NumberField
+            label="行"
+            value={block.rows}
+            min={0}
+            max={20}
+            onChange={(rows) => onChange({ ...block, rows })}
+          />
+          <label className="flex items-center gap-1 opacity-70">
+            <span className="shrink-0">时段</span>
+            <select
+              value={block.dayPart}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value === 'morning' || value === 'afternoon' || value === 'evening') {
+                  onChange({ ...block, dayPart: value });
+                }
+              }}
+              className="rounded border border-black/10 bg-white/70 px-1 py-0.5"
+            >
+              {DAY_PARTS.map((part) => (
+                <option key={part} value={part}>
+                  {DAY_PART_LABELS[part]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      );
+    case 'schedule':
+      return (
+        <>
+          <TextField
+            label="标题"
+            value={block.title}
+            onChange={(title) => onChange({ ...block, title })}
+          />
+          <NumberField
+            label="行"
+            value={block.rows}
+            min={0}
+            max={20}
+            onChange={(rows) => onChange({ ...block, rows })}
+          />
+        </>
+      );
+    case 'timestamp':
+      // 时刻是打印时取的，这里只能改前缀文案。
+      return (
+        <TextField
+          label="文案"
+          value={block.label}
+          onChange={(label) => onChange({ ...block, label })}
+        />
+      );
+    case 'checkboxList':
+      return (
+        <>
+          <NumberField
+            label="行"
+            value={block.rows}
+            min={0}
+            max={20}
+            onChange={(rows) => onChange({ ...block, rows })}
+          />
+          <TextField
+            label="绑定"
+            value={block.bind}
+            onChange={(bind) => onChange({ ...block, bind })}
+            className="w-28"
+          />
+        </>
+      );
+    case 'slots':
+      return (
+        <SlotsLabelsField
+          labels={block.labels}
+          onChange={(labels) => onChange({ ...block, labels })}
+        />
+      );
+    case 'qrcode':
+      return (
+        <NumberField
+          label="边长 mm"
+          value={block.sizeMm}
+          min={5}
+          max={100}
+          onChange={(sizeMm) => onChange({ ...block, sizeMm })}
+        />
+      );
+    case 'table':
+      return (
+        <NumberField
+          label="行"
+          value={block.rows}
+          min={0}
+          max={20}
+          onChange={(rows) => onChange({ ...block, rows })}
+        />
+      );
+    case 'checkboxGrid':
+      return (
+        <NumberField
+          label="行"
+          value={block.rows}
+          min={0}
+          max={20}
+          onChange={(rows) => onChange({ ...block, rows })}
+        />
+      );
+    case 'pageBreak':
+      return null;
+    default:
+      // progressDots 等暂无用户可填字段；不认识的类型宁可只读，也不要猜着改。
+      return null;
+  }
 }
 
 export interface TemplateEditorScreenProps {
@@ -141,12 +422,27 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
     setNotice(null);
   }, []);
 
+  // 行内编辑统一按区块 id 替换：id 是模板内稳定的，不用数组下标，移动/删除后不会串行。
+  const replaceBlock = useCallback(
+    (next: Block) => {
+      updateDraft((current) => ({
+        ...current,
+        blocks: current.blocks.map((item) => (item.id === next.id ? next : item)),
+      }));
+    },
+    [updateDraft],
+  );
+
   const save = useCallback(async () => {
     if (!draft || !customId) return;
+    // 列表显示 `StoredTemplate.name`、打印用 `json.name`：两处写同一个值，
+    // 否则改名后左侧列表会还显示旧名字，和模板内容对不上。
+    const name = draft.name.trim() === '' ? '我的模板' : draft.name.trim();
+    const saved: PrintTemplate = { ...draft, name };
     await putTemplate(db, {
       id: customId,
-      name: draft.name,
-      json: JSON.stringify(draft),
+      name,
+      json: JSON.stringify(saved),
       createdAt: stored?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
     });
@@ -236,7 +532,23 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
       {/* 中：编辑区 */}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">{currentTemplate.name}</span>
+          {isCustom && draft ? (
+            // 自定义模板名可改；内置模板仍是常量，只读展示。
+            <label className="flex items-center gap-1">
+              <span className="text-xs opacity-50">名称</span>
+              <input
+                type="text"
+                aria-label="模板名称"
+                value={draft.name}
+                onChange={(event) =>
+                  updateDraft((current) => ({ ...current, name: event.target.value }))
+                }
+                className="w-48 rounded border border-black/10 bg-white/70 px-2 py-0.5 text-sm font-medium"
+              />
+            </label>
+          ) : (
+            <span className="text-sm font-medium">{currentTemplate.name}</span>
+          )}
           {PAPER_OPTIONS.map((option) => (
             <button
               key={option}
@@ -303,31 +615,10 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
 
         <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
           {(draft?.blocks ?? currentTemplate.blocks).map((block, index) => (
-            <li key={block.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+            <li key={block.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
               <span className="w-8 tabular-nums opacity-35">{index + 1}</span>
               <span className="w-28 font-mono text-[11px]">{block.kind}</span>
-              {hasRows(block) && draft ? (
-                <label className="flex items-center gap-1 opacity-70">
-                  <span>行</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={20}
-                    value={block.rows}
-                    onChange={(event) =>
-                      updateDraft((current) => ({
-                        ...current,
-                        blocks: current.blocks.map((item) =>
-                          item.id === block.id
-                            ? { ...item, rows: Number(event.target.value) }
-                            : item,
-                        ),
-                      }))
-                    }
-                    className="w-14 rounded border border-black/10 bg-white/70 px-1.5 py-0.5"
-                  />
-                </label>
-              ) : null}
+              {draft ? <BlockFields block={block} onChange={replaceBlock} /> : null}
               <span className="flex-1" />
               {draft ? (
                 <>
@@ -388,7 +679,7 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
           </div>
         ) : (
           <p className="text-[11px] opacity-40">
-            内置模板不可编辑。点「复制为我的模板」后可以增删区块、改行数、换纸张。
+            内置模板不可编辑。点「复制为我的模板」后可以增删区块、改内容与模板名、换纸张。
           </p>
         )}
       </div>

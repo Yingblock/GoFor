@@ -7,6 +7,7 @@
 
 export {
   isOddWeek,
+  mergeAdjacent,
   occurrencesInWeek,
   occurrencesOn,
   patternOf,

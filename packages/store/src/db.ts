@@ -1,5 +1,6 @@
 import type {
   Checkin,
+  HabitLog,
   StoredTemplate,
   StoredTimetable,
   StudySession,
@@ -7,6 +8,7 @@ import type {
   TagPool,
   Task,
 } from '@gofor/core/domain';
+import type { Habit } from '@gofor/core/habits';
 import type { PomodoroRun } from '@gofor/core/pomodoro';
 import Dexie, { type Table } from 'dexie';
 
@@ -35,6 +37,8 @@ export class GoForDb extends Dexie {
   checkins!: Table<Checkin, string>;
   timetables!: Table<StoredTimetable, string>;
   tagPools!: Table<TagPool, string>;
+  habits!: Table<Habit, string>;
+  habitLogs!: Table<HabitLog, string>;
 
   constructor(name = 'gofor') {
     super(name);
@@ -76,6 +80,54 @@ export class GoForDb extends Dexie {
       timetables: 'id',
       tagPools: 'id',
     });
+
+    // v4：多个打卡项 + 每项的历史。
+    //
+    // 旧的 `checkins` 是"一天一个布尔"，无法表达多个习惯与重复规则。
+    // 升级时把已有记录迁移成一条名为「学习」的默认习惯，避免用户数据凭空消失。
+    this.version(4)
+      .stores({
+        config: 'key',
+        tasks: 'id, done, due, subjectId, sortKey',
+        subjects: 'id, order',
+        sessions: 'id, date, subjectId',
+        templates: 'id, name',
+        focusRuns: 'id, status, createdAt',
+        checkins: 'date',
+        timetables: 'id',
+        tagPools: 'id',
+        habits: 'id, order',
+        habitLogs: 'id, habitId, date',
+      })
+      .upgrade(async (tx) => {
+        const checkins = (await tx.table('checkins').toArray()) as Checkin[];
+        if (checkins.length === 0) return;
+
+        const doneDates = checkins
+          .filter((row) => row.done)
+          .map((row) => row.date)
+          .sort();
+        if (doneDates.length === 0) return;
+
+        await tx.table('habits').put({
+          id: 'habit-default',
+          name: '学习',
+          weekdays: [],
+          startDate: doneDates[0],
+          endDate: null,
+          order: 0,
+          createdAt: Date.now(),
+        });
+        for (const date of doneDates) {
+          await tx.table('habitLogs').put({
+            id: `habit-default@${date}`,
+            habitId: 'habit-default',
+            date,
+            done: true,
+            updatedAt: Date.now(),
+          });
+        }
+      });
   }
 }
 

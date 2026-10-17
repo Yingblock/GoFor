@@ -39,9 +39,8 @@ async function moveTask(tasks: Task[], index: number, delta: -1 | 1, now: number
 /**
  * 写任务的标签与科目。
  *
- * 仓储的 `updateTask` 只开放 TaskPatch（标题/完成/截止/选做/步骤/排序），
- * 还没有 tags 和 subjectId；本次改动限定在屏幕层，不能去扩 `packages/store`，
- * 所以直接做 Dexie 的字段级 update —— 只覆盖这里点名的字段，不会误写别的字段。
+ * 走仓储的 `updateTask`（TaskPatch 已包含 tags / subjectId）：字段级补丁只覆盖
+ * 这里点名的字段，updatedAt 由仓储统一维护，不自己拼一次 Dexie 写入。
  */
 async function patchTaskTags(
   id: string,
@@ -49,7 +48,7 @@ async function patchTaskTags(
   subjectId: string | null,
   now: number,
 ): Promise<void> {
-  await db.tasks.update(id, { tags, subjectId, updatedAt: now });
+  await updateTask(db, id, { tags, subjectId }, now);
 }
 
 /** 科目池是虚拟池（标签名 = 科目名），按名字反查科目，用来同步 subjectId。 */
@@ -68,6 +67,58 @@ function isTagSelected(task: TaskView, pool: TagPool, tag: string, subjects: Sub
   if (pool.id !== SUBJECT_TAG_POOL_ID) return false;
   const subject = subjectForTag(subjects, tag);
   return subject !== undefined && subject.id === task.subjectId;
+}
+
+interface TagChoicesProps {
+  pools: TagPool[];
+  isSelected: (pool: TagPool, tag: string) => boolean;
+  onToggle: (poolId: string, tag: string) => void;
+}
+
+/**
+ * 按池分组的标签列表。
+ *
+ * 任务行与「添加栏」展示的池、样式、点击语义完全一样，差别只在
+ * 「怎么算选中」「点了往哪写」，所以抽成一份渲染由调用方注入这两件事。
+ * 复制两份的话，以后改配色或池的规则必然漏掉一边。
+ */
+function TagChoices({ pools, isSelected, onToggle }: TagChoicesProps) {
+  return (
+    <>
+      {pools.map((pool) => (
+        <div key={pool.id} className="space-y-1">
+          <div className="flex items-center gap-1.5 text-[10px] opacity-45">
+            <span>{pool.name}</span>
+            {pool.id === SUBJECT_TAG_POOL_ID ? <span>（跟随科目列表）</span> : null}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {pool.tags.length === 0 ? (
+              <span className="text-[10px] opacity-30">还没有标签</span>
+            ) : (
+              pool.tags.map((tag) => {
+                const selected = isSelected(pool, tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => onToggle(pool.id, tag)}
+                    className={
+                      selected
+                        ? 'rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[11px] text-white'
+                        : 'rounded-full border border-black/10 px-2 py-0.5 text-[11px] opacity-60 transition hover:opacity-100'
+                    }
+                  >
+                    {tag}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      ))}
+    </>
+  );
 }
 
 interface TagPanelProps {
@@ -102,38 +153,11 @@ function TagPanel({ task, pools, subjects, onToggle, onCreate }: TagPanelProps) 
 
   return (
     <div className="mt-2 ml-7 space-y-2 rounded-lg border border-black/[0.08] bg-white/70 p-2.5">
-      {pools.map((pool) => (
-        <div key={pool.id} className="space-y-1">
-          <div className="flex items-center gap-1.5 text-[10px] opacity-45">
-            <span>{pool.name}</span>
-            {pool.id === SUBJECT_TAG_POOL_ID ? <span>（跟随科目列表）</span> : null}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {pool.tags.length === 0 ? (
-              <span className="text-[10px] opacity-30">还没有标签</span>
-            ) : (
-              pool.tags.map((tag) => {
-                const selected = isTagSelected(task, pool, tag, subjects);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => onToggle(task, pool.id, tag)}
-                    className={
-                      selected
-                        ? 'rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[11px] text-white'
-                        : 'rounded-full border border-black/10 px-2 py-0.5 text-[11px] opacity-60 transition hover:opacity-100'
-                    }
-                  >
-                    {tag}
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-      ))}
+      <TagChoices
+        pools={pools}
+        isSelected={(pool, tag) => isTagSelected(task, pool, tag, subjects)}
+        onToggle={(poolId, tag) => onToggle(task, poolId, tag)}
+      />
 
       {writablePools.length === 0 ? (
         <p className="border-t border-black/[0.06] pt-2 text-[10px] opacity-40">
@@ -357,6 +381,14 @@ export function Tasks({ tasks }: { tasks: Task[] }) {
   const [draft, setDraft] = useState('');
   const [optional, setOptional] = useState(false);
   const [due, setDue] = useState('');
+  /**
+   * 「添加栏」里已选的标签（只有名字，科目 id 在提交时反查）。
+   *
+   * 这一段是草稿态：选中不等于落库，添加时才写进新任务，所以取消不会影响任何已有任务。
+   */
+  const [draftTags, setDraftTags] = useState<string[]>([]);
+  /** 「添加栏」的标签面板是否展开；与任务行展开的标签面板互不影响。 */
+  const [draftTagPanelOpen, setDraftTagPanelOpen] = useState(false);
   /** 当前展开标签面板的任务 id，同一时间只展开一个。 */
   const [tagPanelTaskId, setTagPanelTaskId] = useState<string | null>(null);
   /** 当前展开的"添加步骤"行内输入框，null 表示收起。 */
@@ -397,16 +429,52 @@ export function Tasks({ tasks }: { tasks: Task[] }) {
   const add = useCallback(async () => {
     const title = draft.trim();
     if (title === '') return;
+    const now = Date.now();
+    /*
+     * 科目标签 ↔ subjectId：一个任务只挂一个科目（和任务行的单选规则一致），
+     * 所以从已选标签里反查第一个命中科目的标签，换科目时旧的科目名已经被 toggle
+     * 摘掉了，这里拿到的就是当前科目。不写 subjectId 会出现"标签是数学、科目却是空"，
+     * 以后按科目统计会漏掉这条任务。
+     */
+    const subject = draftTags
+      .map((tag) => subjectForTag(subjects, tag))
+      .find((item): item is Subject => item !== undefined);
     const task = await createTask(db, {
       id: newId(),
       title,
       due: due === '' ? null : due,
-      now: Date.now(),
+      now,
+      subjectId: subject?.id ?? null,
     });
-    if (optional) await updateTask(db, task.id, { optional: true }, Date.now());
+    if (optional) await updateTask(db, task.id, { optional: true }, now);
+    // createTask 不接受 tags，标签走一次字段级补丁；没选就不写，保持旧数据的空标签语义。
+    if (draftTags.length > 0) await updateTask(db, task.id, { tags: draftTags }, now);
     setDraft('');
+    // 截止与选做是"这一条"的属性，不清空会悄悄带到下一条作业。
+    setDue('');
     setOptional(false);
-  }, [draft, due, optional]);
+    // 标签同理必须清空，否则下一条作业会莫名带上上一条的标签。
+    setDraftTags([]);
+    setDraftTagPanelOpen(false);
+  }, [draft, due, optional, draftTags, subjects]);
+
+  /**
+   * 添加栏里切换标签。科目池与任务行保持一致：单选，换科目时先把其它科目名摘掉，
+   * 不然草稿里会同时挂着两门课，提交时 subjectId 只能存一个，数据自相矛盾。
+   */
+  const toggleDraftTag = useCallback(
+    (poolId: string, tag: string) => {
+      setDraftTags((current) => {
+        if (poolId !== SUBJECT_TAG_POOL_ID) {
+          return current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag];
+        }
+        if (current.includes(tag)) return current.filter((item) => item !== tag);
+        const subjectNames = new Set(subjects.map((item) => item.name));
+        return [...current.filter((item) => !subjectNames.has(item)), tag];
+      });
+    },
+    [subjects],
+  );
 
   const toggleTag = useCallback(
     async (task: TaskView, poolId: string, tag: string) => {
@@ -531,7 +599,60 @@ export function Tasks({ tasks }: { tasks: Task[] }) {
             />
             <span>选做</span>
           </label>
+          <span className="flex-1" />
+          {/*
+            与任务行的「标签」按钮保持同一套交互：点开行内面板、按池列出、点一下切换。
+            数量直接写在按钮上，收起时也能看出这条草稿带了几个标签。
+          */}
+          <button
+            type="button"
+            aria-expanded={draftTagPanelOpen}
+            onClick={() => setDraftTagPanelOpen((value) => !value)}
+            className={`rounded border px-2 py-1 text-[11px] transition ${
+              draftTags.length > 0
+                ? 'border-black/20 bg-black/[0.06]'
+                : 'border-black/10 bg-white/70'
+            }`}
+          >
+            标签{draftTags.length > 0 ? ` · ${draftTags.length}` : ''}
+          </button>
         </div>
+
+        <div className="flex flex-wrap items-center gap-1">
+          {draftTags.length === 0 ? (
+            <span className="text-[11px] opacity-35">未选标签</span>
+          ) : (
+            draftTags.map((tag) => (
+              <span
+                key={tag}
+                className="flex items-center gap-1 rounded-full bg-black/[0.06] px-2 py-0.5 text-[11px] opacity-70"
+              >
+                {tag}
+                <button
+                  type="button"
+                  aria-label={`移除标签 ${tag}`}
+                  onClick={() => setDraftTags((current) => current.filter((item) => item !== tag))}
+                  className="opacity-50 hover:opacity-90"
+                >
+                  ×
+                </button>
+              </span>
+            ))
+          )}
+        </div>
+
+        {draftTagPanelOpen ? (
+          <div className="space-y-2 rounded-lg border border-black/[0.08] bg-white/70 p-2.5">
+            <TagChoices
+              pools={pools}
+              isSelected={(_pool, tag) => draftTags.includes(tag)}
+              onToggle={toggleDraftTag}
+            />
+            <p className="border-t border-black/[0.06] pt-2 text-[10px] opacity-40">
+              新标签去下方「标签管理」里建，建好就能在这里选。
+            </p>
+          </div>
+        ) : null}
       </div>
 
       {normalized.length === 0 ? (

@@ -102,6 +102,9 @@ function ScheduleView({ block, data }: { block: ScheduleBlock; data: SheetData }
         const entry = entries[index];
         // 截断提示只落在最后一行，避免额外多出一行把固定高度撑破。
         const overflow = index === block.rows - 1 ? hidden : 0;
+        // 空课提示必须占**已有行的位置**：区块高度是 layout 算好的固定值，
+        // 多插一行会顶到下一块，打印出来就错位了。
+        const emptyNote = entries.length === 0 && index === 0;
         return (
           <div
             // biome-ignore lint/suspicious/noArrayIndexKey: 课表行是固定长度的位置槽位
@@ -114,17 +117,21 @@ function ScheduleView({ block, data }: { block: ScheduleBlock; data: SheetData }
               borderBottom: `${mm(0.2)} solid #dcdad2`,
             }}
           >
-            <span
-              style={{
-                width: mm(12),
-                flex: 'none',
-                fontSize: mm(3),
-                color: '#6b7280',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {entry?.time ?? ''}
-            </span>
+            {emptyNote ? (
+              <span style={{ fontSize: mm(2.8), color: '#9ca3af' }}>今日无课</span>
+            ) : (
+              <span
+                style={{
+                  width: mm(12),
+                  flex: 'none',
+                  fontSize: mm(3),
+                  color: '#6b7280',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {entry?.time ?? ''}
+              </span>
+            )}
             <span
               style={{
                 flex: 1,
@@ -197,6 +204,32 @@ function TimeLogView({ block }: { block: TimeLogBlock }) {
   );
 }
 
+/**
+ * 当前时间。
+ *
+ * 取的是**渲染那一刻**的本地时间，而不是数据里的某个时间戳——
+ * 这样同一份数据每次打印都会印出当下的时间。
+ * 注意：React 不会在 `window.print()` 时自动重渲染，所以如果页面开了很久，
+ * 印出来的时间可能比实际打印时间早几分钟；这对"这张纸是什么时候打的"足够用。
+ */
+function TimestampView({ label }: { label: string }) {
+  const now = new Date();
+  const text = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate(),
+  ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(
+    now.getMinutes(),
+  ).padStart(2, '0')}`;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: mm(2) }}>
+      <span style={{ fontSize: mm(2.8), color: '#6b7280' }}>{label}</span>
+      <span style={{ fontSize: mm(3), color: '#4b5563', fontVariantNumeric: 'tabular-nums' }}>
+        {text}
+      </span>
+    </div>
+  );
+}
+
 function BlockView({ block, data }: { block: Block; data: SheetData }) {
   switch (block.kind) {
     case 'title':
@@ -225,6 +258,8 @@ function BlockView({ block, data }: { block: Block; data: SheetData }) {
           ))}
         </div>
       );
+    case 'timestamp':
+      return <TimestampView label={block.label} />;
     case 'hintLine':
       return <div style={{ fontSize: mm(2.8), color: '#6b7280' }}>{block.text}</div>;
     case 'footer':

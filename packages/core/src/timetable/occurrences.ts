@@ -294,3 +294,44 @@ export function occurrencesInWeek(weekStartDate: string, data: TimetableData): O
   }
   return result;
 }
+
+/**
+ * 把同一天、同一门课、节次相接的课合并成一条。
+ *
+ * 为什么放在 core 而不是视图层：连堂是"课表语义"，不是渲染细节。
+ * 用户用两条独立规则排出第 2、3 节数学，看起来应该是**一整块**连堂，
+ * 否则周视图里会碎成两个方块，而且 span 也没法跨行。
+ *
+ * 只合并 startPeriod 严格相接的（`prev.start + prev.span === next.start`），
+ * 中间有空节就不合并——那是课间，不是连堂。
+ */
+export function mergeAdjacent(occurrences: readonly Occurrence[]): Occurrence[] {
+  const sorted = [...occurrences].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      a.startPeriod - b.startPeriod ||
+      a.courseId.localeCompare(b.courseId),
+  );
+
+  const merged: Occurrence[] = [];
+  for (const current of sorted) {
+    const last = merged[merged.length - 1];
+    const canMerge =
+      last !== undefined &&
+      last.date === current.date &&
+      last.courseId === current.courseId &&
+      last.startPeriod + last.span === current.startPeriod;
+
+    if (canMerge && last) {
+      merged[merged.length - 1] = {
+        ...last,
+        span: last.span + current.span,
+        endMinute: current.endMinute,
+        overridden: last.overridden || current.overridden,
+      };
+    } else {
+      merged.push(current);
+    }
+  }
+  return merged;
+}

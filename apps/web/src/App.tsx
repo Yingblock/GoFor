@@ -60,18 +60,26 @@ function clockLabel(minute: number): string {
 function asTimetable(raw: unknown): TimetableData | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const candidate = raw as Partial<TimetableData>;
-  if (!Array.isArray(candidate.courses)) return null;
-  if (!Array.isArray(candidate.rules)) return null;
-  if (!Array.isArray(candidate.overrides)) return null;
   if (!Array.isArray(candidate.periods)) return null;
-  if (!Array.isArray(candidate.weekPatterns)) return null;
   const term = candidate.term;
   if (typeof term !== 'object' || term === null) return null;
   if (typeof term.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(term.startDate)) {
     return null;
   }
   if (typeof term.weeks !== 'number') return null;
-  return candidate as TimetableData;
+
+  // 其余数组**缺了就补空**，而不是整份作废。
+  // 早期版本的课表数据没有 `courses` / `weekPatterns` 这些键，
+  // 严格校验会把用户的真实课表判成坏数据，纸面上就一片空白——
+  // 这正是"课程表没有读取真实课表"那次反馈的根因。
+  return {
+    term,
+    periods: candidate.periods,
+    courses: Array.isArray(candidate.courses) ? candidate.courses : [],
+    rules: Array.isArray(candidate.rules) ? candidate.rules : [],
+    overrides: Array.isArray(candidate.overrides) ? candidate.overrides : [],
+    weekPatterns: Array.isArray(candidate.weekPatterns) ? candidate.weekPatterns : [],
+  } as TimetableData;
 }
 
 export function App() {

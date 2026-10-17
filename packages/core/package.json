@@ -11,7 +11,8 @@
     "./domain": "./src/domain/entities.ts",
     "./pomodoro": "./src/pomodoro/index.ts",
     "./timetable": "./src/timetable/index.ts",
-    "./stats": "./src/stats/index.ts"
+    "./stats": "./src/stats/index.ts",
+    "./habits": "./src/habits/index.ts"
   },
   "scripts": {
     "test": "vitest run",

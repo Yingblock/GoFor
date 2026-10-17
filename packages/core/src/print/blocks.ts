@@ -16,6 +16,7 @@ export const BLOCK_KINDS = [
   'checkboxList',
   'timeLog',
   'schedule',
+  'timestamp',
   'checkboxGrid',
   'table',
   'slots',
@@ -72,6 +73,18 @@ export interface ScheduleBlock extends BlockBase {
   /** 显示几节；多了截断并在末尾标注。 */
   rows: number;
   title: string;
+}
+
+/**
+ * 当前时间。
+ *
+ * 打印那一刻的时间戳——用来回答"这张纸是什么时候打出来的"。
+ * 版式上只占一行，具体时刻由渲染层在打印时取，区块本身不存值，
+ * 否则同一份数据每次打印都会印出旧时间。
+ */
+export interface TimestampBlock extends BlockBase {
+  kind: 'timestamp';
+  label: string;
 }
 
 /** 时间登记：写在纸上再解析，见 `paper/timeRange.ts`。 */
@@ -143,6 +156,7 @@ export type Block =
   | CheckboxListBlock
   | TimeLogBlock
   | ScheduleBlock
+  | TimestampBlock
   | CheckboxGridBlock
   | TableBlock
   | SlotsBlock
@@ -175,6 +189,8 @@ export function blockHeightMm(block: Block): number {
       return BLOCK_PADDING_MM + block.rows * TIME_LOG_ROW_MM;
     case 'schedule':
       return BLOCK_PADDING_MM + block.rows * ROW_HEIGHT_MM;
+    case 'timestamp':
+      return BLOCK_PADDING_MM + ROW_HEIGHT_MM;
     case 'checkboxGrid':
       return BLOCK_PADDING_MM + block.rows * CELL_SIZE_MM;
     case 'table':

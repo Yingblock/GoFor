@@ -137,19 +137,28 @@ try {
 
   await openGroup(page, '记录');
   await clickItem(page, '每日打卡');
-  await page.waitForSelector('text=天连续', { timeout: 5000 });
-  await page.locator('button[aria-label$="打卡"]').first().click();
+  await page.waitForSelector('text=新建打卡项', { timeout: 5000 });
+
+  await page.getByRole('button', { name: '新建打卡项' }).first().click();
+  await page.fill('input[placeholder="打卡项名称，如：背单词"]', '背单词');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await page.waitForSelector('input[aria-label="完成 背单词"]', { timeout: 5000 });
+  check('可新建打卡项', true);
+
+  await page.locator('input[aria-label="完成 背单词"]').click();
   await sleep(400);
+
+  // 历史格子必须是只读的（未来不渲染、过去 disabled）
+  const readOnly = await page.locator('button[aria-disabled="true"]').count();
+  check('历史格子只读', readOnly > 0, `${readOnly} 个`);
+
   await page.reload({ waitUntil: 'networkidle' });
   await openGroup(page, '记录');
   await clickItem(page, '每日打卡');
-  await page.waitForSelector('text=天连续', { timeout: 5000 });
+  await page.waitForSelector('input[aria-label="完成 背单词"]', { timeout: 8000 });
   const persisted = await page
     .waitForFunction(
-      () => {
-        const cell = document.querySelector('button[aria-label$="打卡"]');
-        return cell?.className.includes('bg-[var(--color-ink)]') ?? false;
-      },
+      () => document.querySelector('input[aria-label="完成 背单词"]')?.checked === true,
       { timeout: 5000 },
     )
     .then(() => true)
@@ -224,6 +233,11 @@ try {
   await page.waitForSelector('text=/共 \\d+ 页/', { timeout: 5000 });
   const pageInfo = await page.locator('text=/共 \\d+ 页/').first().innerText();
   check('默认 A4 一页装下（含当日课表）', pageInfo.includes('共 1 页'), pageInfo);
+  check(
+    '纸面包含当日课表区块',
+    (await page.getByText('今日课表').count()) > 0,
+    '（今天可能无课，但区块必须存在）',
+  );
 
   /* ------------------------------------------------------ 命令面板与 PDF */
 

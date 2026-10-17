@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Period } from '../config/schema.ts';
 import {
   isOddWeek,
+  mergeAdjacent,
   occurrencesInWeek,
   occurrencesOn,
   patternOf,
@@ -374,5 +375,68 @@ describe('纯函数', () => {
     occurrences.pop();
 
     expect(data).toEqual(snapshot);
+  });
+});
+
+describe('连堂自动合并', () => {
+  const base = {
+    date: '2026-03-02',
+    courseId: 'c-math',
+    ruleId: 'r1',
+    startMinute: 480,
+    endMinute: 525,
+    overridden: false,
+  };
+
+  it('同科目、节次相接时合并成一整块', () => {
+    const merged = mergeAdjacent([
+      { ...base, key: 'a', startPeriod: 1, span: 1, startMinute: 480, endMinute: 525 },
+      {
+        ...base,
+        key: 'b',
+        startPeriod: 2,
+        span: 1,
+        startMinute: 535,
+        endMinute: 580,
+      },
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.span).toBe(2);
+    expect(merged[0]?.endMinute).toBe(580);
+  });
+
+  it('中间空一节就不合并（课间不是连堂）', () => {
+    const merged = mergeAdjacent([
+      { ...base, key: 'a', startPeriod: 1, span: 1 },
+      { ...base, key: 'b', startPeriod: 3, span: 1 },
+    ]);
+    expect(merged).toHaveLength(2);
+  });
+
+  it('不同科目不合并', () => {
+    const merged = mergeAdjacent([
+      { ...base, key: 'a', startPeriod: 1, span: 1 },
+      { ...base, key: 'b', startPeriod: 2, span: 1, courseId: 'c-physics' },
+    ]);
+    expect(merged).toHaveLength(2);
+  });
+
+  it('不同日期不合并', () => {
+    const merged = mergeAdjacent([
+      { ...base, key: 'a', startPeriod: 1, span: 1 },
+      { ...base, key: 'b', startPeriod: 2, span: 1, date: '2026-03-03' },
+    ]);
+    expect(merged).toHaveLength(2);
+  });
+
+  it('三节连续会合并成 span 3', () => {
+    const merged = mergeAdjacent([
+      { ...base, key: 'a', startPeriod: 1, span: 1, startMinute: 480, endMinute: 525 },
+      { ...base, key: 'b', startPeriod: 2, span: 1, startMinute: 535, endMinute: 580 },
+      { ...base, key: 'c', startPeriod: 3, span: 1, startMinute: 590, endMinute: 635 },
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.span).toBe(3);
+    expect(merged[0]?.endMinute).toBe(635);
   });
 });

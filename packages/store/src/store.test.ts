@@ -284,6 +284,55 @@ class V2Db extends Dexie {
   }
 }
 
+/** 只声明到 v3 的库，用来验证 v3 → v4 的打卡迁移。 */
+class V3Db extends Dexie {
+  config!: Table<{ key: string; value: string; updatedAt: number }, string>;
+  tasks!: Table<Task, string>;
+  subjects!: Table<Subject, string>;
+  sessions!: Table<StudySession, string>;
+  templates!: Table<StoredTemplate, string>;
+  checkins!: Table<{ date: string; done: boolean; note: string | null; updatedAt: number }, string>;
+
+  constructor(name: string) {
+    super(name);
+    const schema = {
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+    };
+    this.version(1).stores(schema);
+    this.version(2).stores({ ...schema, checkins: 'date' });
+    this.version(3).stores({ ...schema });
+  }
+}
+
+describe('存储：schema 升级 v3 → v4（旧打卡迁移成默认习惯）', () => {
+  it('把旧的 daily checkin 迁移成一条「学习」习惯的历史', async () => {
+    const name = `gofor-v4-${Math.random().toString(36).slice(2)}`;
+
+    const old = new V3Db(name);
+    // v3 的 checkins 表来自 v2，这里直接写两条已完成的记录
+    await old.table('checkins').bulkPut([
+      { date: '2026-03-01', done: true, note: null, updatedAt: 1 },
+      { date: '2026-03-02', done: false, note: null, updatedAt: 1 },
+      { date: '2026-03-03', done: true, note: null, updatedAt: 1 },
+    ]);
+    old.close();
+
+    const upgraded = new GoForDb(name);
+    const habits = await upgraded.habits.toArray();
+    expect(habits).toHaveLength(1);
+    expect(habits[0]?.name).toBe('学习');
+    expect(habits[0]?.startDate).toBe('2026-03-01');
+
+    const logs = await upgraded.habitLogs.toArray();
+    expect(logs.map((log) => log.date).sort()).toEqual(['2026-03-01', '2026-03-03']);
+    upgraded.close();
+  });
+});
+
 describe('存储：schema 升级 v2 → v3（tagPools 必须新建）', () => {
   it('停在 v2 的库升级后会补出 tagPools 表，且旧数据仍在', async () => {
     const name = `gofor-v3-${Math.random().toString(36).slice(2)}`;

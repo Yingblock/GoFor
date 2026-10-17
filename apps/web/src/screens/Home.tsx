@@ -106,10 +106,16 @@ export function Home({ tasks, onNavigate }: HomeProps) {
             value={`${todayTotal} 分`}
             note={todayTotal === 0 ? '还没有番茄记录' : undefined}
           />
+          {/*
+            这个指标以前叫「连续打卡」，但它是用学习记录（sessions）算的——
+            和打卡项是两回事。打卡是"我承诺做某事并对自己负责"，
+            学习时长是"我花了多少时间"。混用会让两个数字互相污染。
+            所以这里明确改名「连续学习」，打卡的连续天数在打卡页里算。
+          */}
           <StatCard
-            label="连续打卡"
+            label="连续学习"
             value={`${streak} 天`}
-            note={streak === 0 ? '今天还没有学习记录' : undefined}
+            note={streak === 0 ? '今天还没有学习记录' : '按番茄钟/纸面记录计算'}
           />
         </div>
       </section>

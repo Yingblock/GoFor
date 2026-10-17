@@ -1,6 +1,7 @@
 import { newId, systemClock } from '@gofor/core';
 import { dateKey, type Subject } from '@gofor/core/domain';
 import {
+  mergeAdjacent,
   type Occurrence,
   occurrencesOn,
   type Rule,
@@ -16,7 +17,15 @@ import {
   renameSubject,
   saveTimetable,
 } from '@gofor/store';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 const TERM_ID = 'default';
 
@@ -35,6 +44,35 @@ const DEFAULT_PERIODS = [
 ];
 
 const DAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+/**
+ * 浮层的宽/高估算值是**只用来防止浮层超出网格容器**的，不参与布局计算。
+ * 为什么允许估算：真正的宽度由 CSS 决定，这里只需要一个"大概占多大"的下界，
+ * 宁可估大一点（把浮层往回收一点），也不要让它被容器裁掉。
+ */
+const POPOVER_WIDTH = 224;
+const POPOVER_HEIGHT = 260;
+
+/**
+ * 编辑模式下点格子弹出的小浮层。
+ *
+ * - `add`：空格子 → 列科目，选一个就生成一条规则；
+ * - `delete`：有课的块 → 删掉产生它的那条规则。
+ *
+ * `x`/`y` 是相对网格容器的绝对定位坐标，在打开浮层时算一次并存进 state；
+ * 放到渲染期再读 DOM 会让每次重渲染都触发读写布局抖动，也让组件不再可预测。
+ */
+type EditPopover =
+  | { kind: 'add'; day: number; periodIndex: number; x: number; y: number }
+  | {
+      kind: 'delete';
+      ruleId: string;
+      courseId: string;
+      startPeriod: number;
+      span: number;
+      x: number;
+      y: number;
+    };
 
 /** 'YYYY-MM-DD' 加减天数（UTC 换算，避开时区偏移）。 */
 function addDays(date: string, days: number): string {
@@ -108,6 +146,11 @@ export function TimetableScreen() {
   const [weekStart, setWeekStart] = useState(mondayOf(dateKey(systemClock)));
   const [saved, setSaved] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
+  /** 编辑模式默认关闭：课表首先是"看"的，改是偶发动作。 */
+  const [editing, setEditing] = useState(false);
+  const [popover, setPopover] = useState<EditPopover | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const gridHostRef = useRef<HTMLDivElement | null>(null);
 
   /** 科目是全局数据，每次写完都重新拉一遍，保证改名/删除立刻反映到规则和周视图。 */
   const refreshSubjects = useCallback(async () => {
@@ -141,8 +184,28 @@ export function TimetableScreen() {
 
   const byDay = useMemo(() => {
     if (!data) return new Map<string, Occurrence[]>();
-    return new Map(weekDates.map((date) => [date, occurrencesOn(date, data)]));
+    // 先合并再渲染：用户把数学排成第 2、3 节两条规则时，屏幕上应该是一整块连堂，
+    // 而不是两个方块。合并放在 core（mergeAdjacent）而不是这里手写，
+    // 是因为"什么算连堂"是课表语义；这里只负责把结果摆到格子上。
+    return new Map(weekDates.map((date) => [date, mergeAdjacent(occurrencesOn(date, data))]));
   }, [data, weekDates]);
+
+  /**
+   * 编辑模式下哪些"日期 + 节次"格子已经有课。
+   * 用合并后的结果算：一个连堂块占了 span 行，这几行都该算"有课"，
+   * 否则连堂块下面的格子还能点开"加课"浮层，排出时间重叠的规则。
+   */
+  const occupiedCells = useMemo(() => {
+    const cells = new Set<string>();
+    for (const [date, occurrences] of byDay) {
+      for (const occurrence of occurrences) {
+        for (let offset = 0; offset < occurrence.span; offset += 1) {
+          cells.add(`${date}#${occurrence.startPeriod + offset}`);
+        }
+      }
+    }
+    return cells;
+  }, [byDay]);
 
   /** courseId → 科目。用 Map 是因为规则列表和周视图每帧都要查几十次。 */
   const subjectById = useMemo(
@@ -154,6 +217,110 @@ export function TimetableScreen() {
     setData((current) => (current ? patch(current) : current));
     setSaved(false);
   }, []);
+
+  /**
+   * 点浮层外面就关掉它。
+   *
+   * 用 `pointerdown` 而不是 `click`：pointerdown 比 click 早，关掉浮层后
+   * 这一次点击不会再落到"浮层覆盖的下层格子"上，避免关一次浮层顺手又打开一个新的。
+   * 监听挂在 document 上（而不是浮层的父元素），因为浮层是绝对定位、可能盖住邻居格子。
+   */
+  useEffect(() => {
+    if (popover === null) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && popoverRef.current?.contains(target)) return;
+      setPopover(null);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [popover]);
+
+  /**
+   * 把浮层贴在格子的左下角。
+   *
+   * 浮层是网格容器的绝对定位子元素（不是滚动容器的子元素），所以坐标取
+   * "相对容器左上角的可视偏移"——横向滚动后 rect 已经反映了当前位置，不用再加 scrollLeft。
+   * 下方放不下就翻到格子上面，右侧放不下就往回收，窄屏下也不会跑到页面外。
+   */
+  const anchorOf = (element: HTMLElement): { x: number; y: number } => {
+    const host = gridHostRef.current;
+    if (host === null) return { x: 0, y: 0 };
+    const hostRect = host.getBoundingClientRect();
+    const rect = element.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.left - hostRect.left, hostRect.width - POPOVER_WIDTH));
+    const below = rect.bottom - hostRect.top;
+    const above = rect.top - hostRect.top - POPOVER_HEIGHT;
+    return { x, y: below + POPOVER_HEIGHT > hostRect.height ? Math.max(0, above) : below };
+  };
+
+  const openAddPopover = (
+    event: ReactMouseEvent<HTMLButtonElement>,
+    day: number,
+    periodIndex: number,
+  ) => {
+    setPopover({ kind: 'add', day, periodIndex, ...anchorOf(event.currentTarget) });
+  };
+
+  const openDeletePopover = (event: ReactMouseEvent<HTMLButtonElement>, occurrence: Occurrence) => {
+    setPopover({
+      kind: 'delete',
+      ruleId: occurrence.ruleId,
+      courseId: occurrence.courseId,
+      startPeriod: occurrence.startPeriod,
+      span: occurrence.span,
+      ...anchorOf(event.currentTarget),
+    });
+  };
+
+  /**
+   * 在空格子上补一条规则。
+   *
+   * 只排被点的那一天那一节：想连排几天就多点几个格子，比让用户回到上面
+   * 再填"星期几 / 第几节"直观得多。写的是 `data.rules`，**不自动保存**，
+   * 用户仍要点「保存课表」——和页面上其它编辑行为保持一致，改坏了还能刷新走人。
+   */
+  const addRuleForSubject = useCallback(
+    (subject: Subject, day: number, periodIndex: number) => {
+      update((current) => ({
+        ...current,
+        rules: [
+          ...current.rules,
+          {
+            id: newId(),
+            // courseId 指向 subjects 表的科目，和番茄钟/作业共用同一份科目。
+            courseId: subject.id,
+            byDay: [day],
+            startPeriod: periodIndex,
+            span: 1,
+            intervalWeeks: 1,
+          },
+        ],
+      }));
+      setPopover(null);
+    },
+    [update],
+  );
+
+  /**
+   * 删掉产生这一块的规则。
+   *
+   * 取舍：连堂块是 mergeAdjacent 把多条规则的课并成一条的，块上只留下第一条规则的 ruleId，
+   * 所以删"这一节"只会去掉第一条规则，剩下的半截会立刻变回单独的块——
+   * 这比"猜用户想删整块"更安全：那需要把合并前的所有 ruleId 都带上，
+   * 而多删规则是不可撤销的数据丢失。要删干净就再点一次剩下的那块。
+   * 另外一条规则可能排了多个星期几，删规则会连带删掉它在别的那几天的课，浮层里已写明。
+   */
+  const removeRule = useCallback(
+    (ruleId: string) => {
+      update((current) => ({
+        ...current,
+        rules: current.rules.filter((rule) => rule.id !== ruleId),
+      }));
+      setPopover(null);
+    },
+    [update],
+  );
 
   const save = useCallback(async () => {
     if (!data) return;
@@ -197,6 +364,19 @@ export function TimetableScreen() {
   }
 
   const periodCount = data.periods.length;
+
+  /**
+   * 网格线。编辑模式下换成虚线：不用额外说明也能看出"这张表现在可以点"。
+   * 关闭时保持原来的两档灰度（横线更浅、竖线稍深），视觉上和以前完全一致。
+   */
+  const cellBorderClass = editing
+    ? 'border-b border-l border-dashed border-black/20'
+    : 'border-b border-black/[0.04] border-l border-black/[0.06]';
+
+  /** 网格容器的外框：编辑模式虚线 + 更亮的底色，关闭时保持原来的浅灰边框。 */
+  const gridFrameClass = editing
+    ? 'border-dashed border-black/25 bg-white/70'
+    : 'border-black/[0.08] bg-white/50';
 
   /** 查不到名字返回 null（科目被删/旧数据），由展示层决定怎么降级。 */
   const courseName = (id: string): string | null => subjectById.get(id)?.name ?? null;
@@ -397,7 +577,7 @@ export function TimetableScreen() {
 
       {/* C. 周视图 */}
       <section className="space-y-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setWeekStart(addDays(weekStart, -7))}
@@ -422,68 +602,189 @@ export function TimetableScreen() {
           <span className="text-xs tabular-nums opacity-45">
             {weekDates[0]} ~ {weekDates[6]}
           </span>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing((current) => !current);
+              // 退出编辑时顺手关掉浮层：否则它会留在只读界面上，
+              // 里面的"删除这节"还能点，等于绕过编辑模式改数据。
+              setPopover(null);
+            }}
+            aria-pressed={editing}
+            className={`ml-auto rounded border px-2 py-1 text-xs ${
+              editing
+                ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
+                : 'border-black/10 opacity-60'
+            }`}
+          >
+            {editing ? '退出编辑' : '编辑模式'}
+          </button>
         </div>
 
-        <div
-          className="overflow-x-auto rounded-xl border border-black/[0.08] bg-white/50"
-          data-testid="week-grid"
-        >
+        {editing ? <p className="text-[11px] opacity-45">点空白格子加课，点课程块删除</p> : null}
+
+        <div ref={gridHostRef} className="relative">
+          {/* 浮层用的是"相对容器"的静态坐标，横向滚动后会和格子错位；
+              滚动（滚轮/拖滚动条）不触发 pointerdown，所以这里单独关一次浮层。 */}
           <div
-            className="grid min-w-[640px] text-[11px]"
-            style={{ gridTemplateColumns: '52px repeat(7, minmax(0, 1fr))' }}
+            className={`overflow-x-auto rounded-xl border ${gridFrameClass}`}
+            data-testid="week-grid"
+            onScroll={() => setPopover(null)}
           >
-            <div className="border-b border-black/[0.06] p-1.5" />
-            {weekDates.map((date, index) => (
-              <div
-                key={date}
-                className={`border-b border-l border-black/[0.06] p-1.5 text-center ${
-                  date === today ? 'bg-black/[0.05] font-medium' : 'opacity-60'
-                }`}
-              >
-                {DAY_LABELS[index]}
-                <span className="ml-1 opacity-50">{date.slice(5)}</span>
-              </div>
-            ))}
-
-            {/* 基础网格：每节的空行 */}
-            {data.periods.map((period, row) =>
-              [-1, ...weekDates.keys()].map((column) => (
+            <div
+              className="grid min-w-[640px] text-[11px]"
+              style={{ gridTemplateColumns: '52px repeat(7, minmax(0, 1fr))' }}
+            >
+              <div className="border-b border-black/[0.06] p-1.5" />
+              {weekDates.map((date, index) => (
                 <div
-                  key={`${period.index}-${column}`}
-                  className="h-10 border-b border-black/[0.04] border-l border-black/[0.06] px-1 py-0.5 tabular-nums"
-                  style={{ gridColumn: column + 2, gridRow: row + 2 }}
+                  key={date}
+                  className={`border-b border-l border-black/[0.06] p-1.5 text-center ${
+                    date === today ? 'bg-black/[0.05] font-medium' : 'opacity-60'
+                  }`}
                 >
-                  {column === -1 ? (
-                    <span className="opacity-35">
-                      {period.index}
-                      <span className="ml-1 opacity-70">{period.start}</span>
-                    </span>
-                  ) : null}
+                  {DAY_LABELS[index]}
+                  <span className="ml-1 opacity-50">{date.slice(5)}</span>
                 </div>
-              )),
-            )}
+              ))}
 
-            {/* 课程块叠在网格上 */}
-            {weekDates.flatMap((date, column) =>
-              (byDay.get(date) ?? []).map((occurrence) => (
+              {/* 基础网格：节次列 */}
+              {data.periods.map((period, row) => (
                 <div
-                  key={occurrence.key}
-                  className="m-0.5 overflow-hidden rounded bg-[var(--color-ink)]/85 px-1.5 py-1 text-white"
-                  style={{
+                  key={`label-${period.index}`}
+                  className={`h-10 px-1 py-0.5 tabular-nums ${cellBorderClass}`}
+                  style={{ gridColumn: 1, gridRow: row + 2 }}
+                >
+                  <span className="opacity-35">
+                    {period.index}
+                    <span className="ml-1 opacity-70">{period.start}</span>
+                  </span>
+                </div>
+              ))}
+
+              {/* 基础网格：日期列。编辑模式下只有空格子长成按钮，
+                  有课的格子保持纯底色——课程块叠在上面，两个都要能点只会互相抢事件。 */}
+              {data.periods.map((period, row) =>
+                weekDates.map((date, column) => {
+                  const style: CSSProperties = { gridColumn: column + 2, gridRow: row + 2 };
+                  const cellClass = `h-10 px-1 py-0.5 tabular-nums ${cellBorderClass}`;
+                  const key = `${period.index}-${column}`;
+                  if (!editing || occupiedCells.has(`${date}#${period.index}`)) {
+                    return <div key={key} className={cellClass} style={style} />;
+                  }
+                  // weekDates 从周一开始，所以列序正好是星期几（1=周一 … 7=周日）。
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={(event) => openAddPopover(event, column + 1, period.index)}
+                      className={`${cellClass} cursor-pointer bg-black/[0.015] text-left hover:bg-black/[0.06]`}
+                      style={style}
+                      aria-label={`${DAY_LABELS[column]} 第 ${period.index} 节加课`}
+                    />
+                  );
+                }),
+              )}
+
+              {/* 课程块叠在网格上。查看模式是只读 div，编辑模式换成 button：
+                  只有真按钮才有 Tab 停靠点和键盘激活，删除入口不能只靠鼠标。 */}
+              {weekDates.flatMap((date, column) =>
+                (byDay.get(date) ?? []).map((occurrence) => {
+                  const style: CSSProperties = {
                     gridColumn: column + 2,
                     gridRow: `${occurrence.startPeriod + 1} / span ${occurrence.span}`,
-                  }}
-                  title={`${courseLabel(occurrence.courseId)} ${occurrence.startMinute}-${occurrence.endMinute}`}
-                >
-                  <CourseLabel
-                    id={occurrence.courseId}
-                    lookup={subjectById}
-                    unknownClassName="text-white/60"
-                  />
-                </div>
-              )),
-            )}
+                  };
+                  const title = `${courseLabel(occurrence.courseId)} ${occurrence.startMinute}-${occurrence.endMinute}`;
+                  const blockClass = `m-0.5 overflow-hidden rounded bg-[var(--color-ink)]/85 px-1.5 py-1 text-left text-white ${
+                    editing ? 'cursor-pointer ring-1 ring-white/40 hover:brightness-110' : ''
+                  }`;
+                  const label = (
+                    <CourseLabel
+                      id={occurrence.courseId}
+                      lookup={subjectById}
+                      unknownClassName="text-white/60"
+                    />
+                  );
+                  if (!editing) {
+                    return (
+                      <div key={occurrence.key} className={blockClass} style={style} title={title}>
+                        {label}
+                      </div>
+                    );
+                  }
+                  return (
+                    <button
+                      key={occurrence.key}
+                      type="button"
+                      onClick={(event) => openDeletePopover(event, occurrence)}
+                      className={blockClass}
+                      style={style}
+                      title={`${title}（点击删除）`}
+                    >
+                      {label}
+                    </button>
+                  );
+                }),
+              )}
+            </div>
           </div>
+
+          {/* 浮层放在滚动容器外面：格子可以横向滚动，浮层不能被裁成半截。 */}
+          {popover === null ? null : (
+            <div
+              ref={popoverRef}
+              role="dialog"
+              aria-label="编辑格子"
+              className="absolute z-20 w-56 rounded-xl border border-black/10 bg-white p-2 text-xs shadow-lg"
+              style={{ left: popover.x, top: popover.y }}
+            >
+              {popover.kind === 'add' ? (
+                <>
+                  <p className="px-1 pb-1 text-[11px] tabular-nums opacity-50">
+                    {DAY_LABELS[popover.day - 1]} 第 {popover.periodIndex} 节
+                  </p>
+                  {subjects.length === 0 ? (
+                    <p className="px-1 py-1 text-[11px] leading-relaxed opacity-50">
+                      还没有科目，先在「科目」里加一门。
+                    </p>
+                  ) : (
+                    <ul className="max-h-56 overflow-y-auto">
+                      {subjects.map((subject) => (
+                        <li key={subject.id}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void addRuleForSubject(subject, popover.day, popover.periodIndex)
+                            }
+                            className="w-full rounded px-2 py-1 text-left hover:bg-black/[0.06]"
+                          >
+                            {subject.name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="px-1 pb-1 text-[11px] tabular-nums opacity-50">
+                    {courseLabel(popover.courseId)} · 第 {popover.startPeriod} 节起
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => removeRule(popover.ruleId)}
+                    className="w-full rounded px-2 py-1 text-left text-red-600 hover:bg-red-50"
+                  >
+                    删除这节
+                  </button>
+                  <p className="px-1 pt-1 text-[11px] leading-relaxed opacity-40">
+                    会删掉产生它的那条规则（这条规则排的其它天也一起消失）。
+                    {popover.span > 1 ? '连堂块只删第一条规则，剩下的会变回单独的块。' : ''}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </section>
 

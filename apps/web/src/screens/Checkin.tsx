@@ -1,128 +1,546 @@
-import { systemClock } from '@gofor/core';
-import { type Checkin, dateKey, type StudySession } from '@gofor/core/domain';
-import { db, setCheckin } from '@gofor/store';
+import { newId, systemClock } from '@gofor/core';
+import { dateKey, type HabitLog } from '@gofor/core/domain';
+import {
+  addDays,
+  type Habit,
+  habitDatesBetween,
+  isHabitActiveOn,
+  isHabitCheckableOn,
+} from '@gofor/core/habits';
+import { db, deleteHabit, listHabitLogs, listHabits, saveHabit, setHabitLog } from '@gofor/store';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-const WINDOW_DAYS = 14;
+/** 历史方格只回看两周：够看清最近的节奏，又不至于把小屏挤爆。 */
+const HISTORY_DAYS = 14;
 
-/** 'YYYY-MM-DD' 加减天数（UTC 换算，避开时区偏移）。 */
-function addDays(date: string, days: number): string {
-  const [year, month, day] = date.split('-').map(Number);
-  const base = Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1);
-  return new Date(base + days * 86_400_000).toISOString().slice(0, 10);
+/**
+ * 连续天数要从今天一直往回数，两周的窗口不够，所以日志一次多取一年。
+ * 一年以上的连续打卡几乎不存在，用它当上限，避免把整张表读进内存。
+ */
+const STREAK_LOOKBACK_DAYS = 366;
+
+/** 1=周一 … 7=周日，与 `Habit.weekdays` 的取值对齐。 */
+const WEEKDAYS: { value: number; label: string }[] = [
+  { value: 1, label: '周一' },
+  { value: 2, label: '周二' },
+  { value: 3, label: '周三' },
+  { value: 4, label: '周四' },
+  { value: 5, label: '周五' },
+  { value: 6, label: '周六' },
+  { value: 7, label: '周日' },
+];
+
+/**
+ * 与仓储里 `setHabitLog` 写的主键格式一致（`${habitId}@${date}`）。
+ *
+ * 自己不另造一个键：键格式一旦和库里不一致，读出来的记录就对不上，
+ * 界面上会全部显示成"未打卡"。
+ */
+function logKey(habitId: string, date: string): string {
+  return `${habitId}@${date}`;
 }
 
-/** 从 endDate 往回数连续有活动的天数。 */
-function streakOf(activeDates: Set<string>, endDate: string): number {
+/** 把重复规则和起止日期说成人话。 */
+function describeSchedule(habit: Habit): string {
+  const repeat =
+    habit.weekdays.length === 0
+      ? '每天'
+      : [...habit.weekdays]
+          .sort((a, b) => a - b)
+          .map((value) => WEEKDAYS.find((day) => day.value === value)?.label ?? `周${value}`)
+          .join('、');
+  const span =
+    habit.endDate === null ? `${habit.startDate} 起` : `${habit.startDate} ~ ${habit.endDate}`;
+  return `${repeat} · ${span}`;
+}
+
+/**
+ * 某个打卡项的连续天数。
+ *
+ * 口径：从今天往回数，并且**只数这项排期内的日子**——没排期的日子
+ * （比如"周一三五"里的周二）既不计数也不打断，否则这类项永远连不起来，
+ * 数字就失去意义。到今天还没打就直接断（今天没打不算"连续到今天"）。
+ *
+ * 只认 `habitLogs`（用户手动勾的）：学习时长是"我花了多久"，
+ * 打卡是"我做到了"，两者语义不同，混算会让打卡数字虚高。
+ */
+function streakOf(habit: Habit, doneKeys: Set<string>, today: string): number {
   let count = 0;
-  let cursor = endDate;
-  while (activeDates.has(cursor)) {
-    count += 1;
+  let cursor = today;
+  for (let guard = 0; guard < STREAK_LOOKBACK_DAYS; guard += 1) {
+    // 开始日期之前不算失败：新项不该背着"创建前的日子"显示断掉。
+    if (cursor < habit.startDate) break;
+    if (isHabitActiveOn(habit, cursor)) {
+      if (!doneKeys.has(logKey(habit.id, cursor))) break;
+      count += 1;
+    }
     cursor = addDays(cursor, -1);
   }
   return count;
 }
 
+interface HabitDraft {
+  name: string;
+  weekdays: number[];
+  /** 'YYYY-MM-DD'，必填。 */
+  startDate: string;
+  /** 'YYYY-MM-DD'，空字符串表示长期。 */
+  endDate: string;
+}
+
+interface HabitFormProps {
+  title: string;
+  initial: HabitDraft;
+  submitLabel: string;
+  onSubmit: (draft: HabitDraft) => void;
+  onCancel: () => void;
+}
+
 /**
- * 离线·M2 每日打卡。
+ * 新建 / 编辑共用的行内面板。
  *
- * 只记"这一天有没有学"。连续天数是**算出来的**，不落库——
- * 存下来的计数在补录历史时一定不一致。
+ * 不用 prompt / confirm：系统弹窗在这套离线 PWA 里样式不可控，
+ * 也没法做"留空 = 每天"这种需要解释的输入。
+ * 状态放组件内部，靠父级传 `key` 在切换目标时重建，避免残留上一次的草稿。
+ */
+function HabitFormPanel({ title, initial, submitLabel, onSubmit, onCancel }: HabitFormProps) {
+  const [name, setName] = useState(initial.name);
+  const [weekdays, setWeekdays] = useState<number[]>(initial.weekdays);
+  const [startDate, setStartDate] = useState(initial.startDate);
+  const [endDate, setEndDate] = useState(initial.endDate);
+
+  const rangeInvalid = startDate !== '' && endDate !== '' && endDate < startDate;
+  const canSubmit = name.trim() !== '' && startDate !== '' && !rangeInvalid;
+
+  const submit = () => {
+    if (!canSubmit) return;
+    onSubmit({ name, weekdays, startDate, endDate });
+  };
+
+  return (
+    <div className="space-y-2.5 rounded-xl border border-black/[0.08] bg-white/70 p-3">
+      <div className="flex items-center justify-between text-xs">
+        <span className="opacity-60">{title}</span>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-[11px] opacity-40 hover:opacity-70"
+        >
+          取消
+        </button>
+      </div>
+
+      <input
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            submit();
+          }
+          if (event.key === 'Escape') onCancel();
+        }}
+        placeholder="打卡项名称，如：背单词"
+        className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm outline-none"
+      />
+
+      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+        <span className="text-[10px] opacity-40">重复</span>
+        {WEEKDAYS.map((day) => {
+          const selected = weekdays.includes(day.value);
+          return (
+            <button
+              key={day.value}
+              type="button"
+              aria-pressed={selected}
+              onClick={() =>
+                setWeekdays((current) =>
+                  selected
+                    ? current.filter((value) => value !== day.value)
+                    : [...current, day.value],
+                )
+              }
+              className={
+                selected
+                  ? 'rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-white'
+                  : 'rounded-full border border-black/10 px-2 py-0.5 opacity-60 transition hover:opacity-100'
+              }
+            >
+              {day.label}
+            </button>
+          );
+        })}
+        <span className="text-[10px] opacity-30">不选 = 每天</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-[11px] opacity-70">
+        <label className="flex items-center gap-1.5">
+          <span>开始</span>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(event) => setStartDate(event.target.value)}
+            className="rounded border border-black/10 bg-white/70 px-2 py-1"
+          />
+        </label>
+        <label className="flex items-center gap-1.5">
+          <span>结束</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(event) => setEndDate(event.target.value)}
+            className="rounded border border-black/10 bg-white/70 px-2 py-1"
+          />
+          <span className="text-[10px] opacity-50">留空 = 长期</span>
+        </label>
+      </div>
+
+      {rangeInvalid ? (
+        <p className="text-[10px] text-amber-700">结束日期不能早于开始日期。</p>
+      ) : null}
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!canSubmit}
+          className="rounded-lg bg-[var(--color-ink)] px-3 py-1.5 text-xs text-white disabled:opacity-30"
+        >
+          {submitLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs opacity-60"
+        >
+          取消
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface HistoryGridProps {
+  habit: Habit;
+  today: string;
+  historyFrom: string;
+  doneKeys: Set<string>;
+}
+
+/**
+ * 最近两周的方格，**整块只读**。
+ *
+ * 两个刻意的限制：
+ * 1. 未来不渲染：`habitDatesBetween` 的右端就是今天，压根拿不到未来的日期。
+ *    这是渲染层的硬保证——未来还没发生，能提前勾选就等于把"记录"变成"愿望清单"。
+ * 2. 过去只读：打卡是对已发生事实的陈述，允许事后补勾/取消，统计就会变成
+ *    可以随时修改的数字，连续天数也就失去意义。所以过去的格子用 disabled，
+ *    并且在 title 与页脚文案里说明"历史只读"，点击不会静默什么都不发生。
+ */
+function HistoryGrid({ habit, today, historyFrom, doneKeys }: HistoryGridProps) {
+  const dates = habitDatesBetween(habit, historyFrom, today);
+
+  if (dates.length === 0) {
+    return <p className="mt-1.5 text-[10px] opacity-30">最近两周没有安排打卡。</p>;
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+      {dates.map((date) => {
+        const done = doneKeys.has(logKey(habit.id, date));
+        const isToday = date === today;
+        return (
+          <button
+            key={date}
+            type="button"
+            disabled
+            aria-disabled="true"
+            aria-label={`${date} ${done ? '已打卡' : '未打卡'}`}
+            title={`${date}${isToday ? '（今天）' : ''} · ${done ? '已打卡' : '未打卡'} · 历史只读`}
+            className={`size-5 cursor-not-allowed rounded border text-[9px] leading-none tabular-nums ${
+              done
+                ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
+                : 'border-black/20 bg-white/60 text-black/40'
+            } ${isToday ? 'ring-1 ring-[var(--color-accent)] ring-offset-1' : ''}`}
+          >
+            {Number(date.slice(8, 10))}
+          </button>
+        );
+      })}
+      {/* 格子是 disabled 的，点下去不会发生任何事；所以就地写清"只读"，
+          而不是让用户点完猜自己是不是点错了。 */}
+      <span className="ml-1 text-[10px] opacity-30">只读</span>
+    </div>
+  );
+}
+
+/**
+ * 离线·M2 每日打卡（多打卡项 + 重复规则）。
+ *
+ * 数据流：`habits` 是"要做什么"（名称 + 周几重复 + 起止日期），
+ * `habitLogs` 是"哪天做到了"。某天该不该打卡由纯函数 `isHabitActiveOn` 算出来、
+ * 不落库——排期一旦单独存一份，改规则时必然和规则本身不一致。
+ * 写入只有一条路径：`setHabitLog(db, habitId, today, done, now)`。
  */
 export function CheckinScreen() {
   const today = dateKey(systemClock);
-  const dates = useMemo(
-    () => Array.from({ length: WINDOW_DAYS }, (_, index) => addDays(today, -index)),
+  const historyFrom = useMemo(() => addDays(today, -(HISTORY_DAYS - 1)), [today]);
+  const logFrom = useMemo(() => addDays(today, -(STREAK_LOOKBACK_DAYS - 1)), [today]);
+
+  const habits = useLiveQuery(() => listHabits(db), [], [] as Habit[]);
+  // 右端写死为今天：即使库里有未来的脏记录，界面也不会把它当成"已打过"。
+  const logs = useLiveQuery(
+    () => listHabitLogs(db, logFrom, today),
+    [logFrom, today],
+    [] as HabitLog[],
+  );
+
+  const doneKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const log of logs) {
+      if (log.done) set.add(logKey(log.habitId, log.date));
+    }
+    return set;
+  }, [logs]);
+
+  const dueToday = useMemo(
+    () => habits.filter((habit) => isHabitActiveOn(habit, today)),
+    [habits, today],
+  );
+  // 今天轮不到的项也要能看见、能改规则，否则"周一三五"的项在周二就成了隐形数据。
+  const idleToday = useMemo(
+    () => habits.filter((habit) => !isHabitActiveOn(habit, today)),
+    [habits, today],
+  );
+
+  /** 展示口径：今天该打卡的项里最长的那条连续天数。 */
+  const streak = useMemo(() => {
+    let best = 0;
+    for (const habit of dueToday) {
+      best = Math.max(best, streakOf(habit, doneKeys, today));
+    }
+    return best;
+  }, [dueToday, doneKeys, today]);
+
+  const [formTarget, setFormTarget] = useState<{ habitId: string | null } | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  const editingId = formTarget?.habitId ?? null;
+  const creating = formTarget !== null && formTarget.habitId === null;
+
+  /** 新建时的草稿从"今天开始、每天"起步；编辑时原样回填。 */
+  const draftFor = useCallback(
+    (habit: Habit | null): HabitDraft =>
+      habit === null
+        ? { name: '', weekdays: [], startDate: today, endDate: '' }
+        : {
+            name: habit.name,
+            weekdays: [...habit.weekdays],
+            startDate: habit.startDate,
+            endDate: habit.endDate ?? '',
+          },
     [today],
   );
 
-  const from = dates[dates.length - 1] ?? today;
-  const to = dates[0] ?? today;
-
-  const checkins = useLiveQuery(
-    () => db.checkins.where('date').between(from, to, true, true).toArray(),
-    [from, to],
-    [] as Checkin[],
+  /**
+   * 勾选 / 取消今天。
+   *
+   * 只有今天走到这里：过去的格子是 disabled，未来的日期不渲染。
+   * 时间戳走 clock 而不是 `Date.now()`，和领域约定保持一致。
+   */
+  const toggleToday = useCallback(
+    async (habit: Habit) => {
+      const next = !doneKeys.has(logKey(habit.id, today));
+      await setHabitLog(db, habit.id, today, next, systemClock.now());
+    },
+    [doneKeys, today],
   );
 
-  const sessions = useLiveQuery(
-    () => db.sessions.where('date').between(from, to, true, true).toArray(),
-    [from, to],
-    [] as StudySession[],
+  const saveDraft = useCallback(
+    async (habitId: string | null, draft: HabitDraft) => {
+      const now = systemClock.now();
+      const existing = habitId === null ? undefined : habits.find((item) => item.id === habitId);
+      await saveHabit(db, {
+        // 编辑保留原 id：日志主键是 `${habitId}@${date}`，换 id 等于把历史全丢掉。
+        id: existing?.id ?? newId(),
+        name: draft.name.trim(),
+        weekdays: [...draft.weekdays].sort((a, b) => a - b),
+        startDate: draft.startDate,
+        // 空输入统一落成 null，库里只保留一种"长期"的表示。
+        endDate: draft.endDate === '' ? null : draft.endDate,
+        // order 用当前数量递增，新建排在最后；编辑保留原顺序，改个名字不该跳位。
+        order: existing?.order ?? habits.length,
+        createdAt: existing?.createdAt ?? now,
+      });
+      setFormTarget(null);
+    },
+    [habits],
   );
 
-  const byDate = useMemo(() => {
-    const map = new Map<string, Checkin>();
-    for (const record of checkins) map.set(record.date, record);
-    return map;
-  }, [checkins]);
-
-  // 有番茄钟记录的日子自动视为已打卡
-  const autoDates = useMemo(() => new Set(sessions.map((item) => item.date)), [sessions]);
-
-  const activeDates = useMemo(() => {
-    const set = new Set<string>(autoDates);
-    for (const record of checkins) {
-      if (record.done) set.add(record.date);
-    }
-    return set;
-  }, [autoDates, checkins]);
-
-  const streak = useMemo(() => streakOf(activeDates, today), [activeDates, today]);
-  const total = useMemo(
-    () => dates.filter((date) => activeDates.has(date)).length,
-    [dates, activeDates],
-  );
-
-  const toggle = useCallback(async (date: string, done: boolean) => {
-    await setCheckin(db, { date, done }, Date.now());
+  const removeHabit = useCallback(async (habit: Habit) => {
+    // 仓储在事务里连带清掉 habitLogs：孤儿历史留着没有意义。
+    await deleteHabit(db, habit.id);
+    setPendingDeleteId(null);
+    setFormTarget((current) => (current !== null && current.habitId === habit.id ? null : current));
   }, []);
+
+  const renderRow = (habit: Habit) => {
+    const done = doneKeys.has(logKey(habit.id, today));
+    // 唯一的"今天能不能写"判据，未来与过去都由它挡在门外。
+    const checkable = isHabitCheckableOn(habit, today, today);
+
+    return (
+      <li key={habit.id} className="group px-4 py-3">
+        {editingId === habit.id ? (
+          <HabitFormPanel
+            key={habit.id}
+            title="编辑打卡项"
+            initial={draftFor(habit)}
+            submitLabel="保存修改"
+            onSubmit={(draft) => void saveDraft(habit.id, draft)}
+            onCancel={() => setFormTarget(null)}
+          />
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <input
+                type="checkbox"
+                aria-label={`完成 ${habit.name}`}
+                checked={done}
+                disabled={!checkable}
+                onChange={() => void toggleToday(habit)}
+                title={checkable ? '勾上表示今天完成了' : '今天不用打卡'}
+                className={`size-4 shrink-0 ${checkable ? '' : 'cursor-not-allowed opacity-30'}`}
+              />
+              <span className="flex-1 text-sm">{habit.name}</span>
+
+              {!checkable ? (
+                <span className="rounded bg-black/[0.06] px-1.5 py-0.5 text-[10px] opacity-50">
+                  今天不用
+                </span>
+              ) : (
+                <span className="text-[10px] opacity-40">{done ? '已打卡' : '未打卡'}</span>
+              )}
+
+              <span className="text-[10px] tabular-nums opacity-30">{describeSchedule(habit)}</span>
+
+              {/* 触屏没有 hover，小屏常显操作，桌面悬停出现（沿用作业清单的做法）。 */}
+              <span className="flex items-center gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingDeleteId(null);
+                    setFormTarget({ habitId: habit.id });
+                  }}
+                  className="px-1 text-xs opacity-50"
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingDeleteId(habit.id)}
+                  className="px-1 text-xs opacity-50"
+                >
+                  删除
+                </button>
+              </span>
+            </div>
+
+            <HistoryGrid
+              habit={habit}
+              today={today}
+              historyFrom={historyFrom}
+              doneKeys={doneKeys}
+            />
+
+            {pendingDeleteId === habit.id ? (
+              <p className="mt-2 flex flex-wrap items-center gap-2 pl-7 text-[11px] text-amber-700">
+                <span>删除「{habit.name}」会连它的全部历史打卡一起删掉，无法恢复。确定？</span>
+                <button
+                  type="button"
+                  onClick={() => void removeHabit(habit)}
+                  className="rounded border border-amber-300 px-2 py-0.5"
+                >
+                  确认删除
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingDeleteId(null)}
+                  className="rounded border border-black/10 px-2 py-0.5 opacity-60"
+                >
+                  取消
+                </button>
+              </p>
+            ) : null}
+          </>
+        )}
+      </li>
+    );
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-baseline gap-6">
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
         <span className="flex items-baseline gap-2">
           <span className="text-3xl font-semibold tabular-nums">{streak}</span>
-          <span className="text-sm opacity-50">天连续</span>
+          <span className="text-sm opacity-50">天最长连续</span>
         </span>
-        <span className="flex items-baseline gap-2">
-          <span className="text-xl font-semibold tabular-nums">{total}</span>
-          <span className="text-sm opacity-50">/ {WINDOW_DAYS} 天有学习</span>
-        </span>
+        <span className="text-xs tabular-nums opacity-40">今天 {today}</span>
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={() => {
+            setPendingDeleteId(null);
+            setFormTarget({ habitId: null });
+          }}
+          className="rounded-lg bg-[var(--color-ink)] px-3 py-1.5 text-xs text-white"
+        >
+          新建打卡项
+        </button>
       </div>
 
-      <ul className="space-y-1.5">
-        {dates.map((date) => {
-          const record = byDate.get(date);
-          const auto = autoDates.has(date);
-          const done = record?.done ?? auto;
-          return (
-            <li key={date} className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => void toggle(date, !done)}
-                aria-label={`${date} 打卡`}
-                className={`size-5 shrink-0 rounded border transition ${
-                  done
-                    ? 'border-[var(--color-ink)] bg-[var(--color-ink)]'
-                    : 'border-black/20 bg-white/60'
-                }`}
-              />
-              <span className={`text-sm tabular-nums ${date === today ? 'font-medium' : ''}`}>
-                {date}
-                {date === today ? ' · 今天' : ''}
-              </span>
-              {auto && !record?.done ? (
-                <span className="text-[10px] opacity-35">有学习记录</span>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
+      {creating ? (
+        <HabitFormPanel
+          key="new"
+          title="新建打卡项"
+          initial={draftFor(null)}
+          submitLabel="保存"
+          onSubmit={(draft) => void saveDraft(null, draft)}
+          onCancel={() => setFormTarget(null)}
+        />
+      ) : null}
+
+      <section className="space-y-2">
+        <h2 className="text-xs opacity-40">今天该打卡</h2>
+        {dueToday.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-black/[0.12] px-4 py-8 text-center text-xs opacity-40">
+            今天没有要打卡的项。用右上角「新建打卡项」加一项。
+          </p>
+        ) : (
+          <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
+            {dueToday.map((habit) => renderRow(habit))}
+          </ul>
+        )}
+      </section>
+
+      {idleToday.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="text-xs opacity-40">今天不用打卡</h2>
+          <p className="text-[10px] leading-relaxed opacity-35">
+            这些项的重复规则不含今天（或在起止日期之外），只能看历史、改规则。
+          </p>
+          <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
+            {idleToday.map((habit) => renderRow(habit))}
+          </ul>
+        </section>
+      ) : null}
 
       <p className="text-[11px] leading-relaxed opacity-35">
-        有番茄钟记录的日子自动算作已打卡；手动勾选用于补录。连续天数由两者合并计算。
+        方格是最近 {HISTORY_DAYS} 天的历史，只读：打卡记录的是"我做到了"，
+        允许回头补勾或取消，统计就成了可以随时改写的数字。今天能不能打只看今天——
+        未来还没发生，所以不渲染、也不允许提前勾。连续天数取「今天该打卡的项里最长的一条」：
+        从今天往回数，只数这项排期内的日子，哪天没打就断在那一格。
       </p>
     </div>
   );

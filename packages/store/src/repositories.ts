@@ -2,6 +2,7 @@ import type { AppConfig } from '@gofor/core/config';
 import {
   type Checkin,
   DEFAULT_SUBJECT_NAMES,
+  type HabitLog,
   type StoredTemplate,
   type StoredTimetable,
   type StudySession,
@@ -9,6 +10,7 @@ import {
   type TagPool,
   type Task,
 } from '@gofor/core/domain';
+import type { Habit } from '@gofor/core/habits';
 import type { PomodoroRun } from '@gofor/core/pomodoro';
 import { currentConfigOrDefault, DEFAULT_CONFIG_KEY } from './config.ts';
 import type { GoForDb } from './db.ts';
@@ -196,6 +198,52 @@ export async function listTimetables(database: GoForDb): Promise<StoredTimetable
 
 export async function deleteTimetable(database: GoForDb, id: string): Promise<void> {
   await database.timetables.delete(id);
+}
+
+/* ---------------------------------------------------------------- 打卡项 */
+
+export async function listHabits(database: GoForDb): Promise<Habit[]> {
+  const habits = await database.habits.toArray();
+  return habits.sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
+}
+
+export async function saveHabit(database: GoForDb, habit: Habit): Promise<void> {
+  await database.habits.put(habit);
+}
+
+/** 删除打卡项连同它的历史——两者没有独立意义，留着只会变成孤儿数据。 */
+export async function deleteHabit(database: GoForDb, id: string): Promise<void> {
+  await database.transaction('rw', [database.habits, database.habitLogs], async () => {
+    await database.habits.delete(id);
+    await database.habitLogs.where('habitId').equals(id).delete();
+  });
+}
+
+/** 某个打卡项在闭区间内的记录。 */
+export async function listHabitLogs(
+  database: GoForDb,
+  from: string,
+  to: string,
+): Promise<HabitLog[]> {
+  const logs = await database.habitLogs.toArray();
+  return logs.filter((log) => log.date >= from && log.date <= to);
+}
+
+/** 写入/覆盖某天某项的打卡状态。 */
+export async function setHabitLog(
+  database: GoForDb,
+  habitId: string,
+  date: string,
+  done: boolean,
+  now: number,
+): Promise<void> {
+  await database.habitLogs.put({
+    id: `${habitId}@${date}`,
+    habitId,
+    date,
+    done,
+    updatedAt: now,
+  });
 }
 
 /* ------------------------------------------------------------------ 打卡 */

@@ -19,6 +19,7 @@ export {
   type TableBlock,
   TIME_LOG_ROW_MM,
   type TimeLogBlock,
+  type TimestampBlock,
   type TitleBlock,
   validateBlock,
 } from './blocks.ts';

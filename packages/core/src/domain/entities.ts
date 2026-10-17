@@ -97,6 +97,19 @@ export interface Checkin {
 }
 
 /**
+ * 某个打卡项在某一天的完成情况。
+ *
+ * 主键用 `${habitId}@${date}`：一天一项最多一条，天然幂等，重复写不会长出重复行。
+ */
+export interface HabitLog {
+  id: string;
+  habitId: string;
+  date: string;
+  done: boolean;
+  updatedAt: number;
+}
+
+/**
  * 持久化的课表。
  *
  * 整份 `TimetableData` 存成一个 JSON，而不是拆成 courses/rules/overrides 三张表：
