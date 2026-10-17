@@ -44,3 +44,10 @@ export {
   type PaperSize,
   ROW_GAP_MM,
 } from './paper.ts';
+export {
+  BUILTIN_TEMPLATES,
+  CALIBRATION_TEMPLATE,
+  materialize,
+  paperFor,
+  type PrintTemplate,
+} from './templates.ts';

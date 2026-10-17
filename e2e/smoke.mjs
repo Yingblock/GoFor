@@ -86,29 +86,66 @@ try {
   check('新增任务', true);
 
   // 5) 勾选完成并刷新（IndexedDB 持久化）
-  await page.locator('input[type="checkbox"]').first().click();
+  await page.locator('input[aria-label="完成 数学卷子 3.1"]').click();
   await sleep(500);
   await page.reload({ waitUntil: 'networkidle' });
   await openGroup(page, '记录');
   await clickItem(page, '作业清单');
   await page.waitForSelector('text=数学卷子 3.1', { timeout: 8000 });
   check('刷新后任务仍在', true);
-  check('刷新后完成状态仍在', await page.locator('input[type="checkbox"]').first().isChecked());
+  check(
+    '刷新后完成状态仍在',
+    await page.locator('input[aria-label="完成 数学卷子 3.1"]').isChecked(),
+  );
 
-  // 6) 未实现的条目给出阶段说明（不是死链）
+  // 6) 未实现的条目给出阶段说明（不是死链）——用尚未实现的「笔记本」
   await openGroup(page, '工具');
-  await clickItem(page, '番茄钟');
-  await page.waitForSelector('text=此条目属于阶段 P1', { timeout: 5000 });
+  await clickItem(page, '笔记本');
+  await page.waitForSelector('text=此条目属于阶段', { timeout: 5000 });
   check('未实现条目给出阶段说明', true);
 
-  // 7) 打印页：A4 一页装下
+  // 7) 番茄钟：能开始、能暂停
+  await openGroup(page, '工具');
+  await clickItem(page, '番茄钟');
+  await page.getByRole('button', { name: /开始专注/ }).first().click();
+  await page.waitForSelector('text=/\\d{2}:\\d{2}/', { timeout: 5000 });
+  await page.getByRole('button', { name: '暂停' }).first().click();
+  await page.waitForSelector('text=已暂停', { timeout: 5000 });
+  check('番茄钟可开始并暂停', true);
+  await page.getByRole('button', { name: '放弃' }).first().click();
+
+  // 8) 每日打卡：勾选后刷新仍在
+  await openGroup(page, '记录');
+  await clickItem(page, '每日打卡');
+  await page.waitForSelector('text=天连续', { timeout: 5000 });
+  const todayCell = page.locator('button[aria-label$="打卡"]').first();
+  await todayCell.click();
+  await sleep(400);
+  await page.reload({ waitUntil: 'networkidle' });
+  await openGroup(page, '记录');
+  await clickItem(page, '每日打卡');
+  await page.waitForSelector('text=天连续', { timeout: 5000 });
+  // liveQuery 是异步的，"天连续" 出现时数据可能还没到，必须等条件成立
+  const persisted = await page
+    .waitForFunction(
+      () => {
+        const cell = document.querySelector('button[aria-label$="打卡"]');
+        return cell?.className.includes('bg-[var(--color-ink)]') ?? false;
+      },
+      { timeout: 5000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  check('打卡可勾选并持久化', persisted);
+
+  // 9) 打印页：A4 一页装下
   await openGroup(page, '导出');
   await clickItem(page, '打印 checklist');
   await page.waitForSelector('text=/共 \\d+ 页/', { timeout: 5000 });
   const pageInfo = await page.locator('text=/共 \\d+ 页/').first().innerText();
   check('默认 A4 一页装下', pageInfo.includes('共 1 页'), pageInfo);
 
-  // 8) 命令面板
+  // 10) 命令面板
   await page.keyboard.press('Control+k');
   await page.waitForSelector('input[placeholder="输入命令…"]', { timeout: 5000 });
   check('命令面板可唤起', true);

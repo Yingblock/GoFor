@@ -1,13 +1,12 @@
 import { systemClock } from '@gofor/core';
 import { type AppConfig, mergeConfig } from '@gofor/core/config';
-import { dateKey, type StudySession, type Task } from '@gofor/core/domain';
-import type { Block, PaperId } from '@gofor/core/print';
+import { dateKey, type Task } from '@gofor/core/domain';
+import { type Block, materialize, type PaperId, paperFor } from '@gofor/core/print';
 import {
   currentConfigOrDefault,
   db,
   exportAll,
   importAll,
-  listSessionsByDate,
   listTasks,
   saveConfig,
 } from '@gofor/store';
@@ -17,43 +16,18 @@ import { type Command, CommandPalette } from './components/CommandPalette.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { groupOf, type ScreenId, titleOf } from './nav.ts';
 import { PrintLayer } from './print/PrintSheet.tsx';
+import { CheckinScreen } from './screens/Checkin.tsx';
 import { ComingSoon } from './screens/ComingSoon.tsx';
 import { Home } from './screens/Home.tsx';
+import { Pomodoro } from './screens/Pomodoro.tsx';
 import { PrintScreen } from './screens/PrintScreen.tsx';
 import { Tasks } from './screens/Tasks.tsx';
+import { TemplateEditorScreen } from './screens/TemplateEditor.tsx';
+import { TimetableScreen } from './screens/Timetable.tsx';
 
 function todayLabel(date: string): string {
   const [year, month, day] = date.split('-');
   return `${year} 年 ${Number(month)} 月 ${Number(day)} 日`;
-}
-
-/**
- * 拼出「我的一天」的纸面区块。
- *
- * 只用需求里存在的区块：清单 + 时间登记 + 评分格 + 书写提示。
- * 行数随纸张自适应，两个尺寸都能一页放下（由 layout() 保证）。
- */
-function buildSheetBlocks(config: AppConfig, date: string): Block[] {
-  const big = config.print.paper === 'A4';
-  const taskRows = big ? 10 : 4;
-  const logRows = big ? 2 : 1;
-
-  return [
-    { id: 'title', kind: 'title', span: 12, text: todayLabel(date), align: 'left' },
-    {
-      id: 'tasks',
-      kind: 'checkboxList',
-      span: 12,
-      bind: 'tasks.today',
-      rows: taskRows,
-      showMeta: [],
-    },
-    { id: 'am', kind: 'timeLog', span: 12, dayPart: 'morning', rows: logRows, label: '上午' },
-    { id: 'pm', kind: 'timeLog', span: 12, dayPart: 'afternoon', rows: logRows, label: '下午' },
-    { id: 'ev', kind: 'timeLog', span: 12, dayPart: 'evening', rows: logRows, label: '晚上' },
-    { id: 'slots', kind: 'slots', span: 12, labels: ['睡眠', '心情', '专注'] },
-    { id: 'hint', kind: 'hintLine', span: 12, text: config.print.hintLine },
-  ];
 }
 
 export function App() {
@@ -66,7 +40,6 @@ export function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const tasks = useLiveQuery(() => listTasks(db), [], [] as Task[]);
-  const sessions = useLiveQuery(() => listSessionsByDate(db, today), [today], [] as StudySession[]);
 
   useEffect(() => {
     void currentConfigOrDefault(db).then((result) => setConfig(result.config));
@@ -83,7 +56,11 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const blocks = useMemo(() => (config ? buildSheetBlocks(config, today) : []), [config, today]);
+  const blocks = useMemo(() => {
+    if (!config) return [] as Block[];
+    const template = paperFor('day', config.print.paper);
+    return materialize(template, { date: today, dateLabel: todayLabel(today) });
+  }, [config, today]);
 
   const paper: PaperId = config?.print.paper ?? 'A4';
 
@@ -140,9 +117,17 @@ export function App() {
   const body = (() => {
     switch (screen) {
       case 'home':
-        return <Home tasks={tasks} sessions={sessions} onNavigate={navigate} />;
+        return <Home tasks={tasks} onNavigate={navigate} />;
       case 'tasks':
         return <Tasks tasks={tasks} />;
+      case 'checkin':
+        return <CheckinScreen />;
+      case 'timetable':
+        return <TimetableScreen />;
+      case 'templates':
+        return <TemplateEditorScreen />;
+      case 'pomodoro':
+        return <Pomodoro />;
       case 'print':
         return (
           <PrintScreen

@@ -14,6 +14,12 @@ export interface Subject {
   order: number;
 }
 
+export interface Subtask {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -21,10 +27,19 @@ export interface Task {
   done: boolean;
   /** 截止日期 `YYYY-MM-DD`，无截止为 null。 */
   due: string | null;
-  /** 拖拽排序用，越大越靠后。 */
+  /** 选做作业（老师说的"选做/拓展"）。旧数据没有该字段，读取时按 false 处理。 */
+  optional?: boolean;
+  /** 子任务。旧数据没有该字段，读取时按空数组处理。 */
+  subtasks?: Subtask[];
+  /** 排序用，越大越靠后。 */
   sortKey: number;
   createdAt: number;
   updatedAt: number;
+}
+
+/** 把可能缺字段的旧数据补成完整形态。 */
+export function normalizeTask(task: Task): Task & { optional: boolean; subtasks: Subtask[] } {
+  return { ...task, optional: task.optional ?? false, subtasks: task.subtasks ?? [] };
 }
 
 /** 一条学习记录的来源。三种来源产出同一种 `StudySession`。 */
@@ -41,6 +56,34 @@ export interface StudySession {
   taskId: string | null;
   source: SessionSource;
   createdAt: number;
+}
+
+/**
+ * 每日打卡。
+ *
+ * 刻意只存"这一天有没有学"，不存连续天数——连续天数是**算出来的**，
+ * 存下来就会在补录历史时出现不一致。
+ */
+export interface Checkin {
+  /** 主键就是日期，一天最多一条。 */
+  date: string;
+  done: boolean;
+  note: string | null;
+  updatedAt: number;
+}
+
+/**
+ * 持久化的课表。
+ *
+ * 整份 `TimetableData` 存成一个 JSON，而不是拆成 courses/rules/overrides 三张表：
+ * P1 只有手工录入、数据量小（一个学期几十条），拆表带来的查询能力换不来收益，
+ * 反而让"改一条规则"要跨表事务。
+ */
+export interface StoredTimetable {
+  /** 学期 id。 */
+  id: string;
+  data: unknown;
+  updatedAt: number;
 }
 
 export interface StoredTemplate {

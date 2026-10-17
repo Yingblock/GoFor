@@ -8,7 +8,10 @@
     "./config": "./src/config/index.ts",
     "./paper": "./src/paper/index.ts",
     "./print": "./src/print/index.ts",
-    "./domain": "./src/domain/entities.ts"
+    "./domain": "./src/domain/entities.ts",
+    "./pomodoro": "./src/pomodoro/index.ts",
+    "./timetable": "./src/timetable/index.ts",
+    "./stats": "./src/stats/index.ts"
   },
   "scripts": {
     "test": "vitest run",

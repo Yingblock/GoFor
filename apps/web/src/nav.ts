@@ -18,6 +18,7 @@ export type ScreenId =
   | 'checkin'
   | 'usage'
   | 'print'
+  | 'templates'
   | 'friends'
   | 'cloud'
   | 'mind';
@@ -44,7 +45,7 @@ export const NAV: NavGroup[] = [
     stage: 'P1',
     title: '工具',
     items: [
-      { id: 'pomodoro', title: '番茄钟', ready: false },
+      { id: 'pomodoro', title: '番茄钟', ready: true },
       { id: 'notebook', title: '笔记本', ready: false },
       { id: 'board', title: '画板', ready: false },
       { id: 'deviceLock', title: '电子产品锁定', ready: false },
@@ -57,7 +58,7 @@ export const NAV: NavGroup[] = [
     items: [
       { id: 'tasks', title: '作业清单', ready: true },
       { id: 'timetable', title: '课程表', ready: false },
-      { id: 'checkin', title: '每日打卡', ready: false },
+      { id: 'checkin', title: '每日打卡', ready: true },
       { id: 'usage', title: '使用时长', ready: false },
     ],
   },
@@ -65,7 +66,10 @@ export const NAV: NavGroup[] = [
     code: 'P1·M3',
     stage: 'P1',
     title: '导出',
-    items: [{ id: 'print', title: '打印 checklist', ready: true }],
+    items: [
+      { id: 'print', title: '打印 checklist', ready: true },
+      { id: 'templates', title: '模板与校准页', ready: true },
+    ],
   },
   {
     code: 'P2·M1',
@@ -96,6 +100,7 @@ export function groupOf(screen: ScreenId): string | undefined {
 export function titleOf(screen: ScreenId): string {
   if (screen === 'home') return '首页';
   if (screen === 'capture') return '拍照录入';
+  if (screen === 'templates') return '模板与校准页';
   for (const group of NAV) {
     const item = group.items.find((entry) => entry.id === screen);
     if (item) return item.title;

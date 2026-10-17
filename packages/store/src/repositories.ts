@@ -1,6 +1,9 @@
 import type { AppConfig } from '@gofor/core/config';
+import type { PomodoroRun } from '@gofor/core/pomodoro';
 import {
+  type Checkin,
   DEFAULT_SUBJECT_NAMES,
+  type StoredTimetable,
   type StoredTemplate,
   type StudySession,
   type Subject,
@@ -73,12 +76,26 @@ export async function createTask(database: GoForDb, input: CreateTaskInput): Pro
     subjectId: input.subjectId ?? null,
     done: false,
     due: input.due ?? null,
+    optional: false,
+    subtasks: [],
     sortKey,
     createdAt: input.now,
     updatedAt: input.now,
   };
   await database.tasks.put(task);
   return task;
+}
+
+export type TaskPatch = Partial<Pick<Task, 'title' | 'done' | 'due' | 'optional' | 'subtasks' | 'sortKey'>>;
+
+/** 通用更新。字段级补丁，避免为每个小改动写一个新函数。 */
+export async function updateTask(
+  database: GoForDb,
+  id: string,
+  patch: TaskPatch,
+  now: number,
+): Promise<void> {
+  await database.tasks.update(id, { ...patch, updatedAt: now });
 }
 
 export async function setTaskDone(
@@ -106,6 +123,102 @@ export async function deleteSession(database: GoForDb, id: string): Promise<void
 
 export async function listSessionsByDate(database: GoForDb, date: string): Promise<StudySession[]> {
   return database.sessions.where('date').equals(date).toArray();
+}
+
+/* ------------------------------------------------------------------ 课表 */
+
+export async function saveTimetable(
+  database: GoForDb,
+  id: string,
+  data: unknown,
+  now: number,
+): Promise<void> {
+  await database.timetables.put({ id, data, updatedAt: now });
+}
+
+export async function loadTimetable(
+  database: GoForDb,
+  id: string,
+): Promise<unknown | undefined> {
+  const row = await database.timetables.get(id);
+  return row?.data;
+}
+
+export async function listTimetables(database: GoForDb): Promise<StoredTimetable[]> {
+  return database.timetables.toArray();
+}
+
+export async function deleteTimetable(database: GoForDb, id: string): Promise<void> {
+  await database.timetables.delete(id);
+}
+
+/* ------------------------------------------------------------------ 打卡 */
+
+export interface SetCheckinInput {
+  date: string;
+  done: boolean;
+  note?: string | null;
+}
+
+/** 写入一天的打卡（同一天覆盖）。 */
+export async function setCheckin(
+  database: GoForDb,
+  input: SetCheckinInput,
+  now: number,
+): Promise<Checkin> {
+  const checkin: Checkin = {
+    date: input.date,
+    done: input.done,
+    note: input.note ?? null,
+    updatedAt: now,
+  };
+  await database.checkins.put(checkin);
+  return checkin;
+}
+
+export async function getCheckin(
+  database: GoForDb,
+  date: string,
+): Promise<Checkin | undefined> {
+  return database.checkins.get(date);
+}
+
+/** 闭区间内的打卡记录，按日期升序。 */
+export async function listCheckins(
+  database: GoForDb,
+  from: string,
+  to: string,
+): Promise<Checkin[]> {
+  return database.checkins.where('date').between(from, to, true, true).sortBy('date');
+}
+
+/* -------------------------------------------------------------- 番茄钟运行态 */
+
+/**
+ * 保存运行态。
+ *
+ * 每次状态变化（开始/暂停/继续/分心/结算）都落库：
+ * 页面刷新、手机被杀进程、切后台都可能发生，靠内存记状态一定会丢。
+ */
+export async function saveFocusRun(database: GoForDb, run: PomodoroRun): Promise<void> {
+  await database.focusRuns.put(run);
+}
+
+export async function loadFocusRun(
+  database: GoForDb,
+  id: string,
+): Promise<PomodoroRun | undefined> {
+  return database.focusRuns.get(id);
+}
+
+/** 找出未结算的运行（用于启动时恢复）。 */
+export async function listActiveFocusRuns(database: GoForDb): Promise<PomodoroRun[]> {
+  const runs = await database.focusRuns.toArray();
+  return runs.filter((run) => run.status === 'running' || run.status === 'paused');
+}
+
+export async function deleteFocusRun(database: GoForDb, id: string): Promise<void> {
+  await database.focusRuns.delete(id);
 }
 
 /* ------------------------------------------------------------------ 模板 */
@@ -194,5 +307,28 @@ export async function importAll(database: GoForDb, bundle: ExportBundle): Promis
       templates: bundle.templates?.length ?? 0,
     },
     warnings,
+  };
+}
+
+/* --------------------------------------------------- 番茄钟 → 学习记录 */
+
+/**
+ * 把结算后的番茄写成一条 `StudySession`。
+ *
+ * 三种来源（纸面时间登记 / 纸面专注格 / App 番茄钟）产出同一种实体，
+ * 这样统计只写一套。纸面专注格已移除，但 `source` 类型保留兼容旧数据。
+ */
+export function sessionFromRun(run: PomodoroRun, date: string): StudySession {
+  const startMinute = Math.floor(run.createdAt / 60000) % (24 * 60);
+  const minutes = Math.round(run.accumulatedMs / 60000);
+  return {
+    id: `session-${run.id}`,
+    date,
+    start: startMinute,
+    end: startMinute + minutes,
+    subjectId: run.subjectId,
+    taskId: run.taskId,
+    source: 'appTimer',
+    createdAt: run.createdAt,
   };
 }

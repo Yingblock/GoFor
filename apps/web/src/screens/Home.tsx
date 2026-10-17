@@ -1,10 +1,16 @@
-import type { StudySession, Task } from '@gofor/core/domain';
+import { systemClock } from '@gofor/core';
+import { dateKey, type StudySession, type Subject, type Task } from '@gofor/core/domain';
+import { dayTotal, minutesOf, streakDays } from '@gofor/core/stats';
+import { db, listSubjects } from '@gofor/store';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { useMemo } from 'react';
 
 export interface HomeProps {
   tasks: Task[];
-  sessions: StudySession[];
-  onNavigate: (screen: 'capture' | 'print' | 'tasks') => void;
+  onNavigate: (screen: 'capture' | 'print' | 'pomodoro' | 'tasks') => void;
 }
+
+const STREAK_WINDOW_DAYS = 60;
 
 function StatCard({
   label,
@@ -24,21 +30,46 @@ function StatCard({
   );
 }
 
+/** 'YYYY-MM-DD' 往前推 n 天。 */
+function shiftDate(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const base = Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1);
+  return new Date(base + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 /**
  * 首页。
  *
- * 结构由用户规定（DESIGN §13.3）：顶部两个主行动 → 统计信息 → 任务提示。
- * 统计只显示真实数据；没有数据就显示 0 并注明原因，不编数字。
+ * 结构由用户规定（DESIGN §13.3）：顶部两个主行动 → 统计 → 任务提示。
+ * 统计全部来自真实数据；没有数据就显示 0 并注明原因，不编数字。
  */
-export function Home({ tasks, sessions, onNavigate }: HomeProps) {
+export function Home({ tasks, onNavigate }: HomeProps) {
+  const today = dateKey(systemClock);
+  const since = useMemo(() => shiftDate(today, -STREAK_WINDOW_DAYS), [today]);
+
+  const sessions = useLiveQuery(
+    () => db.sessions.where('date').between(since, today, true, true).toArray(),
+    [since, today],
+    [] as StudySession[],
+  );
+  const subjects = useLiveQuery(() => listSubjects(db), [], [] as Subject[]);
+
   const done = tasks.filter((task) => task.done).length;
   const pending = tasks.length - done;
-  const focusMinutes = sessions.reduce((sum, session) => sum + (session.end - session.start), 0);
+
+  const todayTotal = useMemo(() => dayTotal(sessions, today).minutes, [sessions, today]);
+  const streak = useMemo(() => streakDays(sessions, today), [sessions, today]);
+  const todaySessions = useMemo(
+    () => sessions.filter((session) => session.date === today),
+    [sessions, today],
+  );
+
   const unfinished = tasks.filter((task) => !task.done).slice(0, 5);
+  const subjectName = (id: string | null): string =>
+    id === null ? '未分类' : (subjects.find((item) => item.id === id)?.name ?? '未分类');
 
   return (
     <div className="space-y-8">
-      {/* 顶部两个主行动 */}
       <div className="grid gap-3 sm:grid-cols-2">
         <button
           type="button"
@@ -65,7 +96,6 @@ export function Home({ tasks, sessions, onNavigate }: HomeProps) {
         </button>
       </div>
 
-      {/* 统计信息 */}
       <section>
         <h2 className="mb-3 text-sm font-medium opacity-50">统计</h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -73,24 +103,57 @@ export function Home({ tasks, sessions, onNavigate }: HomeProps) {
           <StatCard label="待办" value={String(pending)} />
           <StatCard
             label="今日专注"
-            value={`${focusMinutes} 分`}
-            note={focusMinutes === 0 ? '番茄钟尚未开始（P1）' : undefined}
+            value={`${todayTotal} 分`}
+            note={todayTotal === 0 ? '还没有番茄记录' : undefined}
           />
-          <StatCard label="连续打卡" value="—" note="打卡尚未开始（P1）" />
+          <StatCard
+            label="连续打卡"
+            value={`${streak} 天`}
+            note={streak === 0 ? '今天还没有学习记录' : undefined}
+          />
         </div>
       </section>
 
-      {/* 任务提示 */}
+      {todaySessions.length > 0 ? (
+        <section>
+          <h2 className="mb-3 text-sm font-medium opacity-50">今日记录</h2>
+          <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
+            {todaySessions.map((session) => (
+              <li key={session.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                <span className="tabular-nums opacity-45">
+                  {String(Math.floor((session.start % 1440) / 60)).padStart(2, '0')}:
+                  {String(session.start % 60).padStart(2, '0')}
+                </span>
+                <span className="flex-1">{subjectName(session.subjectId)}</span>
+                <span className="tabular-nums opacity-45">{minutesOf(session)} 分</span>
+                <span className="text-[10px] opacity-30">
+                  {session.source === 'appTimer' ? '番茄钟' : '纸面'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section>
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-sm font-medium opacity-50">任务提示</h2>
-          <button
-            type="button"
-            onClick={() => onNavigate('tasks')}
-            className="text-xs opacity-40 hover:opacity-70"
-          >
-            去作业清单 →
-          </button>
+          <span className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => onNavigate('pomodoro')}
+              className="text-xs opacity-40 hover:opacity-70"
+            >
+              开始专注 →
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate('tasks')}
+              className="text-xs opacity-40 hover:opacity-70"
+            >
+              去作业清单 →
+            </button>
+          </span>
         </div>
 
         {unfinished.length === 0 ? (
