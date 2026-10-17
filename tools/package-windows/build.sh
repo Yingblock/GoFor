@@ -39,10 +39,25 @@ cp "$REPO_ROOT/tools/package-windows/main.cjs" "$APP_DIR/"
 cp "$REPO_ROOT/tools/package-windows/package.json" "$APP_DIR/"
 cp -r "$REPO_ROOT/apps/web/dist" "$APP_DIR/dist"
 
-# 去掉用不到的多语言包，体积能省一半
-rm -rf "$STAGE"/locales/* 2>/dev/null || true
+# 只保留中英文语言包：全留会多 40MB，全删则 Chromium 启动可能异常
 mkdir -p "$STAGE/locales"
-cp /tmp/electron-resources/locales/zh-CN.pak "$STAGE/locales/" 2>/dev/null || true
+python3 - "$STAGE" <<'PYEOF'
+import sys, os, zipfile, shutil
+stage = sys.argv[1]
+src = "/tmp/electron-v33.0.0-win32-x64.zip"
+locales = os.path.join(stage, "locales")
+keep = {"en-US.pak", "zh-CN.pak"}
+for name in os.listdir(locales):
+    if name not in keep:
+        os.remove(os.path.join(locales, name))
+with zipfile.ZipFile(src) as z:
+    for entry in z.namelist():
+        base = os.path.basename(entry)
+        if entry.startswith("locales/") and base in keep:
+            with z.open(entry) as fin, open(os.path.join(locales, base), "wb") as fout:
+                shutil.copyfileobj(fin, fout)
+print("locales:", sorted(os.listdir(locales)))
+PYEOF
 
 mv "$STAGE/electron.exe" "$STAGE/GoFor.exe"
 
