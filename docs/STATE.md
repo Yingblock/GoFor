@@ -7,13 +7,16 @@
 
 **P0 地基 —— 已完成 4/7，剩下 Dexie / 配置持久化 / PWA / 命令面板。**
 
-已完成（`pnpm verify` 全绿，24 个单测通过）：
+已完成（`pnpm verify` 全绿，40 个单测通过）：
 
 - ✅ pnpm workspace 多包结构（`apps/web`、`packages/core`）
 - ✅ TypeScript 7.0.2 strict（`noUncheckedIndexedAccess`、`exactOptionalPropertyTypes`）
 - ✅ React 19 + Vite 7 + Tailwind 4 + Biome 2
 - ✅ dev server 可用（`host: true`，手机可局域网访问）
 - ✅ **`Clock` 抽象**（系统时钟 / 手动时钟）与 `newId`，7 个单测
+- ✅ **纸面时间解析**（`packages/core/src/paper/`，16 个单测）：
+  - `parseTimeRange()` 容错解析手写 `19:30` / `1930` / `19点30分` / `19:30~20:15` / 跨零点
+  - 歧义靠版面（上午/下午/晚上分栏）消除，解析不出来就失败、不猜
 - ✅ **配置层**（`packages/core/src/config/`，17 个单测）：
   - zod schema + 出厂默认值 + 深合并 + 校验
   - `derivePeriodMinutes()` 从作息表推课时（取中位数，不受早读异常段干扰）
@@ -48,4 +51,4 @@ pnpm verify      # typecheck + test + build 三连
 
 ## 最近一次更新
 
-落地配置层（zod schema + 课时推导 + 专注格换算），24 个单测通过。
+落地配置层 + 纸面时间解析，40 个单测通过。纸面时间改为「在校专注格 + 自主时间登记」分工。

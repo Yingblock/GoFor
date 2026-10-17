@@ -225,7 +225,8 @@ type Block =
   | { kind: 'table'; bind: string; columns: ColumnDef[] }      // 课程表
   | { kind: 'qrcode'; payload: 'deepLink'; size: number }
   | { kind: 'fiducials' }                                      // 四角定位标，供回填识别
-  | { kind: 'focusGrid'; bind: string; unitMinutes: 'period' | number }  // 专注格：行=科目，见 DESIGN §9
+  | { kind: 'focusGrid'; bind: string; unitMinutes: 'period' | number }  // 专注格：行=科目，一划即算
+  | { kind: 'timeLog'; dayPart: DayPart; rows: number }        // 时间登记：上午/下午/晚上分栏，见 DESIGN §9
   | { kind: 'slots' }                                          // 三个手写小格：睡眠/心情/专注
   | { kind: 'linedBox'; lines: number; label: string }         // 手写区（备注/错因/明天的计划）
   | { kind: 'hintLine'; text: string }                         // 书写提示：深色笔·不出框·不连笔
@@ -233,9 +234,14 @@ type Block =
   | { kind: 'footer'; text: string };
 ```
 
-**`focusGrid` 是纸张优先设计律的落点**（完整定义见 `DESIGN.md` §9）：打勾只能给布尔值，给不出时长；涂格零书写成本，扫描时数格子就能得到当日专注量。
-它是**科目 × 格数**的矩阵而不是一排格子 —— 行由当天课表自动生成，所以同一个动作同时产出「总时长」和「分科时长」。
-一格代表多少分钟由配置决定（`focus.unit`，默认跟随作息表推导），**不在代码里写死**。
+**纸上的时间有两种记法，按场景分工**（完整对比见 `DESIGN.md` §9）：
+- **在校课时** → `focusGrid`（预印课表，**例外登记**：默认全完成，只圈掉没学的，多数日子 0 笔）
+- **在家/自习** → `timeLog`（写做了什么 + 起止，按上午/下午/晚上分栏消除歧义）
+
+两者都产出同一种 `StudySession`，统计与周报只写一套。
+`focusGrid` 不必涂满——**方块只是定位框，划一笔即算**（成本约为涂满的 1/4）；
+一格代表多少分钟由 `focus.unit` 配置（默认跟随作息表推导），不在代码里写死。
+如果觉得连划一笔都繁，可以 `print.focusGrid.enabled = false`，只保留自主时间登记。
 
 渲染链路：
 

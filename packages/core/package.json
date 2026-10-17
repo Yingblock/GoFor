@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./config": "./src/config/index.ts"
+    "./config": "./src/config/index.ts",
+    "./paper": "./src/paper/index.ts"
   },
   "scripts": {
     "test": "vitest run",
