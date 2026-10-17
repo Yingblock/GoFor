@@ -28,8 +28,8 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 | 产物 | 状态 | 说明 |
 |---|---|---|
-| `release/GoFor-win-x64.zip` | ✅ 已验证启动 | Electron 壳，双击 `GoFor.exe` |
-| `release/GoFor-debug.apk` | ⏳ 构建中 | Capacitor 纯 WebView 壳，无原生插件 |
+| `release/GoFor-win-x64.zip` | ✅ 已验证启动 | Electron v33 壳，双击 `GoFor.exe`；DevTools 确认页面标题 GoFor、URL 指向内置 127.0.0.1 服务 |
+| `release/GoFor-debug.apk` | ✅ 已构建验证 | 4.2MB，`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
 | `release/README.md` | ✅ | 安装说明与已知限制 |
 
 两者都只是"看一眼"，不是发布形态。正式渠道仍是 PWA。
@@ -48,6 +48,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 在 `liveQuery` 里写库 | `ReadOnlyError`，整棵组件树白屏 | 配置读取拆成 `readConfig`（只读）/ `currentConfigOrDefault`（启动时修复一次） |
 | 打印层嵌在 `.screen-only` 里 | 打出来是白纸（PDF 只有 938 字节） | `PrintLayer` 必须渲染在 `.screen-only` **之外**；e2e 用 PDF 体积 + 渲染兜住 |
 | `@gofor/core` 根导出带 zod | 只用到时钟的宿主也打进 46KB zod | 子路径导出：`@gofor/core/config`、`/print`、`/paper`、`/domain` |
+| Biome 扫到 Capacitor 生成的 Java/XML | 4000+ 假错误，`pnpm check` 直接失败 | `biome.json` 的 `files.includes` 排除 `apps/web/android` |
 
 ## 什么坏了 / 什么没做完
 
