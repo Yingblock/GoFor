@@ -1,0 +1,70 @@
+# 机器兜底版「每个提交必须绿」：AGENTS.md 的硬性规则 5 只能约束自觉，
+# 这条流水线把同一套检查搬到 PR 上，红了就不许合并。
+# 只做校验：不部署、不发 release、不碰 secrets。
+name: verify
+
+# 触发三条路：合并到 main 之后、每个 PR（含更新）、以及需要手动重跑时。
+# "on" 加引号是为了避开 YAML 1.1 把裸 on 解析成布尔 true 的老坑（某些本地 linter 会踩）。
+"on":
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支/PR 只保留最新一次运行：旧提交的结论已经过期，继续跑纯属占 runner。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# 默认最小权限：只读仓库内容即可，校验不需要写权限。
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (typecheck + test + build + e2e)
+    runs-on: ubuntu-latest
+    # e2e 要起真实 Chromium + preview 服务；给足余量，但别让卡死的运行烧满 6 小时。
+    timeout-minutes: 20
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # 版本跟 package.json 的 packageManager 对齐（pnpm@12.4.1），避免本地/CI 行为漂移。
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '12.4.1'
+
+      # 必须在 pnpm 之后：setup-node 的 pnpm 缓存依赖已安装的 pnpm 来定位 store。
+      - name: 安装 Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      # 用锁文件精确复现依赖树；锁文件与 package.json 不一致时直接失败，而不是偷偷装个别的版本。
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      # 为什么单独装浏览器：`pnpm e2e` 用 Playwright 打开真实 Chromium 跑冒烟，
+      # 覆盖 IndexedDB、打印 CSS、全屏遮罩这些 Node 里测不出来的东西。
+      # --with-deps 负责 apt 安装 Chromium 缺的系统库（无头 Linux 上缺了会直接启动失败）。
+      - name: 安装 Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # 四连：typecheck + test + build + e2e。
+      # e2e 自己会起 apps/web 的 preview 服务（127.0.0.1:4173，strictPort），
+      # 所以前面必须先 build，且 CI 里这个端口不能被别的东西占着。
+      - name: 全量校验（pnpm verify）
+        run: pnpm verify
+
+      # e2e 目前只保证 page.pdf 不抛错；白纸 PDF 也会“成功”。
+      # 这里用体积兜住历史上踩过的「打印层被隐藏 → PDF 只有几百字节」回归。
+      - name: 检查打印 PDF 不是白纸
+        run: |
+          pdf=e2e/out/day-sheet.pdf
+          test -f "$pdf"
+          size=$(stat -c%s "$pdf")
+          echo "PDF 体积：${size} bytes"
+          test "$size" -gt 20000
