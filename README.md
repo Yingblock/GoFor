@@ -48,13 +48,12 @@ apps/web            PWA 宿主（Vite + React + Tailwind）
                     android/ 为 Capacitor 验证壳，不含原生能力
 packages/core       纯领域逻辑：Clock / 配置 / 纸面时间解析 / 打印版式 / 实体
 packages/store      Dexie 实现（浏览器专用）
-packages/ui         跨宿主组件（暂空）
-packages/vision     CV 管线（暂空）
-packages/plugin-api 插件契约（暂空）
 e2e/                Playwright 真实浏览器冒烟
 docs/               STATE / ROADMAP / DESIGN / WORKFLOW / LATER / DECISIONS
 tools/              一次性打包实验（Windows 便携版）
 ```
+
+`packages/ui`、`packages/vision`、`packages/plugin-api` 是规划中的共享包，尚未建目录。
 
 技术栈与硬性约定见 [`AGENTS.md`](AGENTS.md)：TypeScript strict、pnpm workspaces、
 React + Vite + Tailwind、Dexie、Vitest + Playwright、Biome。
