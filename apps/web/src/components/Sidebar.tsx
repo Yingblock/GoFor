@@ -15,7 +15,7 @@ export interface SidebarProps {
  * 未进入阶段的条目仍然显示但置灰——让用户看到全貌，而不是隐藏。
  */
 export function Sidebar({ screen, onNavigate, open, onClose }: SidebarProps) {
-  const activeGroup = groupOf(screen) ?? 'P1·M2';
+  const activeGroup = groupOf(screen) ?? NAV[1]?.code ?? null;
   const [expanded, setExpanded] = useState<string | null>(activeGroup);
 
   // 切页时自动展开所在分组，避免"当前页在折叠的分组里"
@@ -99,9 +99,6 @@ export function Sidebar({ screen, onNavigate, open, onClose }: SidebarProps) {
                             }`}
                           >
                             {item.title}
-                            {item.ready ? null : (
-                              <span className="font-mono text-[9px] opacity-60">{group.stage}</span>
-                            )}
                           </button>
                         </li>
                       );

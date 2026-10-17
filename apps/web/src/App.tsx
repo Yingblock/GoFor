@@ -224,8 +224,8 @@ export function App() {
         return (
           <ComingSoon
             title="拍照录入"
-            groupCode="P1·M2"
-            stage="P1"
+            groupCode="离线·M2"
+            part="offline"
             note="需要先建好 CV 管线（透视矫正、光照均衡、局部笔迹检测），属于 P2「纸的回流」。P1 先只留入口。"
           />
         );
@@ -234,7 +234,7 @@ export function App() {
           <ComingSoon
             title={titleOf(screen)}
             groupCode={groupCode ?? '—'}
-            stage={groupCode?.startsWith('P2') ? 'P2' : 'P1'}
+            part={groupCode?.startsWith('在线') ? 'online' : 'offline'}
             note="这个条目已经在计划里，但还没开始实现。详见 docs/ROADMAP.md 对应阶段。"
           />
         );

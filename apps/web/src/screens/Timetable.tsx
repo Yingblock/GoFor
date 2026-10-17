@@ -90,7 +90,7 @@ function asTimetable(raw: unknown): TimetableData | null {
 }
 
 /**
- * P1·M2 课程表：科目 + 规则录入 + 周视图。
+ * 离线·M2 课程表：科目 + 规则录入 + 周视图。
  *
  * **科目只存一份**：课表不再维护自己的 `TimetableData.courses`，而是直接读写
  * Dexie 的 `subjects` 表（番茄钟、作业也用这张表）。

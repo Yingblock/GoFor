@@ -85,7 +85,7 @@ export interface TemplateEditorScreenProps {
   schedule: { time: string; label: string }[];
 }
 
-/** P1·M3 模板与校准页：选模板、改区块、换纸张、预览、打印。 */
+/** 离线·M3 模板与校准页：选模板、改区块、换纸张、预览、打印。 */
 export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
   const today = dateKey(systemClock);
   const [selectedId, setSelectedId] = useState<string>(BUILTIN_TEMPLATES[0]?.id ?? 'day');

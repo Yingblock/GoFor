@@ -78,7 +78,7 @@ try {
   await openGroup(page, '记录');
   await clickItem(page, '作业清单');
   await page.waitForSelector('input[placeholder="加一项作业，回车确认"]', { timeout: 5000 });
-  check('可导航到作业清单', true, 'P1·M2');
+  check('可导航到作业清单', true, '离线·M2');
 
   await page.fill('input[placeholder="加一项作业，回车确认"]', '数学卷子 3.1');
   await page.keyboard.press('Enter');
@@ -109,7 +109,7 @@ try {
 
   await openGroup(page, '工具');
   await clickItem(page, '笔记本');
-  await page.waitForSelector('text=此条目属于阶段', { timeout: 5000 });
+  await page.waitForSelector('text=此条目属于产品', { timeout: 5000 });
   check('未实现条目给出阶段说明', true);
 
   /* -------------------------------------------------------------- 番茄钟 */

@@ -30,19 +30,27 @@ export interface NavItem {
   ready: boolean;
 }
 
+/**
+ * 产品部分。
+ *
+ * 注意：这**不是**开发阶段。开发阶段用 P0–P8（见 ROADMAP），
+ * 产品部分只有两个：离线 / 在线。早期两者都用 P1/P2，导致"P1·M1"
+ * 到底是"阶段1模块1"还是"产品第1部分模块1"完全分不清。
+ */
+export type ProductPart = 'offline' | 'online';
+
 export interface NavGroup {
-  /** 模块编码，例如 'P1·M1'。 */
+  /** 模块编码，例如 '离线·M1'。 */
   code: string;
-  /** 阶段，用于给未实现的条目加前缀。 */
-  stage: 'P1' | 'P2';
+  part: ProductPart;
   title: string;
   items: NavItem[];
 }
 
 export const NAV: NavGroup[] = [
   {
-    code: 'P1·M1',
-    stage: 'P1',
+    code: '离线·M1',
+    part: 'offline',
     title: '工具',
     items: [
       { id: 'pomodoro', title: '番茄钟', ready: true },
@@ -52,8 +60,8 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    code: 'P1·M2',
-    stage: 'P1',
+    code: '离线·M2',
+    part: 'offline',
     title: '记录',
     items: [
       { id: 'tasks', title: '作业清单', ready: true },
@@ -63,8 +71,8 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    code: 'P1·M3',
-    stage: 'P1',
+    code: '离线·M3',
+    part: 'offline',
     title: '导出',
     items: [
       { id: 'print', title: '打印 checklist', ready: true },
@@ -72,20 +80,20 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    code: 'P2·M1',
-    stage: 'P2',
+    code: '在线·M1',
+    part: 'online',
     title: '好友',
     items: [{ id: 'friends', title: '好友与状态', ready: false }],
   },
   {
-    code: 'P2·M2',
-    stage: 'P2',
+    code: '在线·M2',
+    part: 'online',
     title: '云存档',
     items: [{ id: 'cloud', title: '存档与分享', ready: false }],
   },
   {
-    code: 'P2·M3',
-    stage: 'P2',
+    code: '在线·M3',
+    part: 'online',
     title: '心理支持',
     items: [{ id: 'mind', title: '自助工具箱', ready: false }],
   },

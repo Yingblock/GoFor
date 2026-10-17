@@ -11,7 +11,7 @@ export interface PrintScreenProps {
   onChangePaper: (paper: PaperId) => void;
 }
 
-/** P1·M3 导出：打印 checklist。 */
+/** 离线·M3 导出：打印 checklist。 */
 export function PrintScreen({ blocks, paper, tasks, schedule, onChangePaper }: PrintScreenProps) {
   const pageCount = layout(blocks, { paper }).pages.length;
 

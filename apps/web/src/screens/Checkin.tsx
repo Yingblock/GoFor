@@ -25,7 +25,7 @@ function streakOf(activeDates: Set<string>, endDate: string): number {
 }
 
 /**
- * P1·M2 每日打卡。
+ * 离线·M2 每日打卡。
  *
  * 只记"这一天有没有学"。连续天数是**算出来的**，不落库——
  * 存下来的计数在补录历史时一定不一致。

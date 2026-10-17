@@ -352,7 +352,7 @@ function TagManager({ subjects, pools }: TagManagerProps) {
   );
 }
 
-/** P1·M2 作业清单：截止时间、必做/选做、步骤、标签池、排序。 */
+/** 离线·M2 作业清单：截止时间、必做/选做、步骤、标签池、排序。 */
 export function Tasks({ tasks }: { tasks: Task[] }) {
   const [draft, setDraft] = useState('');
   const [optional, setOptional] = useState(false);
