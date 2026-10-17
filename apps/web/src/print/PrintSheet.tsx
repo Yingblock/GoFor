@@ -11,6 +11,8 @@ import {
   type ScheduleBlock,
   type TimeLogBlock,
 } from '@gofor/core/print';
+// TODO(debug-clock): 上线前删除（调试时钟入口，恢复 `new Date()`）。
+import { appClock } from '../clock.ts';
 
 /** 纸面渲染需要的数据。刻意保持扁平，方便以后换成任意来源。 */
 export interface SheetData {
@@ -213,7 +215,8 @@ function TimeLogView({ block }: { block: TimeLogBlock }) {
  * 印出来的时间可能比实际打印时间早几分钟；这对"这张纸是什么时候打的"足够用。
  */
 function TimestampView({ label }: { label: string }) {
-  const now = new Date();
+  // TODO(debug-clock): 上线前删除（恢复 `new Date()`；改走 appClock 是为了让调试时钟影响"打印于"）。
+  const now = new Date(appClock.now());
   const text = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
     now.getDate(),
   ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(

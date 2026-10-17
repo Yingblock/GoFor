@@ -105,6 +105,27 @@ try {
   // 标签池（常驻池是科目）
   check('作业页有标签管理', (await page.getByText('标签管理').count()) > 0);
 
+  /*
+   * 添加栏标签：选一次之后连续录入不再清空（用户要求）。
+   * 不只是断言按钮上的计数——第二条任务必须真的带上标签，
+   * 否则"界面没清空、数据却没写进去"这种情况会被漏掉。
+   */
+  const addTagButton = page.locator('button[aria-label="添加栏标签"]');
+  await addTagButton.click();
+  await page.locator('button[aria-pressed]').filter({ hasText: '数学' }).first().click();
+  check('添加栏可选标签', (await addTagButton.innerText()).includes('· 1'));
+
+  await page.fill('input[placeholder="加一项作业，回车确认"]', '物理实验报告');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('text=物理实验报告', { timeout: 5000 });
+  check('新建任务后标签不清空', (await addTagButton.innerText()).includes('· 1'));
+
+  await page.fill('input[placeholder="加一项作业，回车确认"]', '化学方程式');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('text=化学方程式', { timeout: 5000 });
+  const chemRow = page.locator('li').filter({ hasText: '化学方程式' }).first();
+  check('新任务继承已选标签', (await chemRow.getByText('数学', { exact: true }).count()) > 0);
+
   /* -------------------------------------------------------- 未实现条目 */
 
   await openGroup(page, '工具');
@@ -225,6 +246,11 @@ try {
       .catch(() => false);
     check('首页任务提示可勾选', removed);
   }
+
+  // 首页新增的两个区块。今天有没有课随星期变化（周末没有），
+  // 所以只断言区块在，不断言列了几行。
+  check('首页有今日课表区块', (await page.getByText('今日课表').count()) > 0);
+  check('首页有打卡提示区块', (await page.getByText('打卡提示').count()) > 0);
 
   /* ------------------------------------------------------------ 打印 */
 

@@ -93,6 +93,8 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 - 校准页是近似刻度，无 1mm 尺、无四角裁切标记
 - 模板编辑器不支持自由定位，只做列表式编辑
 - 作业排序是上下移，不是拖拽
+- **调试时钟（临时）**：宿主层 `appClock` 可前后拨「现在」（localStorage 持久化），上线前删除；
+  见 `docs/LATER.md` →「待删除：调试时钟」，代码里有 `TODO(debug-clock)` 标记
 
 ## 下一步做什么（P1 收尾后）
 

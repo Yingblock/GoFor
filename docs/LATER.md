@@ -37,6 +37,21 @@
 - [ ] Tauri 桌面壳（触发条件见 ROADMAP §6.6）
 - [ ] 本地 PaddleOCR-onnx 精度评估
 
+## 待删除：调试时钟
+
+- [ ] **调试时钟（临时设施）—— 用户要求"后期提醒我删"** —— 宿主层
+      `apps/web/src/clock.ts` 的 `appClock` 让"现在"可以前后拨（偏移存
+      `localStorage`，刷新后仍生效），用于真机验证：课表「今天/明天有没有课」、
+      打卡「今天能不能打、历史是否只读」、打印模板的「打印于」时间戳。
+      为什么临时：真实"现在"被拨动后，与系统时间分叉的语义只该存在于调试期；
+      且 `monotonic()` **绝不能偏移**（番茄钟已用时间按 monotonic 差值算），
+      这层特殊处理没有长期价值。
+      删除步骤（三步）：
+      1. `apps/web/src/clock.ts` 里 `appClock` 改为直接转发 `systemClock`（或让宿主改回 import `systemClock`）；
+      2. 删除 `apps/web/src/components/DebugPanel.tsx`；
+      3. 删除 `apps/web/src/components/Sidebar.tsx` 里的 `<DebugPanel />` 挂载点。
+      所有入口都标了 `TODO(debug-clock): 上线前删除`，`grep -rn "TODO(debug-clock)" apps/web/src` 可定位。
+
 ## 待确认
 
 - [ ] 学校课时节奏：一节课 40 还是 45 分钟？一天几个番茄格？

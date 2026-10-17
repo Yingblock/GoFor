@@ -1,4 +1,4 @@
-import { newId, systemClock } from '@gofor/core';
+import { newId } from '@gofor/core';
 import { dateKey, type Task } from '@gofor/core/domain';
 import {
   type Block,
@@ -15,6 +15,8 @@ import {
 import { db, listTemplates, putTemplate } from '@gofor/store';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+// TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
+import { appClock } from '../clock.ts';
 import { PrintPreview } from '../print/PrintSheet.tsx';
 
 // 直接复用 core 的纸张清单：再手写一份数组就会在新增尺寸时悄悄过期。
@@ -368,7 +370,7 @@ export interface TemplateEditorScreenProps {
 
 /** 离线·M3 模板与校准页：选模板、改区块、换纸张、预览、打印。 */
 export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
-  const today = dateKey(systemClock);
+  const today = dateKey(appClock);
   const [selectedId, setSelectedId] = useState<string>(BUILTIN_TEMPLATES[0]?.id ?? 'day');
   const [paper, setPaper] = useState<PaperId>('A4');
   const [draft, setDraft] = useState<PrintTemplate | null>(null);

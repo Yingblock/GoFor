@@ -1,4 +1,3 @@
-import { systemClock } from '@gofor/core';
 import { type AppConfig, mergeConfig } from '@gofor/core/config';
 import { dateKey, type Subject, type Task } from '@gofor/core/domain';
 import { type Block, materialize, type PaperId, paperFor } from '@gofor/core/print';
@@ -16,6 +15,7 @@ import {
 } from '@gofor/store';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { appClock } from './clock.ts';
 import { type Command, CommandPalette } from './components/CommandPalette.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { groupOf, type ScreenId, titleOf } from './nav.ts';
@@ -37,9 +37,10 @@ function todayLabel(date: string): string {
 /** 与课表页共用同一个库内 id；P1 只有一个学期。 */
 const TIMETABLE_ID = 'default';
 
-/** 当日课表在纸面上的一行：时间 + 科目名。 */
+/** 当日课表的一行：时间 + 科目名。纸面只用 `time`，首页显示 `time–end` 区间。 */
 interface ScheduleEntry {
   time: string;
+  end: string;
   label: string;
 }
 
@@ -83,7 +84,7 @@ function asTimetable(raw: unknown): TimetableData | null {
 }
 
 export function App() {
-  const today = dateKey(systemClock);
+  const today = dateKey(appClock);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [screen, setScreen] = useState<ScreenId>('home');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -114,6 +115,7 @@ export function App() {
       const occurrences = occurrencesOn(today, data).sort((a, b) => a.startMinute - b.startMinute);
       return occurrences.map((occurrence) => ({
         time: clockLabel(occurrence.startMinute),
+        end: clockLabel(occurrence.endMinute),
         // 优先按 id 对到科目表；课表里的 Course 是本地快照，对不上时退回它自己的名字，
         // 免得纸上印出一串 id。
         label:
@@ -207,7 +209,8 @@ export function App() {
   const body = (() => {
     switch (screen) {
       case 'home':
-        return <Home tasks={tasks} onNavigate={navigate} />;
+        // 课表在 App 里算一次（打印层也用），首页直接复用，避免两处各自展开课表。
+        return <Home tasks={tasks} schedule={schedule} onNavigate={navigate} />;
       case 'tasks':
         return <Tasks tasks={tasks} />;
       case 'checkin':

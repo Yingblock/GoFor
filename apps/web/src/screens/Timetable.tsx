@@ -1,4 +1,4 @@
-import { newId, systemClock } from '@gofor/core';
+import { newId } from '@gofor/core';
 import { dateKey, type Subject } from '@gofor/core/domain';
 import {
   mergeAdjacent,
@@ -26,6 +26,8 @@ import {
   useRef,
   useState,
 } from 'react';
+// TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
+import { appClock } from '../clock.ts';
 
 const TERM_ID = 'default';
 
@@ -91,7 +93,7 @@ function mondayOf(date: string): string {
 }
 
 function defaultData(): TimetableData {
-  const term: Term = { id: TERM_ID, startDate: mondayOf(dateKey(systemClock)), weeks: 20 };
+  const term: Term = { id: TERM_ID, startDate: mondayOf(dateKey(appClock)), weeks: 20 };
   return {
     term,
     // 旧版课表自带一份 courses；现在科目统一走 Dexie 的 subjects 表。
@@ -143,7 +145,7 @@ export function TimetableScreen() {
   const [data, setData] = useState<TimetableData | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subjectError, setSubjectError] = useState<string | null>(null);
-  const [weekStart, setWeekStart] = useState(mondayOf(dateKey(systemClock)));
+  const [weekStart, setWeekStart] = useState(mondayOf(dateKey(appClock)));
   const [saved, setSaved] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
   /** 编辑模式默认关闭：课表首先是"看"的，改是偶发动作。 */
@@ -180,7 +182,7 @@ export function TimetableScreen() {
     [weekStart],
   );
 
-  const today = dateKey(systemClock);
+  const today = dateKey(appClock);
 
   const byDay = useMemo(() => {
     if (!data) return new Map<string, Occurrence[]>();

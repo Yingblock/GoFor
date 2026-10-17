@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { groupOf, NAV, type ScreenId } from '../nav.ts';
+import { DebugPanel } from './DebugPanel.tsx';
 
 export interface SidebarProps {
   screen: ScreenId;
@@ -112,6 +113,11 @@ export function Sidebar({ screen, onNavigate, open, onClose }: SidebarProps) {
 
         <div className="border-t border-black/[0.08] px-4 py-3 text-[10px] leading-relaxed opacity-35">
           P1 离线 · P2 在线
+        </div>
+
+        {/* TODO(debug-clock): 上线前删除（调试时钟入口）。 */}
+        <div className="border-t border-black/[0.08] px-3 pt-2 pb-3">
+          <DebugPanel />
         </div>
       </aside>
     </>

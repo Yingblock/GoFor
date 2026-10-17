@@ -1,6 +1,7 @@
-import { systemClock } from '@gofor/core';
 import { formatClock, progress, remainingMs } from '@gofor/core/pomodoro';
 import { useEffect, useState } from 'react';
+// TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
+import { appClock } from '../clock.ts';
 import {
   MAX_MINUTES,
   MIN_MINUTES,
@@ -15,7 +16,7 @@ const MINUTE_PRESETS = [25, 45, 90];
  * 「确认放弃？」自动收回的毫秒数。
  *
  * 用 setTimeout 而不是领域层的 `Clock`：它只控制一个 UI 确认窗口的寿命，
- * 不参与任何计时计算（剩余时间每次都由 `remainingMs(run, systemClock)` 现算），
+ * 不参与任何计时计算（剩余时间每次都由 `remainingMs(run, appClock)` 现算），
  * 所以不会影响「计时必须可确定性推进」这条约定。
  */
 const ABANDON_CONFIRM_MS = 3000;
@@ -33,7 +34,7 @@ const overlayPrimary = `${overlayButtonBase} bg-[var(--color-ink)] text-white ho
 /**
  * 番茄钟界面。
  *
- * 只做展示：所有时间数值都从 `run` + `systemClock` 现算，
+ * 只做展示：所有时间数值都从 `run` + `appClock` 现算，
  * 不缓存倒计时数字，这样切后台、锁屏、改系统时间都不会让计时失真。
  *
  * 两态互斥：有 `run` → 全屏遮罩；没有 `run` → 设置页。
@@ -217,8 +218,8 @@ function FocusSession({ controller }: { controller: PomodoroController }) {
   if (!run) return null;
 
   const paused = run.status === 'paused';
-  const remaining = formatClock(remainingMs(run, systemClock));
-  const percent = Math.round(progress(run, systemClock) * 100);
+  const remaining = formatClock(remainingMs(run, appClock));
+  const percent = Math.round(progress(run, appClock) * 100);
   const plannedMinutes = Math.round(run.plannedMs / 60_000);
   const subject = controller.subjects.find((item) => item.id === run.subjectId);
   const task = controller.tasks.find((item) => item.id === run.taskId);

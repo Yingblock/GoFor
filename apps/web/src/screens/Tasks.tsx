@@ -453,9 +453,13 @@ export function Tasks({ tasks }: { tasks: Task[] }) {
     // 截止与选做是"这一条"的属性，不清空会悄悄带到下一条作业。
     setDue('');
     setOptional(false);
-    // 标签同理必须清空，否则下一条作业会莫名带上上一条的标签。
-    setDraftTags([]);
-    setDraftTagPanelOpen(false);
+    /*
+     * 标签**不清空**（用户要求）：连续录入同科作业是常态，
+     * 每加一条都重选一遍标签纯属加摩擦。
+     * 代价是标签会带到下一条任务，所以面板保持展开、已选标签原样显示，
+     * 用户随时能点掉——不需要靠"清空"来保证不误带。
+     * 面板的展开状态也不动：用户刚才是开着还是收着，加完仍是那样。
+     */
   }, [draft, due, optional, draftTags, subjects]);
 
   /**
@@ -606,6 +610,7 @@ export function Tasks({ tasks }: { tasks: Task[] }) {
           */}
           <button
             type="button"
+            aria-label="添加栏标签"
             aria-expanded={draftTagPanelOpen}
             onClick={() => setDraftTagPanelOpen((value) => !value)}
             className={`rounded border px-2 py-1 text-[11px] transition ${

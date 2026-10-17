@@ -1,4 +1,4 @@
-import { newId, systemClock } from '@gofor/core';
+import { newId } from '@gofor/core';
 import { resolveUnitMinutes } from '@gofor/core/config';
 import { dateKey, type Subject, type Task } from '@gofor/core/domain';
 import {
@@ -24,6 +24,8 @@ import {
   sessionFromRun,
 } from '@gofor/store';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
+import { appClock } from '../clock.ts';
 
 const MS_PER_MINUTE = 60 * 1000;
 
@@ -77,7 +79,7 @@ export interface PomodoroController {
  * React 状态、持久化与恢复。
  *
  * 计时原则：tick 只用来触发重渲染，剩余时间/进度每次渲染都从
- * `remainingMs(run, systemClock)` 现算。绝对不能用 tick 累加——
+ * `remainingMs(run, appClock)` 现算。绝对不能用 tick 累加——
  * 浏览器在后台会节流定时器，25 分钟会被拖成 40 分钟。
  */
 export function usePomodoro(): PomodoroController {
@@ -104,12 +106,12 @@ export function usePomodoro(): PomodoroController {
     if (target.status !== 'running' && target.status !== 'paused') return;
     settlingRef.current = true;
 
-    const settled = settleRun(target, systemClock, status);
+    const settled = settleRun(target, appClock, status);
     try {
       await saveFocusRun(db, settled);
       // 放弃是用户主动中止，不是学习记录；只有真正完成才计入今日专注。
       if (status === 'finished') {
-        await addSession(db, sessionFromRun(settled, dateKey(systemClock)));
+        await addSession(db, sessionFromRun(settled, dateKey(appClock)));
       }
     } finally {
       // 写记录失败也必须清掉运行态，否则界面会永远停在"已结算"。
@@ -131,7 +133,7 @@ export function usePomodoro(): PomodoroController {
   const checkComplete = useCallback(() => {
     const current = runRef.current;
     if (current?.status !== 'running') return;
-    if (!isComplete(current, systemClock)) return;
+    if (!isComplete(current, appClock)) return;
     void settle(current, 'finished');
   }, [settle]);
 
@@ -163,7 +165,7 @@ export function usePomodoro(): PomodoroController {
 
       // 页面刚加载时单调时钟已归零，必须用墙钟把锚点搬回当前进程，
       // 否则恢复出来的计时会从头开始，或者直接变成 0。
-      const recovered = recoverRun(latest, systemClock, systemClock.now());
+      const recovered = recoverRun(latest, appClock, appClock.now());
       setRun(recovered);
       // 恢复已选时长：历史数据可能是被改过的、或者小于 1 分钟的脏值，重新钳一次。
       setSelectedMinutes(clampMinutes(recovered.plannedMs / MS_PER_MINUTE));
@@ -171,7 +173,7 @@ export function usePomodoro(): PomodoroController {
       setSelectedTaskId(recovered.taskId);
 
       // 恢复出来就已经到点的，立即结算，不用等第一个 tick。
-      if (recovered.status === 'running' && isComplete(recovered, systemClock)) {
+      if (recovered.status === 'running' && isComplete(recovered, appClock)) {
         void settle(recovered, 'finished');
       }
     })();
@@ -182,7 +184,7 @@ export function usePomodoro(): PomodoroController {
   }, [settle]);
 
   // 每秒只触发一次重渲染并顺手检查是否到点；后台节流不会让计时变慢，
-  // 因为剩余时间始终由 `remainingMs(run, systemClock)` 现算。
+  // 因为剩余时间始终由 `remainingMs(run, appClock)` 现算。
   useEffect(() => {
     if (run?.status !== 'running') return;
     const timer = window.setInterval(() => {
@@ -231,8 +233,8 @@ export function usePomodoro(): PomodoroController {
         subjectId,
         taskId: selectedTaskId,
       },
-      systemClock,
-      systemClock.now(),
+      appClock,
+      appClock.now(),
     );
     setRun(next);
     void saveFocusRun(db, next);
@@ -240,7 +242,7 @@ export function usePomodoro(): PomodoroController {
 
   const pause = useCallback(() => {
     if (run?.status !== 'running') return;
-    const next = pauseRun(run, systemClock);
+    const next = pauseRun(run, appClock);
     setRun(next);
     void saveFocusRun(db, next);
   }, [run]);
@@ -248,7 +250,7 @@ export function usePomodoro(): PomodoroController {
   const resume = useCallback(() => {
     if (run?.status !== 'paused') return;
     // 两个锚点的成对刷新由 core 的 resumeRun 负责，这里不要再补
-    const next = resumeRun(run, systemClock, systemClock.now());
+    const next = resumeRun(run, appClock, appClock.now());
     setRun(next);
     void saveFocusRun(db, next);
   }, [run]);

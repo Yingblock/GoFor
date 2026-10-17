@@ -1,4 +1,4 @@
-import { newId, systemClock } from '@gofor/core';
+import { newId } from '@gofor/core';
 import { dateKey, type HabitLog } from '@gofor/core/domain';
 import {
   addDays,
@@ -10,6 +10,8 @@ import {
 import { db, deleteHabit, listHabitLogs, listHabits, saveHabit, setHabitLog } from '@gofor/store';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useMemo, useState } from 'react';
+// TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
+import { appClock } from '../clock.ts';
 
 /** 历史方格只回看两周：够看清最近的节奏，又不至于把小屏挤爆。 */
 const HISTORY_DAYS = 14;
@@ -284,7 +286,7 @@ function HistoryGrid({ habit, today, historyFrom, doneKeys }: HistoryGridProps) 
  * 写入只有一条路径：`setHabitLog(db, habitId, today, done, now)`。
  */
 export function CheckinScreen() {
-  const today = dateKey(systemClock);
+  const today = dateKey(appClock);
   const historyFrom = useMemo(() => addDays(today, -(HISTORY_DAYS - 1)), [today]);
   const logFrom = useMemo(() => addDays(today, -(STREAK_LOOKBACK_DAYS - 1)), [today]);
 
@@ -352,14 +354,14 @@ export function CheckinScreen() {
   const toggleToday = useCallback(
     async (habit: Habit) => {
       const next = !doneKeys.has(logKey(habit.id, today));
-      await setHabitLog(db, habit.id, today, next, systemClock.now());
+      await setHabitLog(db, habit.id, today, next, appClock.now());
     },
     [doneKeys, today],
   );
 
   const saveDraft = useCallback(
     async (habitId: string | null, draft: HabitDraft) => {
-      const now = systemClock.now();
+      const now = appClock.now();
       const existing = habitId === null ? undefined : habits.find((item) => item.id === habitId);
       await saveHabit(db, {
         // 编辑保留原 id：日志主键是 `${habitId}@${date}`，换 id 等于把历史全丢掉。
