@@ -1,14 +1,22 @@
 import type { AppConfig } from '@gofor/core/config';
 import {
   type Checkin,
+  type Checklist,
+  type ChecklistLog,
   DEFAULT_SUBJECT_NAMES,
+  type DiaryEntry,
   type HabitLog,
+  type MoodLog,
+  type ScanBatch,
+  type ScanResult,
+  type SheetManifestRecord,
   type StoredTemplate,
   type StoredTimetable,
   type StudySession,
   type Subject,
   type TagPool,
   type Task,
+  type ToolboxRun,
 } from '@gofor/core/domain';
 import type { Habit } from '@gofor/core/habits';
 import type { PomodoroRun } from '@gofor/core/pomodoro';
@@ -353,22 +361,52 @@ export interface ExportBundle {
   timetables?: StoredTimetable[];
   tagPools?: TagPool[];
   focusRuns?: PomodoroRun[];
+  moodLogs?: MoodLog[];
+  diaryEntries?: DiaryEntry[];
+  toolboxRuns?: ToolboxRun[];
+  checklists?: Checklist[];
+  checklistLogs?: ChecklistLog[];
+  scanBatches?: ScanBatch[];
+  sheetManifests?: SheetManifestRecord[];
 }
 
 export async function exportAll(database: GoForDb): Promise<ExportBundle> {
   const { config } = await loadConfig(database);
-  const [subjects, tasks, sessions, templates, habits, habitLogs, timetables, tagPools, focusRuns] =
-    await Promise.all([
-      listSubjects(database),
-      listTasks(database),
-      database.sessions.toArray(),
-      listTemplates(database),
-      listHabits(database),
-      database.habitLogs.toArray(),
-      database.timetables.toArray(),
-      database.tagPools.toArray(),
-      database.focusRuns.toArray(),
-    ]);
+  const [
+    subjects,
+    tasks,
+    sessions,
+    templates,
+    habits,
+    habitLogs,
+    timetables,
+    tagPools,
+    focusRuns,
+    moodLogs,
+    diaryEntries,
+    toolboxRuns,
+    checklists,
+    checklistLogs,
+    scanBatches,
+    sheetManifests,
+  ] = await Promise.all([
+    listSubjects(database),
+    listTasks(database),
+    database.sessions.toArray(),
+    listTemplates(database),
+    listHabits(database),
+    database.habitLogs.toArray(),
+    database.timetables.toArray(),
+    database.tagPools.toArray(),
+    database.focusRuns.toArray(),
+    database.moodLogs.toArray(),
+    database.diaryEntries.toArray(),
+    database.toolboxRuns.toArray(),
+    database.checklists.toArray(),
+    database.checklistLogs.toArray(),
+    database.scanBatches.toArray(),
+    database.sheetManifests.toArray(),
+  ]);
   return {
     format: 'gofor-export',
     formatVersion: EXPORT_FORMAT_VERSION,
@@ -383,6 +421,13 @@ export async function exportAll(database: GoForDb): Promise<ExportBundle> {
     timetables,
     tagPools,
     focusRuns,
+    moodLogs,
+    diaryEntries,
+    toolboxRuns,
+    checklists,
+    checklistLogs,
+    scanBatches,
+    sheetManifests,
   };
 }
 
@@ -397,6 +442,13 @@ export interface ImportResult {
     timetables: number;
     tagPools: number;
     focusRuns: number;
+    moodLogs: number;
+    diaryEntries: number;
+    toolboxRuns: number;
+    checklists: number;
+    checklistLogs: number;
+    scanBatches: number;
+    sheetManifests: number;
   };
   warnings: string[];
 }
@@ -430,6 +482,13 @@ export async function importAll(database: GoForDb, bundle: ExportBundle): Promis
       database.timetables,
       database.tagPools,
       database.focusRuns,
+      database.moodLogs,
+      database.diaryEntries,
+      database.toolboxRuns,
+      database.checklists,
+      database.checklistLogs,
+      database.scanBatches,
+      database.sheetManifests,
     ],
     async () => {
       if (bundle.config) await saveConfig(database, bundle.config);
@@ -443,6 +502,13 @@ export async function importAll(database: GoForDb, bundle: ExportBundle): Promis
       await database.timetables.bulkPut(bundle.timetables ?? []);
       await database.tagPools.bulkPut(bundle.tagPools ?? []);
       await database.focusRuns.bulkPut(bundle.focusRuns ?? []);
+      await database.moodLogs.bulkPut(bundle.moodLogs ?? []);
+      await database.diaryEntries.bulkPut(bundle.diaryEntries ?? []);
+      await database.toolboxRuns.bulkPut(bundle.toolboxRuns ?? []);
+      await database.checklists.bulkPut(bundle.checklists ?? []);
+      await database.checklistLogs.bulkPut(bundle.checklistLogs ?? []);
+      await database.scanBatches.bulkPut(bundle.scanBatches ?? []);
+      await database.sheetManifests.bulkPut(bundle.sheetManifests ?? []);
     },
   );
 
@@ -457,6 +523,13 @@ export async function importAll(database: GoForDb, bundle: ExportBundle): Promis
       timetables: bundle.timetables?.length ?? 0,
       tagPools: bundle.tagPools?.length ?? 0,
       focusRuns: bundle.focusRuns?.length ?? 0,
+      moodLogs: bundle.moodLogs?.length ?? 0,
+      diaryEntries: bundle.diaryEntries?.length ?? 0,
+      toolboxRuns: bundle.toolboxRuns?.length ?? 0,
+      checklists: bundle.checklists?.length ?? 0,
+      checklistLogs: bundle.checklistLogs?.length ?? 0,
+      scanBatches: bundle.scanBatches?.length ?? 0,
+      sheetManifests: bundle.sheetManifests?.length ?? 0,
     },
     warnings,
   };
@@ -483,4 +556,271 @@ export function sessionFromRun(run: PomodoroRun, date: string): StudySession {
     source: 'appTimer',
     createdAt: run.createdAt,
   };
+}
+
+/* ------------------------------------- P2：三滑块 / 日记 / 工具箱 / 清单 */
+
+/** 某一天的三滑块；没填过返回 undefined。 */
+export async function getMoodLog(database: GoForDb, date: string): Promise<MoodLog | undefined> {
+  return database.moodLogs.get(date);
+}
+
+/** 写入/覆盖某一天的三滑块（一天一条，幂等）。 */
+export async function saveMoodLog(
+  database: GoForDb,
+  input: { date: string; sleep: number; mood: number; focus: number },
+  now: number,
+): Promise<MoodLog> {
+  const log: MoodLog = { ...input, updatedAt: now };
+  await database.moodLogs.put(log);
+  return log;
+}
+
+/** 闭区间内的三滑块（走 date 索引）。 */
+export async function listMoodLogs(
+  database: GoForDb,
+  from: string,
+  to: string,
+): Promise<MoodLog[]> {
+  return database.moodLogs.where('date').between(from, to, true, true).toArray();
+}
+
+export async function saveDiaryEntry(database: GoForDb, entry: DiaryEntry): Promise<void> {
+  await database.diaryEntries.put(entry);
+}
+
+/** 闭区间内的日记，按日期倒序、同一天内新的在前。 */
+export async function listDiaryEntries(
+  database: GoForDb,
+  from: string,
+  to: string,
+): Promise<DiaryEntry[]> {
+  const rows = await database.diaryEntries.where('date').between(from, to, true, true).toArray();
+  return rows.sort((a, b) =>
+    a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1,
+  );
+}
+
+export async function deleteDiaryEntry(database: GoForDb, id: string): Promise<void> {
+  await database.diaryEntries.delete(id);
+}
+
+export async function addToolboxRun(database: GoForDb, run: ToolboxRun): Promise<void> {
+  await database.toolboxRuns.put(run);
+}
+
+/** 最近的练习记录（按开始时间倒序）。 */
+export async function listToolboxRuns(database: GoForDb, limit = 50): Promise<ToolboxRun[]> {
+  const rows = await database.toolboxRuns.orderBy('startedAt').reverse().limit(limit).toArray();
+  return rows;
+}
+
+export async function listChecklists(database: GoForDb): Promise<Checklist[]> {
+  const rows = await database.checklists.toArray();
+  return rows.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export async function saveChecklist(database: GoForDb, checklist: Checklist): Promise<void> {
+  await database.checklists.put(checklist);
+}
+
+/** 删清单连同它的历史——和打卡项一样，留着只会变成孤儿数据。 */
+export async function deleteChecklist(database: GoForDb, id: string): Promise<void> {
+  await database.transaction('rw', [database.checklists, database.checklistLogs], async () => {
+    await database.checklists.delete(id);
+    await database.checklistLogs.where('checklistId').equals(id).delete();
+  });
+}
+
+export async function getChecklistLog(
+  database: GoForDb,
+  checklistId: string,
+  date: string,
+): Promise<ChecklistLog | undefined> {
+  return database.checklistLogs.get(`${checklistId}@${date}`);
+}
+
+export async function listChecklistLogs(
+  database: GoForDb,
+  from: string,
+  to: string,
+): Promise<ChecklistLog[]> {
+  return database.checklistLogs.where('date').between(from, to, true, true).toArray();
+}
+
+/** 写入/覆盖某清单某天的完成情况。 */
+export async function setChecklistLog(
+  database: GoForDb,
+  checklistId: string,
+  date: string,
+  done: string[],
+  now: number,
+): Promise<void> {
+  await database.checklistLogs.put({
+    id: `${checklistId}@${date}`,
+    checklistId,
+    date,
+    done,
+    updatedAt: now,
+  });
+}
+
+/* ---------------------------------------------------- P2：扫描回填批次 */
+
+export async function saveScanBatch(database: GoForDb, batch: ScanBatch): Promise<void> {
+  await database.scanBatches.put(batch);
+}
+
+/** 最近的扫描批次（新建在前）。 */
+export async function listScanBatches(database: GoForDb, limit = 20): Promise<ScanBatch[]> {
+  return database.scanBatches.orderBy('createdAt').reverse().limit(limit).toArray();
+}
+
+export async function updateScanBatchStatus(
+  database: GoForDb,
+  id: string,
+  status: ScanBatch['status'],
+  now: number,
+): Promise<void> {
+  const existing = await database.scanBatches.get(id);
+  if (!existing) return;
+  await database.scanBatches.put({
+    ...existing,
+    status,
+    appliedAt: status === 'applied' ? now : existing.appliedAt,
+  });
+}
+
+export async function deleteScanBatch(database: GoForDb, id: string): Promise<void> {
+  await database.scanBatches.delete(id);
+}
+
+/* ------------------------------------------- P2：打印坐标清单（回填用） */
+
+export function sheetManifestId(templateId: string, date: string, paper: string): string {
+  return `${templateId}@${date}@${paper}`;
+}
+
+export async function saveSheetManifest(
+  database: GoForDb,
+  record: SheetManifestRecord,
+): Promise<void> {
+  await database.sheetManifests.put(record);
+}
+
+export async function getSheetManifest(
+  database: GoForDb,
+  templateId: string,
+  date: string,
+  paper: string,
+): Promise<SheetManifestRecord | undefined> {
+  return database.sheetManifests.get(sheetManifestId(templateId, date, paper));
+}
+
+/* --------------------------------------------- P2：把扫描结果写进各张表 */
+
+/** `payload` 的命名约定：`task:<id>` / `habit:<id>` / `mood:<sleep|mood|focus>`。 */
+export type ScanPayloadKind = 'task' | 'habit' | 'mood';
+
+export interface ScanApplySummary {
+  tasksDone: number;
+  habitsChecked: number;
+  /** 三滑块是否写了（三个值一起写，缺的沿用当天已有值或默认 3）。 */
+  moodSaved: boolean;
+  /** 识别出来了但对应数据不存在/不认识的条目数。 */
+  skipped: number;
+}
+
+const MOOD_KEYS = new Set(['sleep', 'mood', 'focus']);
+
+function splitPayload(payload: string): { kind: string; id: string } | null {
+  const index = payload.indexOf(':');
+  if (index <= 0 || index === payload.length - 1) return null;
+  return { kind: payload.slice(0, index), id: payload.slice(index + 1) };
+}
+
+/**
+ * 把一次扫描的识别结果写进数据层。**只写 `selected` 为真的条目。**
+ *
+ * 为什么不在这里做阈值判断：阈值是"看图"的事，属于 `@gofor/core/scan` 的 classify；
+ * 这里只负责"已经判定为勾选的东西写到哪里去"。分开之后这段能被单测覆盖，
+ * 而阈值调整不用重新测写库路径。
+ *
+ * 三滑块的特殊之处：三个值必须一次写全（那一天只有一条记录），
+ * 没扫到的沿用当天已有值，当天也没有就用 3（中间值），
+ * 不拿 0 兜底——0 是"没填"，会污染平均值。
+ */
+export async function applyScanResults(
+  database: GoForDb,
+  results: readonly ScanResult[],
+  date: string,
+  now: number,
+): Promise<ScanApplySummary> {
+  const summary: ScanApplySummary = {
+    tasksDone: 0,
+    habitsChecked: 0,
+    moodSaved: false,
+    skipped: 0,
+  };
+  const mood: Partial<Record<'sleep' | 'mood' | 'focus', number>> = {};
+
+  for (const result of results) {
+    if (!result.selected) continue;
+    const payload = result.payload ?? null;
+    if (payload === null) {
+      summary.skipped += 1;
+      continue;
+    }
+    const parsed = splitPayload(payload);
+    if (parsed === null) {
+      summary.skipped += 1;
+      continue;
+    }
+
+    if (parsed.kind === 'task') {
+      const task = await database.tasks.get(parsed.id);
+      if (!task) {
+        summary.skipped += 1;
+        continue;
+      }
+      await setTaskDone(database, parsed.id, true, now);
+      summary.tasksDone += 1;
+      continue;
+    }
+
+    if (parsed.kind === 'habit') {
+      const habit = await database.habits.get(parsed.id);
+      if (!habit) {
+        summary.skipped += 1;
+        continue;
+      }
+      await setHabitLog(database, parsed.id, date, true, now);
+      summary.habitsChecked += 1;
+      continue;
+    }
+
+    if (parsed.kind === 'mood' && MOOD_KEYS.has(parsed.id) && result.value !== undefined) {
+      mood[parsed.id as 'sleep' | 'mood' | 'focus'] = result.value;
+      continue;
+    }
+
+    summary.skipped += 1;
+  }
+
+  if (mood.sleep !== undefined || mood.mood !== undefined || mood.focus !== undefined) {
+    const existing = await getMoodLog(database, date);
+    await saveMoodLog(
+      database,
+      {
+        date,
+        sleep: mood.sleep ?? existing?.sleep ?? 3,
+        mood: mood.mood ?? existing?.mood ?? 3,
+        focus: mood.focus ?? existing?.focus ?? 3,
+      },
+      now,
+    );
+    summary.moodSaved = true;
+  }
+
+  return summary;
 }

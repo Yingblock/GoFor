@@ -685,12 +685,14 @@ export function Tasks({ tasks }: { tasks: Task[] }) {
                     }
                     className="size-4 shrink-0"
                   />
-                  <span className={`flex-1 text-sm ${task.done ? 'line-through opacity-40' : ''}`}>
+                  <span
+                    className={`min-w-0 flex-1 break-words text-sm ${task.done ? 'line-through opacity-40' : ''}`}
+                  >
                     {task.title}
                   </span>
 
                   {visibleTags.size > 0 ? (
-                    <span className="flex flex-wrap items-center gap-1">
+                    <span className="flex min-w-0 flex-wrap items-center gap-1">
                       {[...visibleTags].map((tag) => (
                         <span
                           key={tag}
@@ -786,7 +788,7 @@ export function Tasks({ tasks }: { tasks: Task[] }) {
                             className="size-4 shrink-0"
                           />
                           <span
-                            className={`text-xs ${subtask.done ? 'line-through opacity-40' : 'opacity-70'}`}
+                            className={`min-w-0 break-words text-xs ${subtask.done ? 'line-through opacity-40' : 'opacity-70'}`}
                           >
                             {subtask.title}
                           </span>

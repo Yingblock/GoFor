@@ -19,6 +19,12 @@ export type ScreenId =
   | 'usage'
   | 'print'
   | 'templates'
+  /** P2：扫描回填（纸的回流）。 */
+  | 'scan'
+  | 'mood'
+  | 'report'
+  | 'checklist'
+  | 'diary'
   | 'friends'
   | 'cloud'
   | 'mind';
@@ -28,6 +34,13 @@ export interface NavItem {
   title: string;
   /** 实现状态：false 时点击显示"阶段 Pn，尚未开始"。 */
   ready: boolean;
+  /**
+   * 折叠态侧栏里显示的图标（emoji）。
+   *
+   * 不引入图标库：一个 emoji 就够 56px 宽的图标列用，而且没有额外依赖/打包体。
+   * 可选是为了不让"加条目"必须同时想图标。
+   */
+  icon?: string;
 }
 
 /**
@@ -53,10 +66,11 @@ export const NAV: NavGroup[] = [
     part: 'offline',
     title: '工具',
     items: [
-      { id: 'pomodoro', title: '番茄钟', ready: true },
-      { id: 'notebook', title: '笔记本', ready: false },
-      { id: 'board', title: '画板', ready: false },
-      { id: 'deviceLock', title: '电子产品锁定', ready: false },
+      { id: 'pomodoro', title: '番茄钟', ready: true, icon: '🍅' },
+      { id: 'notebook', title: '笔记本', ready: false, icon: '📓' },
+      { id: 'board', title: '画板', ready: false, icon: '🎨' },
+      { id: 'deviceLock', title: '电子产品锁定', ready: false, icon: '🔒' },
+      { id: 'checklist', title: '环境清单', ready: true, icon: '🧹' },
     ],
   },
   {
@@ -64,10 +78,13 @@ export const NAV: NavGroup[] = [
     part: 'offline',
     title: '记录',
     items: [
-      { id: 'tasks', title: '作业清单', ready: true },
-      { id: 'timetable', title: '课程表', ready: true },
-      { id: 'checkin', title: '每日打卡', ready: true },
-      { id: 'usage', title: '使用时长', ready: false },
+      { id: 'tasks', title: '作业清单', ready: true, icon: '📋' },
+      { id: 'timetable', title: '课程表', ready: true, icon: '🗓️' },
+      { id: 'checkin', title: '每日打卡', ready: true, icon: '✅' },
+      { id: 'usage', title: '使用时长', ready: false, icon: '⏱️' },
+      { id: 'scan', title: '扫描回填', ready: true, icon: '📸' },
+      { id: 'mood', title: '三格自评', ready: true, icon: '🌡️' },
+      { id: 'report', title: '自我周报', ready: true, icon: '📊' },
     ],
   },
   {
@@ -75,27 +92,30 @@ export const NAV: NavGroup[] = [
     part: 'offline',
     title: '导出',
     items: [
-      { id: 'print', title: '打印 checklist', ready: true },
-      { id: 'templates', title: '模板与校准页', ready: true },
+      { id: 'print', title: '打印 checklist', ready: true, icon: '🖨️' },
+      { id: 'templates', title: '模板与校准页', ready: true, icon: '📐' },
     ],
   },
   {
     code: '在线·M1',
     part: 'online',
     title: '好友',
-    items: [{ id: 'friends', title: '好友与状态', ready: false }],
+    items: [{ id: 'friends', title: '好友与状态', ready: false, icon: '👥' }],
   },
   {
     code: '在线·M2',
     part: 'online',
     title: '云存档',
-    items: [{ id: 'cloud', title: '存档与分享', ready: false }],
+    items: [{ id: 'cloud', title: '存档与分享', ready: false, icon: '☁️' }],
   },
   {
     code: '在线·M3',
     part: 'online',
     title: '心理支持',
-    items: [{ id: 'mind', title: '自助工具箱', ready: false }],
+    items: [
+      { id: 'mind', title: '自助工具箱', ready: true, icon: '🧠' },
+      { id: 'diary', title: '情绪日记', ready: true, icon: '📖' },
+    ],
   },
 ];
 

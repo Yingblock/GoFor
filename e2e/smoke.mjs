@@ -356,6 +356,163 @@ try {
   check('命令面板可唤起', true);
   await page.keyboard.press('Escape');
 
+  /* -------------------------------------------------- P2：行为层五屏 */
+
+  await openGroup(page, '工具');
+  await clickItem(page, '环境清单');
+  await page.waitForSelector('text=环境隔离清单', { timeout: 8000 });
+  check('环境清单可打开', true);
+
+  await openGroup(page, '记录');
+  await clickItem(page, '三格自评');
+  await page.waitForSelector('text=今天的三格', { timeout: 8000 });
+  check('三格自评可打开', true);
+
+  await openGroup(page, '记录');
+  await clickItem(page, '自我周报');
+  await page.waitForSelector('text=自我周报', { timeout: 8000 });
+  check('自我周报可打开', true);
+
+  await openGroup(page, '心理支持');
+  await clickItem(page, '自助工具箱');
+  await page.waitForSelector('text=四个短练习', { timeout: 8000 });
+  check('自助工具箱可打开', true);
+
+  await openGroup(page, '心理支持');
+  await clickItem(page, '情绪日记');
+  await page.waitForSelector('text=写今天的', { timeout: 8000 });
+  check('情绪日记可打开', true);
+
+  /* -------------------------------------------------- P2：侧栏可折叠 */
+
+  const collapseButton = page.getByRole('button', { name: '折叠侧栏' });
+  check('桌面端有侧栏折叠按钮', (await collapseButton.count()) > 0);
+  if ((await collapseButton.count()) > 0) {
+    await collapseButton.click();
+    const sidebarClass = (await page.locator('aside').first().getAttribute('class')) ?? '';
+    check('折叠后侧栏收成图标列', sidebarClass.includes('md:w-14'));
+    // 折叠态下仍然能导航（图标可点）
+    await page.locator('aside').first().getByRole('button', { name: '作业清单' }).click();
+    await page.waitForSelector('input[placeholder="加一项作业，回车确认"]', { timeout: 8000 });
+    check('折叠态仍可导航', true);
+    await page.getByRole('button', { name: '展开侧栏' }).click();
+  }
+
+  /* ------------------------------------------- P2：拍照 → 识别 → 回填 */
+
+  // 把「打印预览的那一页」截图当照片。预览是缩小显示的，直接截会只有 29px 的二维码、
+  // 解不出来——所以另开一个 4 倍像素密度的页面来截，像素量接近手机拍的照片。
+  // 这样 e2e 不需要提交测试图片，也不依赖摄像头。
+  const photoPage = await browser.newPage({
+    viewport: { width: 1100, height: 1400 },
+    deviceScaleFactor: 4,
+  });
+  await photoPage.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await openGroup(photoPage, '导出');
+  await clickItem(photoPage, '打印 checklist');
+  await photoPage.waitForSelector('.print-page', { timeout: 10000 });
+  const sheetPng = await photoPage.locator('.print-page').first().screenshot();
+  await photoPage.close();
+
+  // 用 canvas 在纸的下半部分涂黑，模拟"填了三格"。坐标清单采样的是归一化矩形，
+  // 所以只需要保证墨迹落在那几行里，不用精确到格子。
+  const canvasPage = await browser.newPage();
+  const inkedBase64 = await canvasPage.evaluate(async (b64) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${b64}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    context.fillStyle = '#000000';
+    context.fillRect(0, Math.floor(image.height * 0.78), image.width, Math.ceil(image.height * 0.16));
+    return canvas.toDataURL('image/png').split(',')[1];
+  }, sheetPng.toString('base64'));
+  await canvasPage.close();
+
+  await openGroup(page, '记录');
+  await clickItem(page, '扫描回填');
+  await page.waitForSelector('text=拍一张纸', { timeout: 8000 });
+  await page
+    .locator('input[aria-label="选择纸的照片"]')
+    .setInputFiles({
+      name: 'sheet.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(inkedBase64, 'base64'),
+    });
+
+  // 自动找角会把底部那条墨迹带当成背景边界，所以先点「重置四角」用确定性内缩矩形。
+  await page.getByRole('button', { name: '重置四角' }).click();
+  await page.getByRole('button', { name: '用这四个角矫正' }).click();
+  await page.getByRole('heading', { name: '待确认' }).waitFor({ timeout: 20000 });
+  check('扫描：解码二维码并进入待确认', true);
+  check('扫描：日期来自纸上的二维码', (await page.getByText(/来自纸上的二维码/).count()) > 0);
+
+  const applyButton = page.getByRole('button', { name: /应用这 \d+ 项/ });
+  const recognised = (await applyButton.count()) > 0;
+  check('扫描：按坐标识别出已填的格子', recognised, recognised ? '' : '没有识别到任何格子');
+  if (recognised) {
+    await applyButton.click();
+    await page.waitForSelector('text=/已回填/', { timeout: 10000 });
+    check('扫描：回填写入数据层', true);
+    // 回填后三格自评应被写上（涂黑了整行，取到的是最右一格 → 5）。
+    // liveQuery 是异步的：刚进页面时滑块还是默认值 3，必须等它读到库里那条记录。
+    await openGroup(page, '记录');
+    await clickItem(page, '三格自评');
+    await page.waitForSelector('text=今天的三格', { timeout: 8000 });
+    const moodLoaded = await page
+      .waitForFunction(
+        () => [...document.querySelectorAll('input[type="range"]')].some((node) => node.value === '5'),
+        { timeout: 8000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    const sliderValues = await page
+      .locator('input[type="range"]')
+      .evaluateAll((nodes) => nodes.map((node) => node.value));
+    check('纸上三格回填到三格自评', moodLoaded, sliderValues.join(','));
+  }
+
+  /* --------------------------------------------- 响应式：360px 不出框 */
+
+  /*
+   * 每页先在大视口点进去，再缩到 360px 量横向溢出。
+   * 反过来做不行：360px 时侧栏是抽屉、导航按钮不可见，根本点不到页面。
+   */
+  const overflowPages = [];
+  const pagesToCheck = [
+    { group: '记录', title: '作业清单' },
+    { group: '记录', title: '课程表' },
+    { group: '记录', title: '扫描回填' },
+    { group: '记录', title: '三格自评' },
+    { group: '记录', title: '自我周报' },
+    { group: '工具', title: '环境清单' },
+    { group: '心理支持', title: '自助工具箱' },
+    { group: '导出', title: '打印 checklist' },
+    { group: '导出', title: '模板与校准页' },
+  ];
+  for (const entry of pagesToCheck) {
+    try {
+      await openGroup(page, entry.group);
+      await clickItem(page, entry.title);
+      await sleep(200);
+      await page.setViewportSize({ width: 360, height: 740 });
+      await sleep(250);
+      const overflow = await page.evaluate(
+        () => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth,
+      );
+      if (overflow > 1) overflowPages.push(`${entry.title}+${overflow}px`);
+      await page.setViewportSize({ width: 1100, height: 1400 });
+      await sleep(150);
+    } catch {
+      overflowPages.push(`${entry.title}打不开`);
+      await page.setViewportSize({ width: 1100, height: 1400 });
+    }
+  }
+  check('360px 宽下各页无横向溢出', overflowPages.length === 0, overflowPages.join(' / '));
+
   /* ------------------------------------------------ 备份导出与导入往返 */
 
   // 回到首页，横幅应该还在（这一轮从未备份过）。
@@ -436,6 +593,116 @@ try {
   });
   await page.waitForSelector('text=/导入失败/', { timeout: 8000 });
   check('非法 JSON 提示导入失败', true);
+
+  /* ---------------------------- 侧栏折叠：持久化 / 快捷键 / 图标全部可达 */
+
+  // 从干净状态开始，免得依赖前面那条折叠检查留下的状态。
+  await page.evaluate(() => localStorage.removeItem('gofor.ui.sidebarCollapsed'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('text=拍照录入', { timeout: 15000 });
+
+  // 用 id 定位侧栏：模板页里有第二个 aside（模板列表），不能靠 first() 碰运气。
+  const aside = page.locator('#app-sidebar');
+  const asideWidth = async () => Math.round((await aside.boundingBox())?.width ?? 0);
+  const expandedWidth = await asideWidth();
+  check('桌面默认展开侧栏', expandedWidth > 200, `${expandedWidth}px`);
+
+  await page.locator('button[aria-label="折叠侧栏"]').click();
+  await sleep(250);
+  check(
+    '折叠后的 aria-expanded 为 false',
+    (await page.locator('button[aria-label="展开侧栏"]').getAttribute('aria-expanded')) === 'false',
+  );
+  const collapsedWidth = await asideWidth();
+  check('折叠后只剩一列图标（56px）', collapsedWidth === 56, `${collapsedWidth}px`);
+  check(
+    '折叠状态写入 localStorage',
+    (await page.evaluate(() => localStorage.getItem('gofor.ui.sidebarCollapsed'))) === '1',
+  );
+
+  // 折叠态逐个图标点过去：每个条目都要点得到，名字来自 aria-label / title。
+  // 只取「有 title 的按钮」：折叠态图标 + GoFor 标题按钮。
+  // （✕ 关闭按钮在桌面是 display:none 但仍有 aria-label，不能混进来。）
+  const iconButtons = page.locator('#app-sidebar button[title]');
+  const iconCount = await iconButtons.count();
+  const iconNames = [];
+  for (let index = 0; index < iconCount; index++) {
+    const name = await iconButtons.nth(index).getAttribute('aria-label');
+    if (name !== null) iconNames.push(name);
+  }
+  const unreachable = [];
+  for (const name of iconNames) {
+    try {
+      await page.locator(`#app-sidebar button[aria-label="${name}"]`).click();
+      if (name === 'GoFor') {
+        await page.waitForSelector('text=任务提示', { timeout: 5000 });
+      } else {
+        await page.waitForSelector(`h1:has-text("${name}")`, { timeout: 5000 });
+      }
+    } catch {
+      unreachable.push(name);
+    }
+  }
+  check(
+    '折叠态每个图标都能导航',
+    iconNames.length > 6 && unreachable.length === 0,
+    unreachable.length ? `点不到：${unreachable.join('、')}` : `${iconNames.length} 个入口`,
+  );
+
+  // 刷新后保持折叠：首帧就是折叠态，不是展开再跳。
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('text=拍照录入', { timeout: 15000 });
+  const widthAfterReload = await asideWidth();
+  check('刷新后仍是折叠态', widthAfterReload === 56, `${widthAfterReload}px`);
+
+  await page.locator('button[aria-label="展开侧栏"]').click();
+  await sleep(250);
+  check('展开后恢复分组手风琴', (await page.locator('aside button[aria-expanded]').count()) === 6);
+  check(
+    '展开状态写入 localStorage',
+    (await page.evaluate(() => localStorage.getItem('gofor.ui.sidebarCollapsed'))) === '0',
+  );
+
+  // 快捷键：Ctrl/Cmd+B 切换，且不能抢命令面板的 Ctrl/Cmd+K。
+  await page.keyboard.press('Control+b');
+  await sleep(200);
+  check('Ctrl+B 折叠侧栏', (await asideWidth()) === 56, `${await asideWidth()}px`);
+  await page.keyboard.press('Control+b');
+  await sleep(200);
+  check('Ctrl+B 展开侧栏', (await asideWidth()) === expandedWidth, `${await asideWidth()}px`);
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('input[placeholder="输入命令…"]', { timeout: 5000 });
+  await page.keyboard.press('Escape');
+  check('Ctrl+K 仍是命令面板（不冲突）', (await asideWidth()) === expandedWidth);
+
+  /* ---------------------- 窄屏：折叠开关不出现，抽屉保持完整文字版 */
+
+  await page.setViewportSize({ width: 360, height: 740 });
+  await sleep(300);
+  const narrowToggle = page.locator('button[aria-label="折叠侧栏"], button[aria-label="展开侧栏"]');
+  check('窄屏不显示折叠开关', !(await narrowToggle.first().isVisible()));
+
+  const drawerClosed = ((await aside.getAttribute('class')) ?? '')
+    .split(' ')
+    .includes('-translate-x-full');
+  check('窄屏侧栏默认是收起的抽屉', drawerClosed);
+
+  await page.locator('button[aria-label="打开菜单"]').click();
+  await sleep(300);
+  await openGroup(page, '记录');
+  check(
+    '窄屏抽屉仍是完整文字版',
+    await page.locator('aside button').filter({ hasText: '作业清单' }).isVisible(),
+  );
+  // 点抽屉右上角的 ✕（全屏遮罩的中心在抽屉底下，点不着，也没必要点它）。
+  await page.locator('#app-sidebar button[aria-label="关闭菜单"]').click();
+  await sleep(300);
+  const drawerReclosed = ((await aside.getAttribute('class')) ?? '')
+    .split(' ')
+    .includes('-translate-x-full');
+  check('窄屏抽屉关闭逻辑不变', drawerReclosed);
+  await page.setViewportSize({ width: 1100, height: 1400 });
+  await sleep(300);
 
   /* ------------------------------------------------------ 打印 PDF */
 

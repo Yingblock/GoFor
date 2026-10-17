@@ -1,12 +1,19 @@
 import type {
   Checkin,
+  Checklist,
+  ChecklistLog,
+  DiaryEntry,
   HabitLog,
+  MoodLog,
+  ScanBatch,
+  SheetManifestRecord,
   StoredTemplate,
   StoredTimetable,
   StudySession,
   Subject,
   TagPool,
   Task,
+  ToolboxRun,
 } from '@gofor/core/domain';
 import type { Habit } from '@gofor/core/habits';
 import type { PomodoroRun } from '@gofor/core/pomodoro';
@@ -39,6 +46,13 @@ export class GoForDb extends Dexie {
   tagPools!: Table<TagPool, string>;
   habits!: Table<Habit, string>;
   habitLogs!: Table<HabitLog, string>;
+  moodLogs!: Table<MoodLog, string>;
+  diaryEntries!: Table<DiaryEntry, string>;
+  toolboxRuns!: Table<ToolboxRun, string>;
+  checklists!: Table<Checklist, string>;
+  checklistLogs!: Table<ChecklistLog, string>;
+  scanBatches!: Table<ScanBatch, string>;
+  sheetManifests!: Table<SheetManifestRecord, string>;
 
   constructor(name = 'gofor') {
     super(name);
@@ -128,6 +142,55 @@ export class GoForDb extends Dexie {
           });
         }
       });
+
+    // v5：P2「纸的回流 + 行为层」的新表。
+    //
+    // 只加表、不动任何已有数据，所以没有 upgrade 函数。
+    // 三滑块/日记/工具箱/清单/扫描批次都是新功能，旧库里不存在这些记录。
+    this.version(5).stores({
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+      focusRuns: 'id, status, createdAt',
+      checkins: 'date',
+      timetables: 'id',
+      tagPools: 'id',
+      habits: 'id, order',
+      habitLogs: 'id, habitId, date',
+      moodLogs: 'date',
+      diaryEntries: 'id, date',
+      toolboxRuns: 'id, exercise, startedAt',
+      checklists: 'id',
+      checklistLogs: 'id, date, checklistId',
+      scanBatches: 'id, status, createdAt',
+    });
+
+    // v6：打印时的坐标清单快照。
+    //
+    // v5 已经在本机跑过（e2e 会建库），所以**不能**往 v5 的 stores 里补表——
+    // Dexie 只按版本号决定跑不跑升级，停在 v5 的库不会补建。
+    this.version(6).stores({
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+      focusRuns: 'id, status, createdAt',
+      checkins: 'date',
+      timetables: 'id',
+      tagPools: 'id',
+      habits: 'id, order',
+      habitLogs: 'id, habitId, date',
+      moodLogs: 'date',
+      diaryEntries: 'id, date',
+      toolboxRuns: 'id, exercise, startedAt',
+      checklists: 'id',
+      checklistLogs: 'id, date, checklistId',
+      scanBatches: 'id, status, createdAt',
+      sheetManifests: 'id, date, templateId',
+    });
   }
 }
 

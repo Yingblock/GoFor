@@ -95,7 +95,7 @@ describe('模板：一页放得下', () => {
 
   it('day 在 A4 一行不少，在 A5 自动精简', () => {
     const a4 = materialize(paperFor('day', 'A4'), CONTEXT);
-    expect(taskRowsOf(a4)).toBe(10);
+    expect(taskRowsOf(a4)).toBe(8);
     expect(timeLogsOf(a4).map((block) => block.rows)).toEqual([2, 2, 2]);
 
     const a5 = materialize(paperFor('day', 'A5'), CONTEXT);
@@ -153,12 +153,12 @@ describe('模板：materialize', () => {
 
   it('嵌套数组也独立，改返回值不会污染模板', () => {
     const template = templateById('day');
-    const slots = materialize(template, CONTEXT).find((block) => block.id === 'slots');
-    if (slots?.kind !== 'slots') throw new Error('缺少 slots 区块');
-    slots.labels.push('额外');
+    const rating = materialize(template, CONTEXT).find((block) => block.id === 'rating');
+    if (rating?.kind !== 'ratingGrid') throw new Error('缺少 ratingGrid 区块');
+    rating.labels.push('额外');
 
-    const original = template.blocks.find((block) => block.id === 'slots');
-    if (original?.kind !== 'slots') throw new Error('模板缺少 slots 区块');
+    const original = template.blocks.find((block) => block.id === 'rating');
+    if (original?.kind !== 'ratingGrid') throw new Error('模板缺少 ratingGrid 区块');
     expect(original.labels).toEqual(['睡眠', '心情', '专注']);
   });
 
@@ -185,7 +185,7 @@ describe('模板：paperFor', () => {
   it('day 在 A4/A5 下行数不同，且可直接 materialize', () => {
     const a4 = materialize(paperFor('day', 'A4'), CONTEXT);
     const a5 = materialize(paperFor('day', 'A5'), CONTEXT);
-    expect(taskRowsOf(a4)).toBe(10);
+    expect(taskRowsOf(a4)).toBe(8);
     expect(taskRowsOf(a5)).toBe(4);
     expect(timeLogsOf(a4)[0]?.rows).toBe(2);
     expect(timeLogsOf(a5)[0]?.rows).toBe(1);

@@ -18,6 +18,7 @@ export const BLOCK_KINDS = [
   'schedule',
   'timestamp',
   'checkboxGrid',
+  'ratingGrid',
   'table',
   'slots',
   'linedBox',
@@ -103,6 +104,26 @@ export interface CheckboxGridBlock extends BlockBase {
   rows: number;
 }
 
+/**
+ * 睡眠 / 心情 / 专注这类 1–N 的自评格。
+ *
+ * 与 `slots`（手写数字）的区别：这里**每行打印成 N 个勾选格子**，
+ * 扫回来只判断"哪一格有墨迹"，就能直接得到 1–N 的数值——不需要识别手写数字。
+ * 行高与 `checkboxGrid` 一致，所以两种格子混排时版式节奏不会突变。
+ */
+export interface RatingGridBlock extends BlockBase {
+  kind: 'ratingGrid';
+  /** 每行一项，例如 `['睡眠', '心情', '专注']`。 */
+  labels: string[];
+  /** 满分（格子数），1 起计。 */
+  scale: number;
+  /**
+   * 与 `labels` 平行的数据键（例如 `sleep` / `mood` / `focus`）。
+   * 回填写库时用它把格子映射回数据字段；没有就只按标签展示。
+   */
+  keys?: string[];
+}
+
 /** 课表之类的表格。 */
 export interface TableBlock extends BlockBase {
   kind: 'table';
@@ -158,6 +179,7 @@ export type Block =
   | ScheduleBlock
   | TimestampBlock
   | CheckboxGridBlock
+  | RatingGridBlock
   | TableBlock
   | SlotsBlock
   | LinedBoxBlock
@@ -193,6 +215,9 @@ export function blockHeightMm(block: Block): number {
       return BLOCK_PADDING_MM + ROW_HEIGHT_MM;
     case 'checkboxGrid':
       return BLOCK_PADDING_MM + block.rows * CELL_SIZE_MM;
+    case 'ratingGrid':
+      // 每行高度与 checkboxGrid 一致：一行一项，格子边长 = CELL_SIZE_MM。
+      return BLOCK_PADDING_MM + block.labels.length * CELL_SIZE_MM;
     case 'table':
       return BLOCK_PADDING_MM + block.rows * ROW_HEIGHT_MM;
     case 'linedBox':
@@ -211,6 +236,14 @@ export function validateBlock(block: Block): string[] {
   }
   if ('rows' in block && (!Number.isInteger(block.rows) || block.rows < 0)) {
     errors.push(`区块 ${block.id}: rows 必须是非负整数`);
+  }
+  if (block.kind === 'ratingGrid') {
+    if (!Number.isInteger(block.scale) || block.scale < 1) {
+      errors.push(`区块 ${block.id}: scale 必须是 ≥1 的整数`);
+    }
+    if (block.labels.length === 0) {
+      errors.push(`区块 ${block.id}: ratingGrid 至少需要一行`);
+    }
   }
   return errors;
 }

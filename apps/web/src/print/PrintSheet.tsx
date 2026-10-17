@@ -11,6 +11,8 @@ import {
   type ScheduleBlock,
   type TimeLogBlock,
 } from '@gofor/core/print';
+import { buildFillLink, encodeQrSvgPath } from '@gofor/core/scan';
+import { useLayoutEffect, useRef, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，恢复 `new Date()`）。
 import { appClock } from '../clock.ts';
 
@@ -24,6 +26,13 @@ export interface SheetData {
    * 这样模板以后换数据源（手填、导入）时不用跟着改渲染。
    */
   schedule?: { time: string; label: string }[];
+  /**
+   * 打印这张纸时的身份：模板、日期、纸张。
+   *
+   * 二维码里写的就是这三样，扫描时靠它把纸对回"哪一天、哪套坐标"。
+   * 不传就画一个虚线占位（旧模板、或还没接进来的调用方）。
+   */
+  qr?: { templateId: string; date: string; paper: string } | undefined;
 }
 
 export interface PrintSheetProps {
@@ -34,6 +43,12 @@ export interface PrintSheetProps {
 }
 
 const mm = (value: number): string => `${value}mm`;
+
+/** CSS 里 1mm 恒等于 96/25.4 px；把毫米版式换算成像素才能判断要不要缩。 */
+const PX_PER_MM = 96 / 25.4;
+
+/** 桌面预览的默认比例：再大就比屏幕还宽，再小看不清。 */
+const PREVIEW_SCALE = 0.62;
 
 function TitleBlockView({ text }: { text: string }) {
   return <div style={{ fontSize: mm(5), fontWeight: 600, letterSpacing: '0.02em' }}>{text}</div>;
@@ -233,6 +248,95 @@ function TimestampView({ label }: { label: string }) {
   );
 }
 
+/** 二维码：把「模板 + 日期 + 纸张」印在纸上，扫描时据此找回坐标清单。 */
+function QrView({ sizeMm, data }: { sizeMm: number; data: SheetData }) {
+  const qr = data.qr;
+  if (qr === undefined) {
+    return (
+      <div
+        style={{
+          width: mm(sizeMm),
+          height: mm(sizeMm),
+          border: `${mm(0.3)} dashed #9ca3af`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: mm(2.4),
+          color: '#9ca3af',
+        }}
+      >
+        二维码
+      </div>
+    );
+  }
+
+  const link = buildFillLink({
+    templateId: qr.templateId,
+    date: qr.date,
+    paper: qr.paper,
+    version: 1,
+  });
+  const svg = encodeQrSvgPath(link);
+  return (
+    <svg
+      role="img"
+      aria-label="回填二维码"
+      viewBox={`0 0 ${svg.size} ${svg.size}`}
+      style={{ width: mm(sizeMm), height: mm(sizeMm), display: 'block' }}
+    >
+      <rect width={svg.size} height={svg.size} fill="#ffffff" />
+      <path d={svg.path} fill="#111111" />
+    </svg>
+  );
+}
+
+/**
+ * 睡眠 / 心情 / 专注这类 1–N 自评格。
+ *
+ * 为什么印成勾选格而不是"写数字"：写数字要 OCR 才读得回来，
+ * 勾选格只要判断"这一格里有没有墨"，回填链路简单一个数量级（DESIGN §16.3）。
+ */
+/** 从 `Block` 联合里取评分格那一支，避免依赖 core 的导出清单。 */
+type RatingGridLike = Extract<Block, { kind: 'ratingGrid' }>;
+
+function RatingGridView({ block }: { block: RatingGridLike }) {
+  return (
+    <div>
+      {block.labels.map((label) => (
+        <div
+          key={label}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: mm(2),
+            // 行高必须正好 7mm 且从块顶开始铺：坐标清单按 rows × 7mm 等分采样窗，
+            // 这里多一个 gap 就会让越靠下的行偏得越多（DESIGN §16.2）。
+            height: mm(7),
+            borderBottom: `${mm(0.2)} solid #dcdad2`,
+          }}
+        >
+          <span style={{ width: mm(16), fontSize: mm(3), color: '#4b5563' }}>{label}</span>
+          <span style={{ display: 'flex', gap: mm(1.5) }}>
+            {Array.from({ length: block.scale }, (_, index) => (
+              <span
+                // biome-ignore lint/suspicious/noArrayIndexKey: 勾选格是固定长度的位置槽位
+                key={`${label}-${index}`}
+                style={{
+                  width: mm(5),
+                  height: mm(5),
+                  border: `${mm(0.2)} solid #b9b6ad`,
+                  borderRadius: mm(0.8),
+                }}
+              />
+            ))}
+          </span>
+          <span style={{ fontSize: mm(2.4), color: '#9ca3af' }}>1 → {block.scale}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function BlockView({ block, data }: { block: Block; data: SheetData }) {
   switch (block.kind) {
     case 'title':
@@ -283,22 +387,9 @@ function BlockView({ block, data }: { block: Block; data: SheetData }) {
         </div>
       );
     case 'qrcode':
-      return (
-        <div
-          style={{
-            width: mm(block.sizeMm),
-            height: mm(block.sizeMm),
-            border: `${mm(0.3)} dashed #9ca3af`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: mm(2.4),
-            color: '#9ca3af',
-          }}
-        >
-          QR
-        </div>
-      );
+      return <QrView sizeMm={block.sizeMm} data={data} />;
+    case 'ratingGrid':
+      return <RatingGridView block={block} />;
     case 'checkboxGrid':
     case 'table':
     case 'progressDots':
@@ -362,29 +453,55 @@ export function PrintLayer({ blocks, paper, margin, data }: PrintSheetProps) {
 export function PrintPreview({ blocks, paper, margin, data }: PrintSheetProps) {
   const result = layout(blocks, margin ? { paper, margin } : { paper });
   const size = PAPER_SIZES[paper];
-  const scale = 0.62;
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [hostWidth, setHostWidth] = useState<number | null>(null);
+
+  /*
+   * 预览宽度跟着容器走：容器够宽就仍用原来的 0.62，窄屏（手机 360px）按比例缩到刚好放下。
+   *
+   * 关键边界：**只有预览缩，打印不缩**。真正打印的是 `PrintLayer`，它的毫米尺寸
+   * 一个都没动；这里缩的只是屏幕上这一份 DOM，否则打出来的字会跟着变小、纸就废了。
+   * 用 ResizeObserver 而不是只在挂载时算一次：折叠侧栏 / 转屏都会改变可用宽度。
+   */
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (host === null) return;
+    const measure = () => setHostWidth(host.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, []);
+
+  const naturalWidthPx = size.widthMm * PX_PER_MM;
+  const scale =
+    hostWidth !== null && hostWidth > 0
+      ? Math.min(PREVIEW_SCALE, hostWidth / naturalWidthPx)
+      : PREVIEW_SCALE;
 
   return (
     // 外层按「缩放后的尺寸」占位，内层再做 transform——
     // 否则 transform 不改变布局盒，预览会被裁掉下半页。
-    <div
-      style={{
-        width: mm(size.widthMm * scale),
-        height: mm(size.heightMm * scale),
-        overflow: 'hidden',
-        filter: 'drop-shadow(0 2px 12px rgba(0,0,0,0.12))',
-      }}
-    >
+    <div ref={hostRef} className="w-full min-w-0">
       <div
         style={{
-          width: mm(size.widthMm),
-          transform: `scale(${scale})`,
-          transformOrigin: 'top left',
+          width: mm(size.widthMm * scale),
+          height: mm(size.heightMm * scale),
+          overflow: 'hidden',
+          filter: 'drop-shadow(0 2px 12px rgba(0,0,0,0.12))',
         }}
       >
-        {result.pages.map((page) => (
-          <PageView key={page.index} page={page} data={data} />
-        ))}
+        <div
+          style={{
+            width: mm(size.widthMm),
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          {result.pages.map((page) => (
+            <PageView key={page.index} page={page} data={data} />
+          ))}
+        </div>
       </div>
     </div>
   );

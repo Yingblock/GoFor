@@ -24,13 +24,19 @@ import { Sidebar } from './components/Sidebar.tsx';
 import { groupOf, type ScreenId, titleOf } from './nav.ts';
 import { PrintLayer } from './print/PrintSheet.tsx';
 import { CheckinScreen } from './screens/Checkin.tsx';
+import { ChecklistScreen } from './screens/Checklist.tsx';
 import { ComingSoon } from './screens/ComingSoon.tsx';
+import { DiaryScreen } from './screens/Diary.tsx';
 import { Home } from './screens/Home.tsx';
+import { MoodScreen } from './screens/Mood.tsx';
 import { Pomodoro } from './screens/Pomodoro.tsx';
 import { PrintScreen } from './screens/PrintScreen.tsx';
+import { ReportScreen } from './screens/Report.tsx';
+import { ScanScreen } from './screens/Scan.tsx';
 import { Tasks } from './screens/Tasks.tsx';
 import { TemplateEditorScreen } from './screens/TemplateEditor.tsx';
 import { TimetableScreen } from './screens/Timetable.tsx';
+import { ToolboxScreen } from './screens/Toolbox.tsx';
 
 function todayLabel(date: string): string {
   const [year, month, day] = date.split('-');
@@ -39,6 +45,24 @@ function todayLabel(date: string): string {
 
 /** 与课表页共用同一个库内 id；P1 只有一个学期。 */
 const TIMETABLE_ID = 'default';
+
+/** 折叠态持久化用的 key：刷新/重开都要保持用户上次的选择。 */
+const SIDEBAR_COLLAPSED_KEY = 'gofor.ui.sidebarCollapsed';
+
+/** 惰性初始化读 localStorage：首帧就是最终状态，不会先画展开再跳成折叠。 */
+function readSidebarCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  } catch {
+    // 隐私模式 / 禁用了存储时读 localStorage 会抛；侧栏展开是安全默认值。
+    return false;
+  }
+}
+
+/** 只有桌面端有折叠态；窄屏是抽屉，永远是完整文字版。 */
+function isDesktopLayout(): boolean {
+  return window.matchMedia('(min-width: 768px)').matches;
+}
 
 /** 当日课表的一行：时间 + 科目名。纸面只用 `time`，首页显示 `time–end` 区间。 */
 interface ScheduleEntry {
@@ -59,6 +83,7 @@ export function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [screen, setScreen] = useState<ScreenId>('home');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(readSidebarCollapsed);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,11 +136,29 @@ export function App() {
     void requestPersistentStorage();
   }, []);
 
+  // 折叠状态变化就落盘；写入失败（隐私模式）不影响交互。
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch {
+      // 同上：存不下就算了，不是功能失败。
+    }
+  }, [collapsed]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const key = event.key.toLowerCase();
+      if (key === 'k') {
         event.preventDefault();
         setPaletteOpen((open) => !open);
+        return;
+      }
+      // Ctrl/Cmd+B 切换侧栏折叠（不抢命令面板的 Ctrl/Cmd+K）。
+      // 窄屏没有折叠态：按了不改状态，免得用户看不见任何效果却把偏好改了。
+      if (key === 'b' && isDesktopLayout()) {
+        event.preventDefault();
+        setCollapsed((current) => !current);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -202,18 +245,24 @@ export function App() {
             paper={paper}
             tasks={tasks}
             schedule={schedule}
+            templateId="day"
+            date={today}
             onChangePaper={(next) => void changePaper(next)}
           />
         );
       case 'capture':
-        return (
-          <ComingSoon
-            title="拍照录入"
-            groupCode="离线·M2"
-            part="offline"
-            note="需要先建好 CV 管线（透视矫正、光照均衡、局部笔迹检测），属于 P2「纸的回流」。P1 先只留入口。"
-          />
-        );
+      case 'scan':
+        return <ScanScreen />;
+      case 'mood':
+        return <MoodScreen />;
+      case 'report':
+        return <ReportScreen />;
+      case 'checklist':
+        return <ChecklistScreen />;
+      case 'diary':
+        return <DiaryScreen />;
+      case 'mind':
+        return <ToolboxScreen />;
       default:
         return (
           <ComingSoon
@@ -234,6 +283,7 @@ export function App() {
           onNavigate={navigate}
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
+          collapsed={collapsed}
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -245,6 +295,22 @@ export function App() {
               aria-label="打开菜单"
             >
               ☰
+            </button>
+
+            {/*
+              折叠按钮放在 header 而不是侧栏里：侧栏折叠后只剩 56px，
+              把开关塞进去会跟图标列抢位置；放在紧邻侧栏的位置（内容区左上角）也符合直觉。
+            */}
+            <button
+              type="button"
+              onClick={() => setCollapsed((current) => !current)}
+              className="hidden rounded-md border border-black/10 px-2 py-1 text-xs opacity-60 transition hover:opacity-100 md:inline-flex"
+              aria-label={collapsed ? '展开侧栏' : '折叠侧栏'}
+              aria-expanded={!collapsed}
+              aria-controls="app-sidebar"
+              title={`${collapsed ? '展开侧栏' : '折叠侧栏'}（Ctrl/⌘ + B）`}
+            >
+              {collapsed ? '»' : '«'}
             </button>
 
             <div className="min-w-0 flex-1">
@@ -275,7 +341,7 @@ export function App() {
 
           <BackupBanner reminderDays={config.backup.reminderDays} />
 
-          <div className="flex-1 px-4 py-6 md:px-8">
+          <div className="min-w-0 flex-1 px-4 py-6 break-words md:px-8">
             {/*
               按页包一层边界：单页渲染崩溃时只显示错误卡片，
               导航、命令面板、打印层都还在（AGENTS 规则 10）。
@@ -287,7 +353,11 @@ export function App() {
       </div>
 
       {/* 打印层必须在 .screen-only 之外，否则打印时被一起隐藏成白纸 */}
-      <PrintLayer blocks={blocks} paper={paper} data={{ tasks, schedule }} />
+      <PrintLayer
+        blocks={blocks}
+        paper={paper}
+        data={{ tasks, schedule, qr: { templateId: 'day', date: today, paper } }}
+      />
 
       <input
         ref={fileInputRef}

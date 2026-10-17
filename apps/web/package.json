@@ -14,6 +14,7 @@
     "@capacitor/core": "^8.5.3",
     "@gofor/core": "workspace:*",
     "@gofor/store": "workspace:*",
+    "@gofor/vision": "workspace:*",
     "dexie-react-hooks": "^4.4.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

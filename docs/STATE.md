@@ -5,13 +5,13 @@
 
 ## 现在在哪
 
-**P1 完成。产品已经能用：记作业（步骤/标签/截止/选做）、番茄钟、课表、多打卡项，按模板把「我的一天」打成一张纸。**
+**P1 + P2 完成。离线闭环已经能「打印 → 手写 → 拍照扫回来」：作业/课表/打卡/番茄，纸上有二维码，扫描后逐条确认再写库。**
 
 GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
 任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
 
-验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 42 项浏览器 e2e）：
+验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 71 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
 - ✅ TypeScript 7.0.2 strict
@@ -57,7 +57,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续学习） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
-测试：core 208 + store 26 = **234 单测**；e2e **42 项**。
+测试：core 285 + store 41 + vision 38 = **364 单测**；e2e **71 项**。
 
 ### 第三批反馈修复（2026-xx）
 
@@ -96,6 +96,24 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 要更多纸张尺寸 | 9 种（含 B5 JIS 182×257 与 B5 ISO 176×250 单列） |
 | 首页复选框不可选 | 换成真 checkbox，勾掉即从列表消失 |
 
+### P2 交付：纸的回流 + 行为层（2026-xx）
+
+| 块 | 落地位置 | 说明 |
+|---|---|---|
+| 二维码 + 深链 | `core/scan/deeplink.ts`、`qr.ts` | `gofor://fill?v=1&t=day&d=YYYY-MM-DD&p=A4`；纸面右上 16mm |
+| 扫描端 | `screens/Scan.tsx` + `screens/scan/*` | 选照片/摄像头帧 → 手动四角（主路径）→ 单应矫正 → Otsu 二值化 → 解二维码 |
+| 坐标注册表 | `core/scan/manifest.ts` + `sheetManifests` 表 | **打印页进入时就固化**，键是「模板@日期@纸张」 |
+| 笔迹检测 | `packages/vision` | `toGray`/`otsuThreshold`/`binarize`/`warpQuad`/`inkRatio`；38 测试 |
+| 回填确认 | `screens/scan/ScanReview.tsx` + `applyScanResults` | 默认全选、逐条可取消；只写这张纸的日期；应用/丢弃都留记录 |
+| 环境清单 | `screens/Checklist.tsx` | 可编辑清单 + 今日勾选 + 近似历史完成率 |
+| 三滑块 + 纸上回流 | `screens/Mood.tsx` + `ratingGrid` 区块 | 纸上印成 1–5 勾选格（手写数字读不回来）；扫回来的数值写 `moodLogs` |
+| 自助工具箱 | `core/wellbeing` + `screens/Toolbox.tsx` | 4-7-8 / 渐进放松 / 5-4-3-2-1 / 身体扫描；进度由"已过毫秒"算，暂停不漂 |
+| 情绪日记 | `screens/Diary.tsx` | 本地、标签、心情 1–5；趋势图未做（LATER） |
+| 自我周报 | `screens/Report.tsx` | 本周学习分钟、科目 Top、打卡率、三滑块均值、练习次数；复习完成度标「P4 接入」 |
+
+**布局（同期修复）**：桌面侧栏可折叠成图标列（`localStorage` + `Ctrl/⌘+B`），窄屏保持抽屉；
+打印预览按容器缩放（**只缩屏幕预览，打印尺寸不动**）；360px 下九屏无横向溢出（e2e 逐页量）。
+
 ### P1 收尾：把「能跑」补成「敢长期用」（2026-xx）
 
 功能做完之后回头审，修的全是**承重件**，没有加新功能。设计依据见 `docs/DESIGN.md` §15。
@@ -118,6 +136,10 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 - 作业排序是上下移，不是拖拽
 - **调试时钟（临时）**：宿主层 `appClock` 可前后拨「现在」（localStorage 持久化），上线前删除；
   见 `docs/LATER.md` →「待删除：调试时钟」，代码里有 `TODO(debug-clock)` 标记
+- **纸条回流的手写区仍读不了**：时间登记、`slots` 手写格需要 OCR；三格自评改用 `ratingGrid` 勾选格
+- **自动找纸不可靠**：`detectPageQuad` 遇到桌面/阴影会选错连通域，手动四角才是主路径
+- **无光照均衡、无实时取景框**：靠"重拍一张"和选照片绕过去
+- **情绪日记没有趋势图**：只有列表（见 LATER）
 
 ## 下一步做什么
 
@@ -136,6 +158,8 @@ P1 的 15 项已全部落地，收尾质量问题也修完了（见上）。下�
 | `@gofor/core` 根导出带 zod | 只用到时钟的宿主也打进 46KB zod | 子路径导出：`@gofor/core/config`、`/print`、`/paper`、`/domain` |
 | 往已发布的 Dexie 版本里加表 | 老库不会补建，运行时「表不存在」 | 必须新开 `version(N+1)`；已补 v2→v3 迁移测试 |
 | 主 session 里跑 build/e2e/下载 | 用户白等 10–40 分钟，上下文被日志淹没 | **长任务一律子代理或后台作业**，见 AGENTS.md §0 |
+| 打印时不固化坐标、扫描时现算 | 中间改过作业顺序，勾选会被记到别人头上（静默错数据） | 进入打印页就存 `sheetManifests` 快照；按「模板@日期@纸张」键覆盖 |
+| 二维码印 12mm | 预览截图里只有 29px，jsQR 解不出来；纸上手机也可能扫不出 | 加到 16mm；e2e 用 4 倍像素密度截图当"照片" |
 | e2e 只 `server.kill()` 父进程 | 每跑一次漏一个 `vite preview` 占着 4173；下一次 e2e 连上**旧构建**的服务，照样"全绿"（假绿） | `spawn(..., { detached: true })` 后按进程组清；开跑前先查端口，有人应答就直接报错 |
 | Biome 扫到 Capacitor 生成的 Java/XML | 4000+ 假错误，`pnpm check` 直接失败 | `biome.json` 的 `files.includes` 排除 `apps/web/android` |
 

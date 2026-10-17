@@ -167,7 +167,7 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
                 className="flex items-center gap-3 px-4 py-2 text-sm"
               >
                 <span className="w-11 shrink-0 tabular-nums opacity-45">{entry.time}</span>
-                <span className="flex-1">{entry.label}</span>
+                <span className="min-w-0 flex-1 break-words">{entry.label}</span>
                 <span className="text-[11px] tabular-nums opacity-30">– {entry.end}</span>
               </li>
             ))}
@@ -218,7 +218,7 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
                   onChange={() => void setHabitLog(db, habit.id, today, true, appClock.now())}
                   className="size-4 shrink-0"
                 />
-                <span className="flex-1">{habit.name}</span>
+                <span className="min-w-0 flex-1 break-words">{habit.name}</span>
                 <span className="text-[10px] opacity-30">待打卡</span>
               </li>
             ))}
@@ -260,7 +260,7 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
                   {String(Math.floor((session.start % 1440) / 60)).padStart(2, '0')}:
                   {String(session.start % 60).padStart(2, '0')}
                 </span>
-                <span className="flex-1">{subjectName(session.subjectId)}</span>
+                <span className="min-w-0 flex-1 break-words">{subjectName(session.subjectId)}</span>
                 <span className="tabular-nums opacity-45">{minutesOf(session)} 分</span>
                 <span className="text-[10px] opacity-30">
                   {session.source === 'appTimer' ? '番茄钟' : '纸面'}
@@ -312,7 +312,7 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
                   onChange={() => void setTaskDone(db, task.id, true, Date.now())}
                   className="size-4 shrink-0"
                 />
-                <span className="flex-1">{task.title}</span>
+                <span className="min-w-0 flex-1 break-words">{task.title}</span>
                 {task.due ? <span className="text-[11px] opacity-40">{task.due}</span> : null}
               </li>
             ))}

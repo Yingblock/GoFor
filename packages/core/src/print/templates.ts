@@ -74,21 +74,32 @@ export const BUILTIN_TEMPLATES: PrintTemplate[] = [
     name: '我的一天',
     paper: 'A4',
     blocks: [
-      dateTitle('left'),
+      // 标题让出右边 3 列给二维码：二维码不占独立一行，A4 才装得下。
+      { ...dateTitle('left'), span: 9 },
+      // 回填二维码：写死「模板 + 日期 + 纸张」，扫描时据此找回坐标清单（DESIGN §16）。
+      { id: 'qr', kind: 'qrcode', span: 3, sizeMm: 16 },
       {
         id: 'tasks',
         kind: 'checkboxList',
         span: 12,
         bind: 'tasks.today',
-        rows: 10,
+        rows: 9,
         showMeta: [],
       },
       // 当日课表排在清单之后：学生先看"今天有什么课"，再对照作业
-      { id: 'schedule', kind: 'schedule', span: 12, rows: 8, title: '今日课表' },
+      { id: 'schedule', kind: 'schedule', span: 12, rows: 7, title: '今日课表' },
       { id: 'am', kind: 'timeLog', span: 12, dayPart: 'morning', rows: 2, label: '上午' },
       { id: 'pm', kind: 'timeLog', span: 12, dayPart: 'afternoon', rows: 2, label: '下午' },
       { id: 'ev', kind: 'timeLog', span: 12, dayPart: 'evening', rows: 2, label: '晚上' },
-      { id: 'slots', kind: 'slots', span: 12, labels: ['睡眠', '心情', '专注'] },
+      // 三格自评印成 1–5 的勾选格：手写数字读不回来（DESIGN §16.3）。
+      {
+        id: 'rating',
+        kind: 'ratingGrid',
+        span: 12,
+        labels: ['睡眠', '心情', '专注'],
+        keys: ['sleep', 'mood', 'focus'],
+        scale: 5,
+      },
       hint(DEFAULT_HINT),
     ],
   },
@@ -176,6 +187,13 @@ function cloneBlock(block: Block): Block {
       return { ...block, headers: [...block.headers] };
     case 'slots':
       return { ...block, labels: [...block.labels] };
+    case 'ratingGrid':
+      // labels 与 keys 都是数组：浅拷贝会让"改返回值"污染内置模板（已有测试钉住这一点）。
+      return {
+        ...block,
+        labels: [...block.labels],
+        ...(block.keys === undefined ? {} : { keys: [...block.keys] }),
+      };
     default: {
       const copy: Block = { ...block };
       return copy;
@@ -193,12 +211,13 @@ function adaptBlock(block: Block, templateId: string, full: boolean): Block {
   if (templateId === 'day') {
     switch (block.kind) {
       case 'checkboxList':
-        return { ...block, rows: full ? 10 : 4 };
+        return { ...block, rows: full ? 8 : 4 };
       case 'timeLog':
         return { ...block, rows: full ? 2 : 1 };
       case 'schedule':
-        // A4 放得下 8 节；A5 只留 4 节，否则整体超过 194mm 可用高度。
-        return { ...block, rows: full ? 8 : 4 };
+        // A4 完整版留 6 节 + 二维码 + 三格自评仍能一页（267/281mm）；
+        // A5 只留 4 节，否则整体超过 194mm 可用高度。
+        return { ...block, rows: full ? 6 : 4 };
       default:
         return block;
     }

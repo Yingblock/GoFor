@@ -102,7 +102,7 @@ packages/core     纯领域逻辑：零 UI、零平台 API、零副作用
                   子路径：./config（配置+zod）、./print（版式）、./paper（时间解析）、./domain
 packages/store    Dexie 实现（浏览器专用），实现了 core 里的仓储接口
 packages/ui       跨宿主组件（暂空）
-packages/vision   CV：透视矫正、光照均衡、局部采样（暂空）
+packages/vision   纯图像算法：灰度/Otsu/二值化/单应透视矫正/墨迹占比/找纸（零依赖，38 测试）
 packages/plugin-api  插件契约（暂空）
 e2e/              真实浏览器冒烟（Playwright），产物在 e2e/out/（已 ignore）
 docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS
@@ -154,6 +154,19 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
 - **数据只在本机时，任何"新存一类东西"的功能都要想一遍丢了怎么办。**
   现在的兜底是：启动时 `navigator.storage.persist()`、`backup.reminderDays` 到了提醒备份、
   导入导出有 e2e 覆盖。详见 `docs/DESIGN.md` §15。
+
+## 打印与扫描（P2 之后新增）
+
+- **打印层新增可勾选区块时，必须同时在 `packages/core/src/scan/manifest.ts` 里加切分。**
+  否则纸上有格子、坐标清单里没有，扫回来就是"识别不到任何格子"，而且不会报错。
+- **采样窗必须和渲染对齐**：坐标按内容区（`rows × 行高`）切，不含区块底部留白；
+  渲染时行高要正好等于 `ROW_HEIGHT_MM` 并从块顶铺起。改渲染或改切分都要同步改另一边。
+- **坐标清单在进入打印页时就固化**（`sheetManifests`，键 `模板@日期@纸张`），不要绑在
+  「打印这一张」按钮上：用户经常直接按 Ctrl/⌘+P，那条路不会触发点击处理。
+- **二维码 ≥ 16mm**。12mm 在 300dpi 下每模块约 0.3mm，手机经常扫不出；
+  e2e 用 4 倍像素密度截图当"照片"来验证整条链路。
+- **手写内容不做识别**：时间登记、`slots` 手写格需要 OCR，P2 明确不做；
+  要回填的数值请用 `ratingGrid`（印成勾选格）。
 
 ## 领域约定
 

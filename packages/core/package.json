@@ -12,7 +12,9 @@
     "./pomodoro": "./src/pomodoro/index.ts",
     "./timetable": "./src/timetable/index.ts",
     "./stats": "./src/stats/index.ts",
-    "./habits": "./src/habits/index.ts"
+    "./habits": "./src/habits/index.ts",
+    "./scan": "./src/scan/index.ts",
+    "./wellbeing": "./src/wellbeing/index.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -20,9 +22,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "vitest": "^5.0.5"
   },
   "dependencies": {
+    "jsqr": "^1.4.0",
+    "qrcode": "^1.5.4",
     "zod": "^4.6.7"
   }
 }

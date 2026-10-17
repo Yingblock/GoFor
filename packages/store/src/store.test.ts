@@ -7,26 +7,47 @@ import { describe, expect, it } from 'vitest';
 import { currentConfigOrDefault, DEFAULT_CONFIG_KEY, readConfig } from './config.ts';
 import { GoForDb } from './db.ts';
 import {
+  addToolboxRun,
+  applyScanResults,
   createTask,
+  deleteChecklist,
+  deleteDiaryEntry,
   deleteFocusRun,
+  deleteScanBatch,
   ensureSubjects,
   exportAll,
   getCheckin,
+  getChecklistLog,
+  getMoodLog,
+  getSheetManifest,
   importAll,
   listActiveFocusRuns,
   listCheckins,
+  listChecklistLogs,
+  listChecklists,
+  listDiaryEntries,
   listHabitLogs,
+  listMoodLogs,
+  listScanBatches,
   listTasks,
+  listToolboxRuns,
   loadFocusRun,
+  saveChecklist,
   saveConfig,
+  saveDiaryEntry,
   saveFocusRun,
   saveHabit,
+  saveMoodLog,
+  saveScanBatch,
+  saveSheetManifest,
   saveTagPool,
   saveTimetable,
   sessionFromRun,
   setCheckin,
+  setChecklistLog,
   setHabitLog,
   setTaskDone,
+  updateScanBatchStatus,
 } from './repositories.ts';
 
 /** 每个用例用独立的库名，避免互相污染。 */
@@ -184,12 +205,48 @@ describe('存储：导入导出', () => {
     await saveTagPool(source, 'pool-1', '学校', ['晚自习']);
     await saveFocusRun(source, sampleRun());
 
+    // P2 的新表也必须进导出包（否则备份又少一半数据）
+    await saveMoodLog(source, { date: '2026-03-05', sleep: 4, mood: 3, focus: 5 }, 4);
+    await saveChecklist(source, { id: 'c1', name: '开始前', items: ['手机放远'], createdAt: 5 });
+    await setChecklistLog(source, 'c1', '2026-03-05', ['手机放远'], 6);
+    await saveDiaryEntry(source, {
+      id: 'd1',
+      date: '2026-03-05',
+      text: '还行',
+      tags: [],
+      mood: 3,
+      createdAt: 7,
+    });
+    await addToolboxRun(source, {
+      id: 'run-1',
+      exercise: 'breathing-478',
+      startedAt: 8,
+      completedAt: 9,
+      seconds: 60,
+    });
+    await saveScanBatch(source, {
+      id: 's1',
+      createdAt: 10,
+      date: '2026-03-05',
+      templateId: 'day',
+      paper: 'A4',
+      results: [],
+      status: 'pending',
+      appliedAt: null,
+    });
+
     const bundle = await exportAll(source);
     expect(bundle.habits).toHaveLength(1);
     expect(bundle.habitLogs).toHaveLength(1);
     expect(bundle.timetables).toHaveLength(1);
     expect(bundle.tagPools).toHaveLength(1);
     expect(bundle.focusRuns).toHaveLength(1);
+    expect(bundle.moodLogs).toHaveLength(1);
+    expect(bundle.diaryEntries).toHaveLength(1);
+    expect(bundle.toolboxRuns).toHaveLength(1);
+    expect(bundle.checklists).toHaveLength(1);
+    expect(bundle.checklistLogs).toHaveLength(1);
+    expect(bundle.scanBatches).toHaveLength(1);
 
     const target = freshDb('export-all-tables-dst');
     const result = await importAll(target, bundle);
@@ -199,6 +256,12 @@ describe('存储：导入导出', () => {
       timetables: 1,
       tagPools: 1,
       focusRuns: 1,
+      moodLogs: 1,
+      diaryEntries: 1,
+      toolboxRuns: 1,
+      checklists: 1,
+      checklistLogs: 1,
+      scanBatches: 1,
     });
     // 真的落库了才算数：只断言计数的话，importAll 里漏写一张表也能过。
     expect((await target.habits.get('h1'))?.name).toBe('背单词');
@@ -317,6 +380,95 @@ describe('存储：番茄转学习记录', () => {
 });
 
 /* ------------------------------------------------------- schema 迁移 v1→v2 */
+
+/**
+ * 只声明到 v4 的库（没有 P2 的新表），用来验证 v4 → v5。
+ *
+ * 和真实历史一致：v1 建基础表、v2 加番茄/打卡/课表、v3 加标签池、v4 加多个打卡项。
+ */
+class V4Db extends Dexie {
+  config!: Table<{ key: string; value: string; updatedAt: number }, string>;
+  tasks!: Table<Task, string>;
+  checkins!: Table<{ date: string; done: boolean; note: string | null; updatedAt: number }, string>;
+
+  constructor(name: string) {
+    super(name);
+    this.version(1).stores({
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+    });
+    this.version(2).stores({
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+      focusRuns: 'id, status, createdAt',
+      checkins: 'date',
+      timetables: 'id',
+    });
+    this.version(3).stores({
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+      focusRuns: 'id, status, createdAt',
+      checkins: 'date',
+      timetables: 'id',
+      tagPools: 'id',
+    });
+    this.version(4).stores({
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+      focusRuns: 'id, status, createdAt',
+      checkins: 'date',
+      timetables: 'id',
+      tagPools: 'id',
+      habits: 'id, order',
+      habitLogs: 'id, habitId, date',
+    });
+  }
+}
+
+/** 只声明到 v5 的库（没有 sheetManifests），用来验证 v5 → v6。 */
+class V5Db extends Dexie {
+  constructor(name: string) {
+    super(name);
+    const v4 = {
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+      focusRuns: 'id, status, createdAt',
+      checkins: 'date',
+      timetables: 'id',
+      tagPools: 'id',
+      habits: 'id, order',
+      habitLogs: 'id, habitId, date',
+    };
+    this.version(1).stores(v4);
+    this.version(2).stores(v4);
+    this.version(3).stores(v4);
+    this.version(4).stores(v4);
+    this.version(5).stores({
+      ...v4,
+      moodLogs: 'date',
+      diaryEntries: 'id, date',
+      toolboxRuns: 'id, exercise, startedAt',
+      checklists: 'id',
+      checklistLogs: 'id, date, checklistId',
+      scanBatches: 'id, status, createdAt',
+    });
+  }
+}
 
 /** 只声明 v1 schema 的库，用来验证升级路径。 */
 class V1Db extends Dexie {
@@ -533,6 +685,423 @@ describe('存储：打卡日志（走 date 索引）', () => {
   it('空库里返回空数组而不是抛错', async () => {
     const db = freshDb('habit-logs-empty');
     expect(await listHabitLogs(db, '2026-01-01', '2026-12-31')).toEqual([]);
+    await db.close();
+  });
+});
+
+/* ----------------------------------------------------------- P2：数据层 */
+
+describe('存储：schema 升级 v4 → v5（P2 新表必须新建）', () => {
+  it('停在 v4 的库升级后旧数据仍在，新表可写', async () => {
+    const name = `gofor-v5-${Math.random().toString(36).slice(2)}`;
+
+    const old = new V4Db(name);
+    await old.tasks.put({
+      id: 't1',
+      title: 'v4 时期写入',
+      subjectId: null,
+      done: false,
+      due: null,
+      sortKey: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    old.close();
+
+    const upgraded = new GoForDb(name);
+    expect((await upgraded.tasks.toArray())[0]?.title).toBe('v4 时期写入');
+
+    // 关键：v4 的库里没有这些表，升级后必须能写，否则运行时报「表不存在」
+    await saveMoodLog(upgraded, { date: '2026-03-05', sleep: 4, mood: 3, focus: 5 }, 10);
+    await saveChecklist(upgraded, {
+      id: 'c1',
+      name: '开始前',
+      items: ['手机放远'],
+      createdAt: 1,
+    });
+    await saveScanBatch(upgraded, {
+      id: 's1',
+      createdAt: 1,
+      date: '2026-03-05',
+      templateId: 'day',
+      paper: 'A4',
+      results: [],
+      status: 'pending',
+      appliedAt: null,
+    });
+    expect(await upgraded.moodLogs.count()).toBe(1);
+    expect(await upgraded.checklists.count()).toBe(1);
+    expect(await upgraded.scanBatches.count()).toBe(1);
+    upgraded.close();
+  });
+});
+
+describe('存储：三滑块', () => {
+  it('同一天重复写入是覆盖（一天一条）', async () => {
+    const db = freshDb('mood-overwrite');
+    await saveMoodLog(db, { date: '2026-03-05', sleep: 4, mood: 3, focus: 5 }, 1);
+    await saveMoodLog(db, { date: '2026-03-05', sleep: 2, mood: 2, focus: 3 }, 2);
+
+    const log = await getMoodLog(db, '2026-03-05');
+    expect(log?.sleep).toBe(2);
+    expect(log?.updatedAt).toBe(2);
+    expect(await db.moodLogs.count()).toBe(1);
+    await db.close();
+  });
+
+  it('闭区间查询含两端、按日期升序', async () => {
+    const db = freshDb('mood-range');
+    for (const date of ['2026-03-01', '2026-03-03', '2026-03-06']) {
+      await saveMoodLog(db, { date, sleep: 3, mood: 3, focus: 3 }, 1);
+    }
+    const logs = await listMoodLogs(db, '2026-03-03', '2026-03-06');
+    expect(logs.map((log) => log.date)).toEqual(['2026-03-03', '2026-03-06']);
+    await db.close();
+  });
+
+  it('没填过的日期返回 undefined', async () => {
+    const db = freshDb('mood-empty');
+    expect(await getMoodLog(db, '2026-03-05')).toBeUndefined();
+    await db.close();
+  });
+});
+
+describe('存储：情绪日记', () => {
+  it('按日期倒序、同一天新的在前', async () => {
+    const db = freshDb('diary-order');
+    await saveDiaryEntry(db, {
+      id: 'd1',
+      date: '2026-03-01',
+      text: '旧',
+      tags: [],
+      mood: null,
+      createdAt: 1,
+    });
+    await saveDiaryEntry(db, {
+      id: 'd2',
+      date: '2026-03-03',
+      text: '晚',
+      tags: ['考试'],
+      mood: 4,
+      createdAt: 3,
+    });
+    await saveDiaryEntry(db, {
+      id: 'd3',
+      date: '2026-03-03',
+      text: '早',
+      tags: [],
+      mood: null,
+      createdAt: 2,
+    });
+
+    const entries = await listDiaryEntries(db, '2026-03-01', '2026-03-03');
+    expect(entries.map((entry) => entry.id)).toEqual(['d2', 'd3', 'd1']);
+    await db.close();
+  });
+
+  it('删除后查不到，其它条目还在', async () => {
+    const db = freshDb('diary-delete');
+    await saveDiaryEntry(db, {
+      id: 'd1',
+      date: '2026-03-01',
+      text: 'a',
+      tags: [],
+      mood: null,
+      createdAt: 1,
+    });
+    await saveDiaryEntry(db, {
+      id: 'd2',
+      date: '2026-03-02',
+      text: 'b',
+      tags: [],
+      mood: null,
+      createdAt: 2,
+    });
+    await deleteDiaryEntry(db, 'd1');
+    expect((await listDiaryEntries(db, '2026-03-01', '2026-03-02')).map((e) => e.id)).toEqual([
+      'd2',
+    ]);
+    await db.close();
+  });
+});
+
+describe('存储：自助工具箱记录', () => {
+  it('按开始时间倒序，limit 生效', async () => {
+    const db = freshDb('toolbox-order');
+    for (const [index, exercise] of ['breathing-478', 'relax', 'bodyscan'].entries()) {
+      await addToolboxRun(db, {
+        id: `run-${index}`,
+        exercise: exercise as 'breathing-478' | 'relax' | 'bodyscan',
+        startedAt: index * 1000,
+        completedAt: index === 1 ? null : index * 1000 + 500,
+        seconds: 60,
+      });
+    }
+    const runs = await listToolboxRuns(db, 2);
+    expect(runs.map((run) => run.id)).toEqual(['run-2', 'run-1']);
+    await db.close();
+  });
+});
+
+describe('存储：环境隔离清单', () => {
+  it('清单与当天完成情况：写入幂等，删除清单级联删历史', async () => {
+    const db = freshDb('checklist');
+    await saveChecklist(db, {
+      id: 'c1',
+      name: '开始前',
+      items: ['手机放远', '桌面清空'],
+      createdAt: 1,
+    });
+    await saveChecklist(db, { id: 'c2', name: '考试前', items: [], createdAt: 2 });
+    expect((await listChecklists(db)).map((item) => item.name)).toEqual(['开始前', '考试前']);
+
+    await setChecklistLog(db, 'c1', '2026-03-05', ['手机放远'], 10);
+    await setChecklistLog(db, 'c1', '2026-03-05', ['手机放远', '桌面清空'], 11);
+    const log = await getChecklistLog(db, 'c1', '2026-03-05');
+    expect(log?.done).toEqual(['手机放远', '桌面清空']);
+    expect(await listChecklistLogs(db, '2026-03-05', '2026-03-05')).toHaveLength(1);
+
+    await deleteChecklist(db, 'c1');
+    expect(await db.checklists.count()).toBe(1);
+    expect(await db.checklistLogs.count()).toBe(0);
+    await db.close();
+  });
+});
+
+describe('存储：扫描批次', () => {
+  it('保存、按时间倒序列出、状态流转、删除', async () => {
+    const db = freshDb('scan');
+    const batch = {
+      id: 's1',
+      createdAt: 100,
+      date: '2026-03-05',
+      templateId: 'day',
+      paper: 'A4',
+      results: [
+        {
+          targetId: 'tasks/1',
+          label: '数学卷子',
+          kind: 'checkbox' as const,
+          ink: 0.4,
+          selected: true,
+        },
+      ],
+      status: 'pending' as const,
+      appliedAt: null,
+    };
+    await saveScanBatch(db, batch);
+    await saveScanBatch(db, { ...batch, id: 's2', createdAt: 200 });
+
+    expect((await listScanBatches(db)).map((item) => item.id)).toEqual(['s2', 's1']);
+
+    await updateScanBatchStatus(db, 's1', 'applied', 999);
+    const applied = await db.scanBatches.get('s1');
+    expect(applied?.status).toBe('applied');
+    expect(applied?.appliedAt).toBe(999);
+
+    // discarded 不应改写 appliedAt
+    await updateScanBatchStatus(db, 's2', 'discarded', 1000);
+    expect((await db.scanBatches.get('s2'))?.appliedAt).toBeNull();
+
+    await deleteScanBatch(db, 's1');
+    expect(await db.scanBatches.count()).toBe(1);
+    await db.close();
+  });
+});
+
+describe('存储：schema 升级 v5 → v6（坐标清单快照表）', () => {
+  it('停在 v5 的库升级后能写 sheetManifests，旧数据仍在', async () => {
+    const name = `gofor-v6-${Math.random().toString(36).slice(2)}`;
+    const old = new V5Db(name);
+    await old.open();
+    old.close();
+
+    const upgraded = new GoForDb(name);
+    await saveSheetManifest(upgraded, {
+      id: 'day@2026-03-05@A4',
+      templateId: 'day',
+      date: '2026-03-05',
+      paper: 'A4',
+      json: '{"version":1,"pages":[]}',
+      createdAt: 1,
+    });
+    const record = await getSheetManifest(upgraded, 'day', '2026-03-05', 'A4');
+    expect(record?.json).toContain('"version":1');
+    upgraded.close();
+  });
+});
+
+describe('存储：扫描结果回填', () => {
+  it('勾选的任务行写回完成状态，未勾选的不动', async () => {
+    const db = freshDb('scan-apply-tasks');
+    await createTask(db, { id: 't1', title: '数学卷子', now: 1 });
+    await createTask(db, { id: 't2', title: '英语听力', now: 1 });
+
+    const summary = await applyScanResults(
+      db,
+      [
+        {
+          targetId: 'list/0',
+          label: '数学卷子',
+          kind: 'checkbox',
+          ink: 0.4,
+          selected: true,
+          payload: 'task:t1',
+        },
+        {
+          targetId: 'list/1',
+          label: '英语听力',
+          kind: 'checkbox',
+          ink: 0.01,
+          selected: false,
+          payload: 'task:t2',
+        },
+      ],
+      '2026-03-05',
+      10,
+    );
+
+    expect(summary.tasksDone).toBe(1);
+    expect((await db.tasks.get('t1'))?.done).toBe(true);
+    expect((await db.tasks.get('t2'))?.done).toBe(false);
+    await db.close();
+  });
+
+  it('打卡行写 habitLog；不存在的 habit 记为 skipped', async () => {
+    const db = freshDb('scan-apply-habits');
+    await saveHabit(db, {
+      id: 'h1',
+      name: '背单词',
+      weekdays: [],
+      startDate: '2026-03-01',
+      endDate: null,
+      order: 0,
+      createdAt: 1,
+    });
+
+    const summary = await applyScanResults(
+      db,
+      [
+        {
+          targetId: 'grid/0',
+          label: '背单词',
+          kind: 'cell',
+          ink: 0.5,
+          selected: true,
+          payload: 'habit:h1',
+        },
+        {
+          targetId: 'grid/1',
+          label: '已删除的习惯',
+          kind: 'cell',
+          ink: 0.5,
+          selected: true,
+          payload: 'habit:gone',
+        },
+      ],
+      '2026-03-05',
+      10,
+    );
+
+    expect(summary.habitsChecked).toBe(1);
+    expect(summary.skipped).toBe(1);
+    expect(await db.habitLogs.get('h1@2026-03-05')).toMatchObject({ done: true });
+    await db.close();
+  });
+
+  it('三滑块一次写全，没扫到的沿用当天已有值', async () => {
+    const db = freshDb('scan-apply-mood');
+    await saveMoodLog(db, { date: '2026-03-05', sleep: 2, mood: 2, focus: 2 }, 1);
+
+    const summary = await applyScanResults(
+      db,
+      [
+        {
+          targetId: 'rating/0-3',
+          label: '睡眠 4 分',
+          kind: 'slider',
+          ink: 0.6,
+          selected: true,
+          value: 4,
+          payload: 'mood:sleep',
+        },
+        {
+          targetId: 'rating/2-4',
+          label: '专注 5 分',
+          kind: 'slider',
+          ink: 0.6,
+          selected: true,
+          value: 5,
+          payload: 'mood:focus',
+        },
+      ],
+      '2026-03-05',
+      10,
+    );
+
+    expect(summary.moodSaved).toBe(true);
+    const log = await getMoodLog(db, '2026-03-05');
+    expect(log).toMatchObject({ sleep: 4, mood: 2, focus: 5 });
+    await db.close();
+  });
+
+  it('当天没有三滑块时用中间值 3 补齐，而不是 0（0 会污染平均值）', async () => {
+    const db = freshDb('scan-apply-mood-new');
+    await applyScanResults(
+      db,
+      [
+        {
+          targetId: 'rating/1-2',
+          label: '心情 3 分',
+          kind: 'slider',
+          ink: 0.6,
+          selected: true,
+          value: 3,
+          payload: 'mood:mood',
+        },
+      ],
+      '2026-03-05',
+      10,
+    );
+    const log = await getMoodLog(db, '2026-03-05');
+    expect(log).toMatchObject({ sleep: 3, mood: 3, focus: 3 });
+    await db.close();
+  });
+
+  it('没有 payload / 认不出前缀的条目计入 skipped，不崩', async () => {
+    const db = freshDb('scan-apply-skip');
+    const summary = await applyScanResults(
+      db,
+      [
+        {
+          targetId: 'x',
+          label: '无 payload',
+          kind: 'checkbox',
+          ink: 0.5,
+          selected: true,
+        },
+        {
+          targetId: 'y',
+          label: '奇怪前缀',
+          kind: 'checkbox',
+          ink: 0.5,
+          selected: true,
+          payload: 'weird:abc',
+        },
+        {
+          targetId: 'z',
+          label: '已取消',
+          kind: 'checkbox',
+          ink: 0.5,
+          selected: false,
+          payload: 'task:t1',
+        },
+      ],
+      '2026-03-05',
+      10,
+    );
+    expect(summary.skipped).toBe(2);
+    expect(summary.tasksDone).toBe(0);
     await db.close();
   });
 });

@@ -415,7 +415,7 @@ export function CheckinScreen() {
                 title={checkable ? '勾上表示今天完成了' : '今天不用打卡'}
                 className={`size-4 shrink-0 ${checkable ? '' : 'cursor-not-allowed opacity-30'}`}
               />
-              <span className="flex-1 text-sm">{habit.name}</span>
+              <span className="min-w-0 flex-1 break-words text-sm">{habit.name}</span>
 
               {!checkable ? (
                 <span className="rounded bg-black/[0.06] px-1.5 py-0.5 text-[10px] opacity-50">

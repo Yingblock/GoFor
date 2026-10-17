@@ -57,6 +57,17 @@ const BLOCK_PRESETS: Record<string, () => Block> = {
   }),
   // 渲染层在打印那一刻取时刻，区块只存前缀文案，所以默认值只给 label。
   timestamp: () => ({ id: newId(), kind: 'timestamp', span: 12, label: '打印于' }),
+  // 回填二维码：内容由打印层按「模板 + 日期 + 纸张」现算，区块只存边长。
+  qrcode: () => ({ id: newId(), kind: 'qrcode', span: 3, sizeMm: 12 }),
+  // 三格自评：印成 1–5 的勾选格，扫描能读回数值（手写数字读不了，见 DESIGN §16.3）。
+  ratingGrid: () => ({
+    id: newId(),
+    kind: 'ratingGrid',
+    span: 12,
+    labels: ['睡眠', '心情', '专注'],
+    keys: ['sleep', 'mood', 'focus'],
+    scale: 5,
+  }),
 };
 
 function todayLabel(date: string): string {
@@ -470,9 +481,9 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
   }, [currentTemplate]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[180px_minmax(0,1fr)_360px]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[180px_minmax(0,1fr)_360px]">
       {/* 左：模板列表 */}
-      <aside className="space-y-3 text-sm">
+      <aside className="min-w-0 space-y-3 text-sm">
         <h2 className="text-xs font-medium opacity-50">内置</h2>
         <ul className="space-y-0.5">
           {BUILTIN_TEMPLATES.map((template) => (
@@ -532,7 +543,7 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
       </aside>
 
       {/* 中：编辑区 */}
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           {isCustom && draft ? (
             // 自定义模板名可改；内置模板仍是常量，只读展示。
@@ -687,12 +698,20 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
       </div>
 
       {/* 右：预览 */}
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-2">
         <h2 className="text-xs font-medium opacity-50">预览</h2>
         <PrintPreview
           blocks={blocks}
           paper={currentTemplate.paper}
-          data={{ tasks: [] as Task[], schedule }}
+          data={{
+            tasks: [] as Task[],
+            schedule,
+            qr: {
+              templateId: currentTemplate.id,
+              date: dateKey(appClock),
+              paper: currentTemplate.paper,
+            },
+          }}
         />
         {selectedId === CALIBRATION_TEMPLATE.id ? (
           <p className="text-[11px] leading-relaxed opacity-45">

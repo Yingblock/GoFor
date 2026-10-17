@@ -148,3 +148,119 @@ export function dateKey(clock: Clock): string {
 
 /** 默认科目。首次启动时播种，用户可改。 */
 export const DEFAULT_SUBJECT_NAMES = ['语文', '数学', '英语', '物理', '化学', '生物'] as const;
+
+/* ------------------------------------- P2：纸的回流 + 行为层（本地持久化） */
+
+/**
+ * 睡眠 / 心情 / 专注三个 1–5 的自评，**一天一条**。
+ *
+ * 为什么不是"每次记录一条"：纸上的三格是一天填一次的东西，
+ * 存成时间序列会让"今天填过没有"变成一次扫描，而按天覆盖天然幂等。
+ */
+export interface MoodLog {
+  /** 'YYYY-MM-DD'，也是一天唯一的那条记录。 */
+  date: string;
+  /** 1–5，越大越好（睡眠质量 / 心情 / 专注度）。 */
+  sleep: number;
+  mood: number;
+  focus: number;
+  updatedAt: number;
+}
+
+/** 情绪日记（本地、标签、可关联当天心情）。 */
+export interface DiaryEntry {
+  id: string;
+  date: string;
+  text: string;
+  tags: string[];
+  /** 独立于三滑块的心情分值 1–5；null 表示只写文字没打心情。 */
+  mood: number | null;
+  createdAt: number;
+}
+
+/** 自助工具箱里的练习种类。 */
+export type ToolboxExercise = 'breathing-478' | 'relax' | 'grounding-54321' | 'bodyscan';
+
+/** 一次练习的记录：只记"做了多久"，不做心理评估。 */
+export interface ToolboxRun {
+  id: string;
+  exercise: ToolboxExercise;
+  startedAt: number;
+  /** null 表示中途退出（也有 value：秒数照记）。 */
+  completedAt: number | null;
+  /** 实际停留秒数。中途退出也有值，用来区分"打开又关掉"和"做完了"。 */
+  seconds: number;
+}
+
+/** 环境隔离清单：可编辑的"开始学习前流程"。 */
+export interface Checklist {
+  id: string;
+  name: string;
+  /** 条目文字。勾选状态存在 ChecklistLog 里，不在这里。 */
+  items: string[];
+  createdAt: number;
+}
+
+/** 清单某一天的完成情况。 */
+export interface ChecklistLog {
+  /** `${checklistId}@${date}`，一天一条。 */
+  id: string;
+  checklistId: string;
+  date: string;
+  /** 当天勾上的条目文字（存文字不存下标：条目可编辑、顺序会变）。 */
+  done: string[];
+  updatedAt: number;
+}
+
+/** 扫描识别出的一个格子。 */
+export interface ScanResult {
+  /** 与模板坐标注册表里的 target id 对应，例如 `tasks/3`、`slider/sleep`。 */
+  targetId: string;
+  /** 写给人看的说明，回填确认列表里显示。 */
+  label: string;
+  kind: 'checkbox' | 'cell' | 'slider';
+  /** 该区域内墨迹占比 0–1（调试与自适应阈值用）。 */
+  ink: number;
+  /** 是否判定为"已勾选 / 已填"。 */
+  selected: boolean;
+  /**
+   * 关联的数据 id，命名约定见 `applyScanResults`：
+   * `task:<id>` / `habit:<id>` / `mood:<sleep|mood|focus>`。
+   * 旧数据（P2 之前）没有这个字段，按 null 处理。
+   */
+  payload?: string | null;
+  /** 三滑块回填时的 1–5；其它 kind 没有。 */
+  value?: number;
+}
+
+/** 一次扫描的结果批次。 */
+export interface ScanBatch {
+  id: string;
+  createdAt: number;
+  /** 纸上印的日期（来自二维码），不是扫描发生的时间。 */
+  date: string;
+  templateId: string;
+  paper: string;
+  results: ScanResult[];
+  /** pending = 等用户确认；applied = 已写进其它表；discarded = 用户丢弃。 */
+  status: 'pending' | 'applied' | 'discarded';
+  appliedAt: number | null;
+}
+
+/**
+ * 打印时固化的坐标清单（`SheetManifest` 的序列化快照）。
+ *
+ * 为什么必须存下来：回填要按"打印那一刻"的任务顺序把纸上的第 N 行映射回任务 id。
+ * 如果扫描时重新推导，中间改过作业顺序就会把勾选记到别人头上——静默错数据。
+ * 键是「模板 + 日期 + 纸张」，因为同一天可能换了纸张重打。
+ */
+export interface SheetManifestRecord {
+  /** `${templateId}@${date}@${paper}` */
+  id: string;
+  templateId: string;
+  date: string;
+  paper: string;
+  /** 序列化的 `SheetManifest`，解析见 `@gofor/core/scan`。 */
+  json: string;
+  createdAt: number;
+}
