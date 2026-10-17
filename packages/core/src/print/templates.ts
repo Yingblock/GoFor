@@ -59,15 +59,7 @@ function linedBox(id: string, label: string, lines: number): Block {
   return { id, kind: 'linedBox', span: 12, label, lines };
 }
 
-const WEEKDAY_LABELS = [
-  '周一',
-  '周二',
-  '周三',
-  '周四',
-  '周五',
-  '周六',
-  '周日',
-] as const;
+const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'] as const;
 
 /**
  * 内置模板。

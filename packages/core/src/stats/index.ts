@@ -11,8 +11,8 @@ export {
   dailyBreakdown,
   dayTotal,
   minutesOf,
-  streakDays,
   type SubjectTotal,
+  streakDays,
   subjectTotals,
   totalBetween,
 } from './aggregate.ts';

@@ -12,8 +12,8 @@ import {
   BUILTIN_TEMPLATES,
   CALIBRATION_TEMPLATE,
   materialize,
-  paperFor,
   type PrintTemplate,
+  paperFor,
 } from './templates.ts';
 
 const CONTEXT = { date: '2026-03-05', dateLabel: '2026 年 3 月 5 日' };
@@ -28,7 +28,7 @@ function templateById(id: string): PrintTemplate {
 
 function titleOf(blocks: readonly Block[]): TitleBlock {
   const block = blocks.find((candidate) => candidate.kind === 'title');
-  if (!block || block.kind !== 'title') throw new Error('没有 title 区块');
+  if (block?.kind !== 'title') throw new Error('没有 title 区块');
   return block;
 }
 
@@ -42,7 +42,7 @@ function timeLogsOf(blocks: readonly Block[]): TimeLogBlock[] {
 
 function taskRowsOf(blocks: readonly Block[]): number {
   const block = blocks.find((candidate) => candidate.id === 'tasks');
-  if (!block || block.kind !== 'checkboxList') throw new Error('没有 tasks 清单区块');
+  if (block?.kind !== 'checkboxList') throw new Error('没有 tasks 清单区块');
   return block.rows;
 }
 
@@ -154,11 +154,11 @@ describe('模板：materialize', () => {
   it('嵌套数组也独立，改返回值不会污染模板', () => {
     const template = templateById('day');
     const slots = materialize(template, CONTEXT).find((block) => block.id === 'slots');
-    if (!slots || slots.kind !== 'slots') throw new Error('缺少 slots 区块');
+    if (slots?.kind !== 'slots') throw new Error('缺少 slots 区块');
     slots.labels.push('额外');
 
     const original = template.blocks.find((block) => block.id === 'slots');
-    if (!original || original.kind !== 'slots') throw new Error('模板缺少 slots 区块');
+    if (original?.kind !== 'slots') throw new Error('模板缺少 slots 区块');
     expect(original.labels).toEqual(['睡眠', '心情', '专注']);
   });
 
@@ -224,7 +224,7 @@ describe('模板：打印校准页', () => {
     ]);
 
     const footer = blocks.find((block) => block.kind === 'footer');
-    if (!footer || footer.kind !== 'footer') throw new Error('缺少 footer 区块');
+    if (footer?.kind !== 'footer') throw new Error('缺少 footer 区块');
     expect(footer.text).toContain('GoFor');
     expect(footer.text).toContain('日期');
   });

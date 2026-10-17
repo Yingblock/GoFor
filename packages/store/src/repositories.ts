@@ -1,14 +1,14 @@
 import type { AppConfig } from '@gofor/core/config';
-import type { PomodoroRun } from '@gofor/core/pomodoro';
 import {
   type Checkin,
   DEFAULT_SUBJECT_NAMES,
-  type StoredTimetable,
   type StoredTemplate,
+  type StoredTimetable,
   type StudySession,
   type Subject,
   type Task,
 } from '@gofor/core/domain';
+import type { PomodoroRun } from '@gofor/core/pomodoro';
 import { currentConfigOrDefault, DEFAULT_CONFIG_KEY } from './config.ts';
 import type { GoForDb } from './db.ts';
 
@@ -86,7 +86,9 @@ export async function createTask(database: GoForDb, input: CreateTaskInput): Pro
   return task;
 }
 
-export type TaskPatch = Partial<Pick<Task, 'title' | 'done' | 'due' | 'optional' | 'subtasks' | 'sortKey'>>;
+export type TaskPatch = Partial<
+  Pick<Task, 'title' | 'done' | 'due' | 'optional' | 'subtasks' | 'sortKey'>
+>;
 
 /** 通用更新。字段级补丁，避免为每个小改动写一个新函数。 */
 export async function updateTask(
@@ -136,10 +138,7 @@ export async function saveTimetable(
   await database.timetables.put({ id, data, updatedAt: now });
 }
 
-export async function loadTimetable(
-  database: GoForDb,
-  id: string,
-): Promise<unknown | undefined> {
+export async function loadTimetable(database: GoForDb, id: string): Promise<unknown | undefined> {
   const row = await database.timetables.get(id);
   return row?.data;
 }
@@ -176,10 +175,7 @@ export async function setCheckin(
   return checkin;
 }
 
-export async function getCheckin(
-  database: GoForDb,
-  date: string,
-): Promise<Checkin | undefined> {
+export async function getCheckin(database: GoForDb, date: string): Promise<Checkin | undefined> {
   return database.checkins.get(date);
 }
 

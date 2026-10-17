@@ -48,6 +48,6 @@ export {
   BUILTIN_TEMPLATES,
   CALIBRATION_TEMPLATE,
   materialize,
-  paperFor,
   type PrintTemplate,
+  paperFor,
 } from './templates.ts';

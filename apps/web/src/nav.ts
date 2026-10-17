@@ -57,7 +57,7 @@ export const NAV: NavGroup[] = [
     title: '记录',
     items: [
       { id: 'tasks', title: '作业清单', ready: true },
-      { id: 'timetable', title: '课程表', ready: false },
+      { id: 'timetable', title: '课程表', ready: true },
       { id: 'checkin', title: '每日打卡', ready: true },
       { id: 'usage', title: '使用时长', ready: false },
     ],

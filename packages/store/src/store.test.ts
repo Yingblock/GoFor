@@ -1,26 +1,26 @@
 import 'fake-indexeddb/auto';
-import Dexie, { type Table } from 'dexie';
 import { DEFAULT_APP_CONFIG } from '@gofor/core/config';
 import type { StoredTemplate, StudySession, Subject, Task } from '@gofor/core/domain';
 import type { PomodoroRun } from '@gofor/core/pomodoro';
+import Dexie, { type Table } from 'dexie';
 import { describe, expect, it } from 'vitest';
 import { currentConfigOrDefault, DEFAULT_CONFIG_KEY, readConfig } from './config.ts';
 import { GoForDb } from './db.ts';
 import {
   createTask,
   deleteFocusRun,
-  getCheckin,
-  listCheckins,
-  setCheckin,
-  listActiveFocusRuns,
-  loadFocusRun,
-  saveFocusRun,
-  sessionFromRun,
   ensureSubjects,
   exportAll,
+  getCheckin,
   importAll,
+  listActiveFocusRuns,
+  listCheckins,
   listTasks,
+  loadFocusRun,
   saveConfig,
+  saveFocusRun,
+  sessionFromRun,
+  setCheckin,
   setTaskDone,
 } from './repositories.ts';
 

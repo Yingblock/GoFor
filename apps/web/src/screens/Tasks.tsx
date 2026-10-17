@@ -52,19 +52,16 @@ export function Tasks({ tasks }: { tasks: Task[] }) {
     setOptional(false);
   }, [draft, due, optional]);
 
-  const addSubtask = useCallback(
-    async (task: ReturnType<typeof normalizeTask>) => {
-      const title = window.prompt('子任务：')?.trim();
-      if (!title) return;
-      await updateTask(
-        db,
-        task.id,
-        { subtasks: [...task.subtasks, { id: newId(), title, done: false }] },
-        Date.now(),
-      );
-    },
-    [],
-  );
+  const addSubtask = useCallback(async (task: ReturnType<typeof normalizeTask>) => {
+    const title = window.prompt('子任务：')?.trim();
+    if (!title) return;
+    await updateTask(
+      db,
+      task.id,
+      { subtasks: [...task.subtasks, { id: newId(), title, done: false }] },
+      Date.now(),
+    );
+  }, []);
 
   return (
     <div className="space-y-5">

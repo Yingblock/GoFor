@@ -1,5 +1,5 @@
 import { systemClock } from '@gofor/core';
-import { dateKey, type Checkin, type StudySession } from '@gofor/core/domain';
+import { type Checkin, dateKey, type StudySession } from '@gofor/core/domain';
 import { db, setCheckin } from '@gofor/store';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useMemo } from 'react';

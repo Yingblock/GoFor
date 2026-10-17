@@ -58,11 +58,7 @@ export function dayTotal(sessions: readonly StudySession[], date: string): DayTo
 }
 
 /** `[from, to]` 闭区间内的总时长（分钟）。 */
-export function totalBetween(
-  sessions: readonly StudySession[],
-  from: string,
-  to: string,
-): number {
+export function totalBetween(sessions: readonly StudySession[], from: string, to: string): number {
   let minutes = 0;
   for (const session of sessions) {
     // 固定宽度的日期键可以直接比字符串；闭区间意味着两端都算。

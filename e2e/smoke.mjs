@@ -107,7 +107,10 @@ try {
   // 7) 番茄钟：能开始、能暂停
   await openGroup(page, '工具');
   await clickItem(page, '番茄钟');
-  await page.getByRole('button', { name: /开始专注/ }).first().click();
+  await page
+    .getByRole('button', { name: /开始专注/ })
+    .first()
+    .click();
   await page.waitForSelector('text=/\\d{2}:\\d{2}/', { timeout: 5000 });
   await page.getByRole('button', { name: '暂停' }).first().click();
   await page.waitForSelector('text=已暂停', { timeout: 5000 });
@@ -138,14 +141,38 @@ try {
     .catch(() => false);
   check('打卡可勾选并持久化', persisted);
 
-  // 9) 打印页：A4 一页装下
+  // 9) 课程表：录入课程 + 规则后能在周视图看到
+  await openGroup(page, '记录');
+  await clickItem(page, '课程表');
+  await page.waitForSelector('[data-testid="week-grid"]', { timeout: 8000 });
+  await page.fill('input[placeholder="课程名，如 数学"]', '数学');
+  await page.getByRole('button', { name: '加课程' }).click();
+  await page.getByRole('button', { name: '加规则' }).click();
+  await page
+    .locator('[data-testid="week-grid"]')
+    .getByText('数学', { exact: false })
+    .first()
+    .waitFor({ timeout: 5000 });
+  check('课程表可录入并在周视图显示', true);
+  await page.getByRole('button', { name: '保存课表' }).click();
+  await page.waitForSelector('text=已保存', { timeout: 5000 });
+  check('课表可保存', true);
+
+  // 10) 模板编辑器：内置模板 + 校准页
+  await openGroup(page, '导出');
+  await clickItem(page, '模板与校准页');
+  await page.getByRole('button', { name: '打印校准页' }).click();
+  await page.waitForSelector('text=每台打印机第一次使用前', { timeout: 5000 });
+  check('模板编辑器与校准页可打开', true);
+
+  // 11) 打印页：A4 一页装下
   await openGroup(page, '导出');
   await clickItem(page, '打印 checklist');
   await page.waitForSelector('text=/共 \\d+ 页/', { timeout: 5000 });
   const pageInfo = await page.locator('text=/共 \\d+ 页/').first().innerText();
   check('默认 A4 一页装下', pageInfo.includes('共 1 页'), pageInfo);
 
-  // 10) 命令面板
+  // 12) 命令面板
   await page.keyboard.press('Control+k');
   await page.waitForSelector('input[placeholder="输入命令…"]', { timeout: 5000 });
   check('命令面板可唤起', true);
