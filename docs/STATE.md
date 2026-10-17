@@ -5,28 +5,34 @@
 
 ## 现在在哪
 
-**P0 地基 —— 已完成 4/7，剩下 Dexie / PWA / 命令面板。**
+**P0 地基 —— 已完成 4/7，剩下 Dexie / 配置持久化 / PWA / 命令面板。**
 
-已完成（`pnpm verify` 全绿）：
+已完成（`pnpm verify` 全绿，24 个单测通过）：
 
 - ✅ pnpm workspace 多包结构（`apps/web`、`packages/core`）
 - ✅ TypeScript 7.0.2 strict（`noUncheckedIndexedAccess`、`exactOptionalPropertyTypes`）
 - ✅ React 19 + Vite 7 + Tailwind 4 + Biome 2
-- ✅ `@gofor/core` 的 `Clock` 抽象（系统时钟 / 手动时钟）与 `newId`，7 个单测通过
 - ✅ dev server 可用（`host: true`，手机可局域网访问）
+- ✅ **`Clock` 抽象**（系统时钟 / 手动时钟）与 `newId`，7 个单测
+- ✅ **配置层**（`packages/core/src/config/`，17 个单测）：
+  - zod schema + 出厂默认值 + 深合并 + 校验
+  - `derivePeriodMinutes()` 从作息表推课时（取中位数，不受早读异常段干扰）
+  - `resolveUnitMinutes()` / `minutesForCells()` / `cellsForMinutes()` 做专注格换算
 
 环境：Node 22.23.2 / pnpm 12.4.1 / Debian 13。Rust、Java 未安装（P5 之后才需要）。
 
 ## 下一步做什么（按顺序，做完一条划掉一条）
 
 1. **Dexie 数据层**：`packages/core/src/db/` —— schema v1、迁移器、仓储层、一个 React hook
-2. **PWA**：manifest + service worker + 图标，确认手机上能"添加到主屏"
-3. **命令面板骨架**（Ctrl+K，占位命令即可）
+2. **配置持久化**：把 `AppConfig` 存进 Dexie，加 `schemaVersion` 迁移器，UI 只读展示
+3. **PWA**：manifest + service worker + 图标，确认手机上能"添加到主屏"
+4. **命令面板骨架**（Ctrl+K，占位命令即可）
 
 ## 什么坏了 / 什么没做完
 
 - 无已知问题。`dist/` 未纳入 git（已 ignore）。
-- 注意：仓库根目录同时有 `typescript@7.0.2`，**不要**在子包里再装别的 TS 版本。
+- 仓库内**只有一份 TypeScript（7.0.2，根目录）**，不要在子包里再装别的版本。
+- `apps/web` 还没接 shadcn/ui 与路由（P0 0.2 的剩余部分）。
 
 ## 怎么跑起来
 
@@ -42,4 +48,4 @@ pnpm verify      # typecheck + test + build 三连
 
 ## 最近一次更新
 
-P0 骨架落地，首个 commit `ae0f738`。
+落地配置层（zod schema + 课时推导 + 专注格换算），24 个单测通过。
