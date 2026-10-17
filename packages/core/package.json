@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./config": "./src/config/index.ts",
-    "./paper": "./src/paper/index.ts"
+    "./paper": "./src/paper/index.ts",
+    "./print": "./src/print/index.ts"
   },
   "scripts": {
     "test": "vitest run",

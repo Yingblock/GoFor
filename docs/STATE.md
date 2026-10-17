@@ -7,13 +7,17 @@
 
 **P0 地基 —— 已完成 4/7，剩下 Dexie / 配置持久化 / PWA / 命令面板。**
 
-已完成（`pnpm verify` 全绿，40 个单测通过）：
+已完成（`pnpm verify` 全绿，59 个单测通过）：
 
 - ✅ pnpm workspace 多包结构（`apps/web`、`packages/core`）
 - ✅ TypeScript 7.0.2 strict（`noUncheckedIndexedAccess`、`exactOptionalPropertyTypes`）
 - ✅ React 19 + Vite 7 + Tailwind 4 + Biome 2
 - ✅ dev server 可用（`host: true`，手机可局域网访问）
 - ✅ **`Clock` 抽象**（系统时钟 / 手动时钟）与 `newId`，7 个单测
+- ✅ **打印版式引擎**（`packages/core/src/print/`，19 个单测）：
+  - 纸张尺寸（mm，非 px）+ 12 列网格 + 固定高度区块（不做自动撑开）
+  - `layout()` 纯算术排版、自动分页、超页告警；`normalizePlacement()` 出回填坐标
+  - **实测：完整混合版需 A4，A5 只放得下精简版**（194mm 可用高度）
 - ✅ **纸面时间解析**（`packages/core/src/paper/`，16 个单测）：
   - `parseTimeRange()` 容错解析手写 `19:30` / `1930` / `19点30分` / `19:30~20:15` / 跨零点
   - 歧义靠版面（上午/下午/晚上分栏）消除，解析不出来就失败、不猜
@@ -51,4 +55,5 @@ pnpm verify      # typecheck + test + build 三连
 
 ## 最近一次更新
 
-落地配置层 + 纸面时间解析，40 个单测通过。纸面时间改为「在校专注格 + 自主时间登记」分工。
+落地配置层 + 纸面时间解析 + 打印版式引擎，59 个单测通过。
+专注格与时间登记都已是普通 block，模板可自由拼装；模板编辑器 v0 已排进 P1（14h）。

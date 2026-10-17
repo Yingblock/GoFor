@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PAPER_IDS } from '../print/paper.ts';
 
 /** "HH:mm"，24 小时制，两位补齐。 */
 export const PERIOD_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
@@ -21,7 +22,8 @@ export const periodSchema = z
 export const focusUnitSchema = z.union([z.literal('period'), z.number().int().min(1).max(240)]);
 
 export const printSchema = z.object({
-  paper: z.enum(['A4', 'A5', 'B5', 'index-card']),
+  // 与 packages/core/src/print/paper.ts 共用同一份常量，避免两处枚举漂移
+  paper: z.enum(PAPER_IDS),
   focusGrid: z.object({
     enabled: z.boolean(),
     /** 每行在「当天该科目节数」之外多留几格，给加练/自习用。 */
