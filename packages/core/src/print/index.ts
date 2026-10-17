@@ -7,7 +7,6 @@ export {
   CELL_SIZE_MM,
   type CheckboxGridBlock,
   type CheckboxListBlock,
-  type FocusGridBlock,
   type FooterBlock,
   type HintLineBlock,
   type LinedBoxBlock,

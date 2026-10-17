@@ -1,5 +1,5 @@
 /**
- * P0 冒烟测试：真实浏览器跑一遍「数据 → 版式 → 打印」。
+ * P0 冒烟测试：真实浏览器跑一遍「导航 → 数据 → 版式 → 打印」。
  *
  * 用法：pnpm build && pnpm e2e
  * 会自动起一个 preview 服务、跑完、再关掉。
@@ -40,11 +40,23 @@ async function waitForServer(attempts = 40) {
   return false;
 }
 
+/** 展开某个模块分组（已展开则不点，否则会把它收起来）。 */
+async function openGroup(page, title) {
+  const button = page.locator('aside button[aria-expanded]').filter({ hasText: title }).first();
+  const expanded = await button.getAttribute('aria-expanded');
+  if (expanded !== 'true') await button.click();
+}
+
+/** 点击分组下的条目。 */
+async function clickItem(page, title) {
+  await page.locator('aside button').filter({ hasText: title }).first().click();
+}
+
 try {
   if (!(await waitForServer())) throw new Error('preview 服务未启动，先跑 pnpm build');
 
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 900, height: 1400 } });
+  const page = await browser.newPage({ viewport: { width: 1100, height: 1400 } });
   const errors = [];
   page.on('pageerror', (error) => errors.push(String(error)));
   page.on('console', (message) => {
@@ -53,32 +65,50 @@ try {
 
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
 
-  await page.waitForSelector('text=专注格', { timeout: 15000 });
-  check('首屏渲染', (await page.locator('text=语文').count()) > 0, '默认科目已播种');
+  // 1) 首页：顶部两个主行动
+  await page.waitForSelector('text=拍照录入', { timeout: 15000 });
+  check('首页两个主行动', (await page.getByText('打印 checklist').count()) > 0);
 
+  // 2) 侧栏按模块编码分组
+  const groups = await page.locator('aside button[aria-expanded]').count();
+  check('侧栏 6 个模块分组', groups === 6, `实际 ${groups}`);
+
+  // 3) 导航到 P1·M2 → 作业清单
+  await openGroup(page, '记录');
+  await clickItem(page, '作业清单');
+  await page.waitForSelector('input[placeholder="加一项作业，回车确认"]', { timeout: 5000 });
+  check('可导航到作业清单', true, 'P1·M2');
+
+  // 4) 新增任务
   await page.fill('input[placeholder="加一项作业，回车确认"]', '数学卷子 3.1');
   await page.keyboard.press('Enter');
   await page.waitForSelector('text=数学卷子 3.1', { timeout: 5000 });
   check('新增任务', true);
 
-  const cell = page.locator('button[aria-label="数学 第 1 格"]');
-  await cell.click();
-  await sleep(300);
-  check('专注格可填写', (await cell.getAttribute('class')).includes('bg-[var(--color-ink)]'));
-
+  // 5) 勾选完成并刷新（IndexedDB 持久化）
+  await page.locator('input[type="checkbox"]').first().click();
+  await sleep(500);
   await page.reload({ waitUntil: 'networkidle' });
+  await openGroup(page, '记录');
+  await clickItem(page, '作业清单');
   await page.waitForSelector('text=数学卷子 3.1', { timeout: 8000 });
   check('刷新后任务仍在', true);
-  check(
-    '刷新后专注格仍在',
-    (await page.locator('button[aria-label="数学 第 1 格"]').getAttribute('class')).includes(
-      'bg-[var(--color-ink)]',
-    ),
-  );
+  check('刷新后完成状态仍在', await page.locator('input[type="checkbox"]').first().isChecked());
 
+  // 6) 未实现的条目给出阶段说明（不是死链）
+  await openGroup(page, '工具');
+  await clickItem(page, '番茄钟');
+  await page.waitForSelector('text=此条目属于阶段 P1', { timeout: 5000 });
+  check('未实现条目给出阶段说明', true);
+
+  // 7) 打印页：A4 一页装下
+  await openGroup(page, '导出');
+  await clickItem(page, '打印 checklist');
+  await page.waitForSelector('text=/共 \\d+ 页/', { timeout: 5000 });
   const pageInfo = await page.locator('text=/共 \\d+ 页/').first().innerText();
   check('默认 A4 一页装下', pageInfo.includes('共 1 页'), pageInfo);
 
+  // 8) 命令面板
   await page.keyboard.press('Control+k');
   await page.waitForSelector('input[placeholder="输入命令…"]', { timeout: 5000 });
   check('命令面板可唤起', true);

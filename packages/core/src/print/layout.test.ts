@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   blockHeightMm,
-  CELL_SIZE_MM,
   type CheckboxListBlock,
-  type FocusGridBlock,
   type TimeLogBlock,
   type TitleBlock,
 } from './blocks.js';
@@ -21,15 +19,25 @@ const tasks = (rows: number, id = 'tasks'): CheckboxListBlock => ({
   showMeta: [],
 });
 
-const focusGrid: FocusGridBlock = {
-  id: 'focus',
-  kind: 'focusGrid',
+const afternoonLog: TimeLogBlock = {
+  id: 'log-pm',
+  kind: 'timeLog',
   span: 12,
-  bind: 'subjects.today',
-  rows: 4,
-  cells: 5,
-  unitMinutes: 'period',
+  dayPart: 'afternoon',
+  rows: 2,
+  label: '下午',
 };
+
+const eveningLog: TimeLogBlock = {
+  id: 'log-eve',
+  kind: 'timeLog',
+  span: 12,
+  dayPart: 'evening',
+  rows: 2,
+  label: '晚上',
+};
+
+const slots = { id: 'slots', kind: 'slots' as const, span: 12, labels: ['睡眠', '心情', '专注'] };
 
 const morningLog: TimeLogBlock = {
   id: 'log-am',
@@ -56,10 +64,6 @@ describe('版式：区块高度是确定的', () => {
   it('清单高度 = 内边距 + 行数 × 行高', () => {
     expect(blockHeightMm(tasks(5))).toBe(8 + 5 * 7);
     expect(blockHeightMm(tasks(5)) - blockHeightMm(tasks(4))).toBe(7);
-  });
-
-  it('专注格按方格边长算', () => {
-    expect(blockHeightMm(focusGrid)).toBe(8 + 4 * CELL_SIZE_MM);
   });
 
   it('时间登记行比普通行更高', () => {
@@ -138,30 +142,19 @@ describe('版式：分页', () => {
     expect(result.warnings.join()).toContain('高于整页可用高度');
   });
 
-  it('完整混合版（清单 8 项 + 专注格 + 三段时间登记）装不进 A5', () => {
-    const fullDay = [
-      title,
-      tasks(8),
-      focusGrid,
-      morningLog,
-      { ...morningLog, id: 'log-pm', dayPart: 'afternoon' as const, label: '下午' },
-      { ...morningLog, id: 'log-eve', dayPart: 'evening' as const, label: '晚上' },
-    ];
-    // A5 可用高度只有 194mm，这个组合约需 210mm —— 这是实测出来的结论，
-    // 不是参数拍脑袋：完整混合版必须用 A4，A5 只能放精简版。
-    expect(fitsOnePage(fullDay, { paper: 'A5' })).toBe(false);
-    expect(fitsOnePage(fullDay, { paper: 'A4' })).toBe(true);
+  it('当前「我的一天」模板（清单 + 三段时间登记 + 评分格）A4 一页装下', () => {
+    const day = [title, tasks(10), morningLog, afternoonLog, eveningLog, slots];
+    expect(fitsOnePage(day, { paper: 'A4' })).toBe(true);
   });
 
-  it('精简版（清单 5 项 + 专注格 + 两段时间登记）能放进 A5', () => {
-    const slimDay = [
-      title,
-      tasks(5),
-      focusGrid,
-      morningLog,
-      { ...morningLog, id: 'log-eve', dayPart: 'evening' as const, label: '晚上' },
-    ];
-    expect(fitsOnePage(slimDay, { paper: 'A5' })).toBe(true);
+  it('同一模板在 A5 上会分页（A5 只放得下精简版）', () => {
+    const day = [title, tasks(10), morningLog, afternoonLog, eveningLog, slots];
+    expect(fitsOnePage(day, { paper: 'A5' })).toBe(false);
+  });
+
+  it('A5 精简版（清单 4 项 + 三段时间登记各 1 行）能装下', () => {
+    const slim = [title, tasks(4), morningLog, afternoonLog, eveningLog];
+    expect(fitsOnePage(slim, { paper: 'A5' })).toBe(true);
   });
 
   it('行数多到装不下时 fitsOnePage 为 false', () => {

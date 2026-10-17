@@ -1,8 +1,7 @@
-import type { Subject, Task } from '@gofor/core/domain';
+import type { Task } from '@gofor/core/domain';
 import {
   type Block,
   type CheckboxListBlock,
-  type FocusGridBlock,
   layout,
   type Margin,
   PAPER_SIZES,
@@ -14,9 +13,6 @@ import {
 /** 纸面渲染需要的数据。刻意保持扁平，方便以后换成任意来源。 */
 export interface SheetData {
   tasks: Task[];
-  subjects: Subject[];
-  /** 科目 id → 已涂格数。 */
-  filledCells: Record<string, number>;
 }
 
 export interface PrintSheetProps {
@@ -78,40 +74,6 @@ function CheckboxListView({ block, data }: { block: CheckboxListBlock; data: She
   );
 }
 
-function FocusGridView({ block, data }: { block: FocusGridBlock; data: SheetData }) {
-  const subjects = data.subjects.slice(0, block.rows);
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: mm(0.6) }}>
-      {subjects.map((subject) => {
-        const filled = data.filledCells[subject.id] ?? 0;
-        return (
-          <div key={subject.id} style={{ display: 'flex', alignItems: 'center', gap: mm(2) }}>
-            <span style={{ fontSize: mm(3.2), width: mm(16), flex: 'none' }}>{subject.name}</span>
-            <div style={{ display: 'flex', gap: mm(1.2) }}>
-              {Array.from({ length: block.cells }, (_, index) => {
-                const isFilled = index < filled;
-                return (
-                  <div
-                    // biome-ignore lint/suspicious/noArrayIndexKey: 方格是固定长度的位置槽位
-                    key={`cell-${index}`}
-                    style={{
-                      width: mm(6),
-                      height: mm(6),
-                      border: `${mm(0.3)} solid #4b5563`,
-                      borderRadius: mm(1),
-                      background: isFilled ? '#4b5563' : 'transparent',
-                    }}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /** 一个空的时间槽。用描边而不是下划线：手写在框里不容易写出界。 */
 function TimeSlot() {
   return (
@@ -162,8 +124,6 @@ function BlockView({ block, data }: { block: Block; data: SheetData }) {
       return <TitleBlockView text={block.text} />;
     case 'checkboxList':
       return <CheckboxListView block={block} data={data} />;
-    case 'focusGrid':
-      return <FocusGridView block={block} data={data} />;
     case 'timeLog':
       return <TimeLogView block={block} />;
     case 'slots':
@@ -283,21 +243,30 @@ export function PrintLayer({ blocks, paper, margin, data }: PrintSheetProps) {
 export function PrintPreview({ blocks, paper, margin, data }: PrintSheetProps) {
   const result = layout(blocks, margin ? { paper, margin } : { paper });
   const size = PAPER_SIZES[paper];
+  const scale = 0.62;
 
   return (
+    // 外层按「缩放后的尺寸」占位，内层再做 transform——
+    // 否则 transform 不改变布局盒，预览会被裁掉下半页。
     <div
       style={{
-        transform: 'scale(0.62)',
-        transformOrigin: 'top left',
-        width: mm(size.widthMm),
-        height: mm(size.heightMm * 0.62),
+        width: mm(size.widthMm * scale),
+        height: mm(size.heightMm * scale),
         overflow: 'hidden',
         filter: 'drop-shadow(0 2px 12px rgba(0,0,0,0.12))',
       }}
     >
-      {result.pages.map((page) => (
-        <PageView key={page.index} page={page} data={data} />
-      ))}
+      <div
+        style={{
+          width: mm(size.widthMm),
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+        }}
+      >
+        {result.pages.map((page) => (
+          <PageView key={page.index} page={page} data={data} />
+        ))}
+      </div>
     </div>
   );
 }

@@ -14,7 +14,6 @@
 export const BLOCK_KINDS = [
   'title',
   'checkboxList',
-  'focusGrid',
   'timeLog',
   'checkboxGrid',
   'table',
@@ -59,19 +58,6 @@ export interface CheckboxListBlock extends BlockBase {
   /** 显式行数，决定高度。 */
   rows: number;
   showMeta: ('subject' | 'due')[];
-}
-
-/**
- * 专注格：行 = 科目，列 = 专注单元。
- * 不预印格子数由课表推导，而是模板里写死 `cells`，保证高度确定。
- */
-export interface FocusGridBlock extends BlockBase {
-  kind: 'focusGrid';
-  bind: string;
-  rows: number;
-  cells: number;
-  /** 一个格子代表多少分钟；'period' 表示跟随作息表（见配置层）。 */
-  unitMinutes: 'period' | number;
 }
 
 /** 时间登记：写在纸上再解析，见 `paper/timeRange.ts`。 */
@@ -141,7 +127,6 @@ export interface PageBreakBlock extends BlockBase {
 export type Block =
   | TitleBlock
   | CheckboxListBlock
-  | FocusGridBlock
   | TimeLogBlock
   | CheckboxGridBlock
   | TableBlock
@@ -171,8 +156,6 @@ export function blockHeightMm(block: Block): number {
       return block.sizeMm;
     case 'checkboxList':
       return BLOCK_PADDING_MM + block.rows * ROW_HEIGHT_MM;
-    case 'focusGrid':
-      return BLOCK_PADDING_MM + block.rows * CELL_SIZE_MM;
     case 'timeLog':
       return BLOCK_PADDING_MM + block.rows * TIME_LOG_ROW_MM;
     case 'checkboxGrid':
