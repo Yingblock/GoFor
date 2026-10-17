@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink: oklch(0.22 0.02 250);
-  --color-paper: oklch(0.98 0.005 90);
-  --color-accent: oklch(0.62 0.15 250);
+  --color-ink: oklch(0.26 0.03 260);
+  --color-paper: oklch(0.975 0.006 90);
+  --color-accent: oklch(0.55 0.13 255);
+  --color-muted: oklch(0.62 0.02 260);
 }
 
 html,
@@ -20,4 +21,43 @@ body {
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei",
     sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------- 打印 */
+
+/* 真实纸张尺寸由 PrintSheet 内联的 <style> 覆盖，这里只给兜底值 */
+@page {
+  size: A5 portrait;
+  margin: 0;
+}
+
+/* 屏幕上隐藏真实打印层，只在打印时显示 */
+.print-root {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  /* 打印时只留纸面 */
+  .screen-only {
+    display: none !important;
+  }
+
+  .print-root {
+    display: block !important;
+  }
+
+  .print-page {
+    break-after: page;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .print-page:last-child {
+    break-after: auto;
+  }
 }

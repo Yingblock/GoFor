@@ -1,0 +1,21 @@
+{
+  "name": "@gofor/store",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@gofor/core": "workspace:*",
+    "dexie": "^4.2.1"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.2",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,0 +1,103 @@
+/**
+ * P0 冒烟测试：真实浏览器跑一遍「数据 → 版式 → 打印」。
+ *
+ * 用法：pnpm build && pnpm e2e
+ * 会自动起一个 preview 服务、跑完、再关掉。
+ *
+ * 为什么必须用真实浏览器：IndexedDB、Service Worker、打印 CSS
+ * 在 Node 里都测不出来。
+ */
+import { spawn } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { chromium } from 'playwright';
+
+const PORT = 4173;
+const BASE = `http://127.0.0.1:${PORT}`;
+const results = [];
+let failed = false;
+
+function check(name, ok, detail = '') {
+  results.push(`${ok ? '✓' : '✗'} ${name}${detail ? ` — ${detail}` : ''}`);
+  if (!ok) failed = true;
+}
+
+const server = spawn(
+  'pnpm',
+  ['--filter', '@gofor/web', 'preview', '--port', String(PORT), '--strictPort'],
+  { stdio: 'ignore' },
+);
+
+async function waitForServer(attempts = 40) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const response = await fetch(BASE);
+      if (response.ok) return true;
+    } catch {
+      // 还没起来，继续等
+    }
+    await sleep(250);
+  }
+  return false;
+}
+
+try {
+  if (!(await waitForServer())) throw new Error('preview 服务未启动，先跑 pnpm build');
+
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 900, height: 1400 } });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(String(error)));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+
+  await page.waitForSelector('text=专注格', { timeout: 15000 });
+  check('首屏渲染', (await page.locator('text=语文').count()) > 0, '默认科目已播种');
+
+  await page.fill('input[placeholder="加一项作业，回车确认"]', '数学卷子 3.1');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('text=数学卷子 3.1', { timeout: 5000 });
+  check('新增任务', true);
+
+  const cell = page.locator('button[aria-label="数学 第 1 格"]');
+  await cell.click();
+  await sleep(300);
+  check('专注格可填写', (await cell.getAttribute('class')).includes('bg-[var(--color-ink)]'));
+
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('text=数学卷子 3.1', { timeout: 8000 });
+  check('刷新后任务仍在', true);
+  check(
+    '刷新后专注格仍在',
+    (await page.locator('button[aria-label="数学 第 1 格"]').getAttribute('class')).includes(
+      'bg-[var(--color-ink)]',
+    ),
+  );
+
+  const pageInfo = await page.locator('text=/共 \\d+ 页/').first().innerText();
+  check('默认 A4 一页装下', pageInfo.includes('共 1 页'), pageInfo);
+
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('input[placeholder="输入命令…"]', { timeout: 5000 });
+  check('命令面板可唤起', true);
+  await page.keyboard.press('Escape');
+
+  // 这一张就是能带去学校的纸
+  await page.pdf({
+    path: 'e2e/out/day-sheet.pdf',
+    printBackground: true,
+    preferCSSPageSize: true,
+  });
+  check('能导出打印 PDF', true, 'e2e/out/day-sheet.pdf');
+
+  check('无运行时报错', errors.length === 0, errors.join(' | '));
+
+  await browser.close();
+} finally {
+  server.kill('SIGTERM');
+}
+
+console.log(results.join('\n'));
+process.exit(failed ? 1 : 0);

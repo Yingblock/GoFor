@@ -1,4 +1,5 @@
 export { DEFAULT_APP_CONFIG, FALLBACK_PERIOD_MINUTES } from './defaults.ts';
+export { CURRENT_CONFIG_VERSION, type MigrateConfigResult, migrateConfig } from './migrate.ts';
 export {
   cellsForMinutes,
   mergeConfig,

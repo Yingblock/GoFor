@@ -70,12 +70,15 @@
 | 0.1 | pnpm monorepo + TS strict + Biome + Vitest + 目录骨架 | 6 | ✅ |
 | 0.2 | Vite + React + Tailwind 起壳 | 8 | ✅（shadcn/路由待补） |
 | 0.3 | **配置层**：schema（zod）、默认值、深合并、课时推导、校验 | 6 | ✅ |
-| 0.4 | Dexie 数据层：schema、版本迁移、仓储层封装、hook | 10 | ⬜ |
-| 0.5 | **配置持久化 + `schemaVersion` 迁移器** | 4 | ⬜ |
-| 0.6 | PWA：manifest、Service Worker、安装引导、图标 | 5 | ⬜ |
-| 0.7 | 命令面板骨架（Ctrl+K，占位命令） | 6 | ⬜ |
+| 0.4 | Dexie 数据层：schema、版本迁移、仓储层封装、hook | 10 | ✅ |
+| 0.5 | **配置持久化 + `schemaVersion` 迁移器** | 4 | ✅ |
+| 0.6 | PWA：manifest、Service Worker、安装引导、图标 | 5 | ✅ |
+| 0.7 | 命令面板骨架（Ctrl+K，占位命令） | 6 | ✅ |
 
 **验收**：手机上"添加到主屏"，离线可打开，改数据后刷新不丢，配置能导出/导入。
+
+> **已完成**。额外产出：首张可打印的「我的一天」A4 纸（`pnpm e2e` 生成 PDF）。
+> 默认纸张因此改为 **A4**——完整混合版实测 201mm 高，A5 的 194mm 装不下。
 
 ---
 

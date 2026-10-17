@@ -22,9 +22,12 @@ GoFor —— 面向中国高中生的离线优先学习辅助工具。
 ```
 apps/web          PWA 宿主（Vite + React）
 packages/core     纯领域逻辑：零 UI、零平台 API、零副作用
+                  子路径：./config（配置+zod）、./print（版式）、./paper（时间解析）、./domain
+packages/store    Dexie 实现（浏览器专用），实现了 core 里的仓储接口
 packages/ui       跨宿主组件（暂空）
 packages/vision   CV：透视矫正、光照均衡、局部采样（暂空）
 packages/plugin-api  插件契约（暂空）
+e2e/              真实浏览器冒烟（Playwright），产物在 e2e/out/（已 ignore）
 docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS
 ```
 
@@ -44,6 +47,13 @@ docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS
 8. **不要做 ROADMAP 当前阶段之外的功能**，新想法写进 `docs/LATER.md`。
 9. 单个任务控制在 8 小时内；超了就拆。
 
+## 存储约定
+
+- **`liveQuery` 里只能只读**。任何写操作都会抛 `ReadOnlyError` 并白屏。
+  需要「读+修复」的场景（如配置迁移）用 `currentConfigOrDefault`，且只在启动时调一次；
+  运行期读用 `readConfig`。
+- 打印层 `PrintLayer` 必须渲染在 `.screen-only` 之外，否则打印时被一起隐藏 → 白纸。
+
 ## 领域约定
 
 - 时间一律用 `Clock` 抽象，**禁止直接调用 `Date.now()` 或裸 `setTimeout`**。
@@ -59,7 +69,8 @@ pnpm dev            # apps/web 开发服务器
 pnpm test           # 全部单测
 pnpm typecheck      # 全部类型检查
 pnpm check          # Biome 自动修复
-pnpm verify         # 三连：typecheck + test + build
+pnpm e2e            # 真实浏览器冒烟（需先 build），生成打印 PDF
+pnpm verify         # 四连：typecheck + test + build + e2e
 ```
 
 ## 提交信息

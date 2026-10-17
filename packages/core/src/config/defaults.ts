@@ -22,7 +22,9 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     longBreakEvery: 4,
   },
   print: {
-    paper: 'A5',
+    // 默认 A4：校内外打印机基本都是 A4；完整混合版（清单 + 专注格 + 三段时间登记）
+    // 实测需要约 201mm 高，A5 的 194mm 可用高度装不下。A5 留给精简版与口袋卡。
+    paper: 'A4',
     focusGrid: {
       enabled: true,
       spareCells: 1,

@@ -86,16 +86,16 @@ describe('配置：专注格单位', () => {
 describe('配置：合并与校验', () => {
   it('深合并不会改动原对象', () => {
     const merged = mergeConfig(DEFAULT_APP_CONFIG, {
-      print: { paper: 'A4' },
+      print: { paper: 'A5' },
       focus: { unit: 25 },
     });
 
-    expect(merged.print.paper).toBe('A4');
+    expect(merged.print.paper).toBe('A5');
     expect(merged.print.focusGrid.spareCells).toBe(1); // 未覆盖的兄弟字段保留
     expect(merged.focus.unit).toBe(25);
     expect(merged.focus.breakMinutes).toBe(10);
 
-    expect(DEFAULT_APP_CONFIG.print.paper).toBe('A5');
+    expect(DEFAULT_APP_CONFIG.print.paper).toBe('A4');
     expect(DEFAULT_APP_CONFIG.focus.unit).toBe('period');
   });
 
