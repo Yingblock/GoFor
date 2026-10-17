@@ -257,6 +257,60 @@ class V1Db extends Dexie {
   }
 }
 
+/** 只声明到 v2 的库（不含 tagPools），用来验证 v2 → v3。 */
+class V2Db extends Dexie {
+  config!: Table<{ key: string; value: string; updatedAt: number }, string>;
+  tasks!: Table<Task, string>;
+  subjects!: Table<Subject, string>;
+  sessions!: Table<StudySession, string>;
+  templates!: Table<StoredTemplate, string>;
+
+  constructor(name: string) {
+    super(name);
+    this.version(1).stores({
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+    });
+    this.version(2).stores({
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+    });
+  }
+}
+
+describe('存储：schema 升级 v2 → v3（tagPools 必须新建）', () => {
+  it('停在 v2 的库升级后会补出 tagPools 表，且旧数据仍在', async () => {
+    const name = `gofor-v3-${Math.random().toString(36).slice(2)}`;
+
+    const old = new V2Db(name);
+    await old.tasks.put({
+      id: 't1',
+      title: 'v2 时期写入',
+      subjectId: null,
+      done: false,
+      due: null,
+      sortKey: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    old.close();
+
+    const upgraded = new GoForDb(name);
+    expect((await upgraded.tasks.toArray())[0]?.title).toBe('v2 时期写入');
+
+    // 关键断言：v2 的库里没有这张表，升级后必须能写
+    await upgraded.tagPools.put({ id: 'pool-1', name: '错因', tags: ['计算失误'] });
+    expect(await upgraded.tagPools.count()).toBe(1);
+    upgraded.close();
+  });
+});
+
 describe('存储：schema 升级 v1 → v2', () => {
   it('升级后旧数据仍在，新表可用', async () => {
     const name = `gofor-migrate-${Math.random().toString(36).slice(2)}`;

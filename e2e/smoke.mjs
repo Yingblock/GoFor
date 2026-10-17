@@ -1,10 +1,10 @@
 /**
- * P0 冒烟测试：真实浏览器跑一遍「导航 → 数据 → 版式 → 打印」。
+ * P1 冒烟测试：真实浏览器跑一遍「导航 → 数据 → 版式 → 打印」。
  *
  * 用法：pnpm build && pnpm e2e
  * 会自动起一个 preview 服务、跑完、再关掉。
  *
- * 为什么必须用真实浏览器：IndexedDB、Service Worker、打印 CSS
+ * 为什么必须用真实浏览器：IndexedDB、打印 CSS、全屏遮罩、二次确认
  * 在 Node 里都测不出来。
  */
 import { spawn } from 'node:child_process';
@@ -65,27 +65,26 @@ try {
 
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
 
-  // 1) 首页：顶部两个主行动
+  /* ---------------------------------------------------------- 导航与首页 */
+
   await page.waitForSelector('text=拍照录入', { timeout: 15000 });
   check('首页两个主行动', (await page.getByText('打印 checklist').count()) > 0);
 
-  // 2) 侧栏按模块编码分组
   const groups = await page.locator('aside button[aria-expanded]').count();
   check('侧栏 6 个模块分组', groups === 6, `实际 ${groups}`);
 
-  // 3) 导航到 P1·M2 → 作业清单
+  /* -------------------------------------------------------------- 作业清单 */
+
   await openGroup(page, '记录');
   await clickItem(page, '作业清单');
   await page.waitForSelector('input[placeholder="加一项作业，回车确认"]', { timeout: 5000 });
   check('可导航到作业清单', true, 'P1·M2');
 
-  // 4) 新增任务
   await page.fill('input[placeholder="加一项作业，回车确认"]', '数学卷子 3.1');
   await page.keyboard.press('Enter');
   await page.waitForSelector('text=数学卷子 3.1', { timeout: 5000 });
   check('新增任务', true);
 
-  // 5) 勾选完成并刷新（IndexedDB 持久化）
   await page.locator('input[aria-label="完成 数学卷子 3.1"]').click();
   await sleep(500);
   await page.reload({ waitUntil: 'networkidle' });
@@ -98,37 +97,53 @@ try {
     await page.locator('input[aria-label="完成 数学卷子 3.1"]').isChecked(),
   );
 
-  // 6) 未实现的条目给出阶段说明（不是死链）——用尚未实现的「笔记本」
+  // 留一条未完成任务，后面验证首页复选框
+  await page.fill('input[placeholder="加一项作业，回车确认"]', '英语听力 Unit 4');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('text=英语听力 Unit 4', { timeout: 5000 });
+
+  // 标签池（常驻池是科目）
+  check('作业页有标签管理', (await page.getByText('标签管理').count()) > 0);
+
+  /* -------------------------------------------------------- 未实现条目 */
+
   await openGroup(page, '工具');
   await clickItem(page, '笔记本');
   await page.waitForSelector('text=此条目属于阶段', { timeout: 5000 });
   check('未实现条目给出阶段说明', true);
 
-  // 7) 番茄钟：能开始、能暂停
+  /* -------------------------------------------------------------- 番茄钟 */
+
   await openGroup(page, '工具');
   await clickItem(page, '番茄钟');
+  await page.locator('input[type="number"]').first().fill('30');
   await page
-    .getByRole('button', { name: /开始专注/ })
+    .getByRole('button', { name: /开始专注 30 分钟/ })
     .first()
     .click();
   await page.waitForSelector('text=/\\d{2}:\\d{2}/', { timeout: 5000 });
+  check('番茄钟支持自定义时长并进入专注', true);
+
   await page.getByRole('button', { name: '暂停' }).first().click();
   await page.waitForSelector('text=已暂停', { timeout: 5000 });
-  check('番茄钟可开始并暂停', true);
-  await page.getByRole('button', { name: '放弃' }).first().click();
+  check('番茄钟可暂停', true);
 
-  // 8) 每日打卡：勾选后刷新仍在
+  await page.getByRole('button', { name: '放弃' }).first().click();
+  await page.getByRole('button', { name: '确认放弃？' }).first().click();
+  await page.waitForSelector('text=自定义', { timeout: 5000 });
+  check('放弃需要二次确认', true);
+
+  /* -------------------------------------------------------------- 每日打卡 */
+
   await openGroup(page, '记录');
   await clickItem(page, '每日打卡');
   await page.waitForSelector('text=天连续', { timeout: 5000 });
-  const todayCell = page.locator('button[aria-label$="打卡"]').first();
-  await todayCell.click();
+  await page.locator('button[aria-label$="打卡"]').first().click();
   await sleep(400);
   await page.reload({ waitUntil: 'networkidle' });
   await openGroup(page, '记录');
   await clickItem(page, '每日打卡');
   await page.waitForSelector('text=天连续', { timeout: 5000 });
-  // liveQuery 是异步的，"天连续" 出现时数据可能还没到，必须等条件成立
   const persisted = await page
     .waitForFunction(
       () => {
@@ -141,44 +156,82 @@ try {
     .catch(() => false);
   check('打卡可勾选并持久化', persisted);
 
-  // 9) 课程表：录入课程 + 规则后能在周视图看到
+  /* -------------------------------------------------------------- 课程表 */
+
   await openGroup(page, '记录');
   await clickItem(page, '课程表');
   await page.waitForSelector('[data-testid="week-grid"]', { timeout: 8000 });
-  await page.fill('input[placeholder="课程名，如 数学"]', '数学');
-  await page.getByRole('button', { name: '加课程' }).click();
+
+  await page.fill('input[placeholder="科目名，如 数学"]', '地理');
+  await page.getByRole('button', { name: '加科目' }).click();
+  await page.getByText('地理', { exact: true }).first().waitFor({ timeout: 5000 });
+  check('课表可新增全局科目', true);
+
   await page.getByRole('button', { name: '加规则' }).click();
   await page
     .locator('[data-testid="week-grid"]')
-    .getByText('数学', { exact: false })
+    .getByText('语文', { exact: false })
     .first()
     .waitFor({ timeout: 5000 });
   check('课程表可录入并在周视图显示', true);
+
   await page.getByRole('button', { name: '保存课表' }).click();
   await page.waitForSelector('text=已保存', { timeout: 5000 });
   check('课表可保存', true);
 
-  // 10) 模板编辑器：内置模板 + 校准页
+  /* ------------------------------------------------------ 模板与校准页 */
+
   await openGroup(page, '导出');
   await clickItem(page, '模板与校准页');
   await page.getByRole('button', { name: '打印校准页' }).click();
   await page.waitForSelector('text=每台打印机第一次使用前', { timeout: 5000 });
   check('模板编辑器与校准页可打开', true);
 
-  // 11) 打印页：A4 一页装下
+  await page.getByRole('button', { name: '我的一天' }).click();
+  const missing = [];
+  for (const size of ['A4', 'A6', 'B5 (JIS)', 'Letter']) {
+    if ((await page.getByRole('button', { name: size, exact: true }).count()) === 0) {
+      missing.push(size);
+    }
+  }
+  check('模板支持更多纸张尺寸', missing.length === 0, missing.length ? `缺 ${missing}` : '');
+
+  /* ---------------------------------------------------- 首页任务提示可勾选 */
+
+  await page.getByRole('button', { name: 'GoFor', exact: true }).click();
+  await page.waitForSelector('text=任务提示', { timeout: 5000 });
+  // 注意：应用外壳的根是 div.screen-only，不是 <main>；用 aria-label 定位更稳
+  const homeBoxes = page.locator('input[aria-label^="完成 "]');
+  const before = await homeBoxes.count();
+  check('首页显示未完成任务', before > 0, `未完成 ${before} 条`);
+  if (before > 0) {
+    await homeBoxes.first().click();
+    const removed = await page
+      .waitForFunction(
+        (n) => document.querySelectorAll('input[aria-label^="完成 "]').length < n,
+        before,
+        { timeout: 5000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    check('首页任务提示可勾选', removed);
+  }
+
+  /* ------------------------------------------------------------ 打印 */
+
   await openGroup(page, '导出');
   await clickItem(page, '打印 checklist');
   await page.waitForSelector('text=/共 \\d+ 页/', { timeout: 5000 });
   const pageInfo = await page.locator('text=/共 \\d+ 页/').first().innerText();
-  check('默认 A4 一页装下', pageInfo.includes('共 1 页'), pageInfo);
+  check('默认 A4 一页装下（含当日课表）', pageInfo.includes('共 1 页'), pageInfo);
 
-  // 12) 命令面板
+  /* ------------------------------------------------------ 命令面板与 PDF */
+
   await page.keyboard.press('Control+k');
   await page.waitForSelector('input[placeholder="输入命令…"]', { timeout: 5000 });
   check('命令面板可唤起', true);
   await page.keyboard.press('Escape');
 
-  // 这一张就是能带去学校的纸
   await page.pdf({
     path: 'e2e/out/day-sheet.pdf',
     printBackground: true,

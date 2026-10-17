@@ -83,6 +83,8 @@ export const BUILTIN_TEMPLATES: PrintTemplate[] = [
         rows: 10,
         showMeta: [],
       },
+      // 当日课表排在清单之后：学生先看"今天有什么课"，再对照作业
+      { id: 'schedule', kind: 'schedule', span: 12, rows: 8, title: '今日课表' },
       { id: 'am', kind: 'timeLog', span: 12, dayPart: 'morning', rows: 2, label: '上午' },
       { id: 'pm', kind: 'timeLog', span: 12, dayPart: 'afternoon', rows: 2, label: '下午' },
       { id: 'ev', kind: 'timeLog', span: 12, dayPart: 'evening', rows: 2, label: '晚上' },
@@ -194,6 +196,9 @@ function adaptBlock(block: Block, templateId: string, full: boolean): Block {
         return { ...block, rows: full ? 10 : 4 };
       case 'timeLog':
         return { ...block, rows: full ? 2 : 1 };
+      case 'schedule':
+        // A4 放得下 8 节；A5 只留 4 节，否则整体超过 194mm 可用高度。
+        return { ...block, rows: full ? 8 : 4 };
       default:
         return block;
     }

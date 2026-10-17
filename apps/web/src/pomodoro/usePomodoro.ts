@@ -27,6 +27,28 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const MS_PER_MINUTE = 60 * 1000;
 
+/**
+ * 自定义时长的合法区间（分钟）。
+ *
+ * 上限 180 是产品边界（一次专注超过 3 小时就不该算一个番茄），
+ * 下限 1 是为了让 `plannedMs` 永远为正——`startRun` 也按 1 兜底，但 UI 层先拦住更清楚。
+ * 这是交互约束，不是"现实世界会变的配置"，所以不进 `@gofor/core/config`。
+ */
+export const MIN_MINUTES = 1;
+export const MAX_MINUTES = 180;
+
+/**
+ * 把任意分钟数收敛到合法区间。
+ *
+ * 钳位只放在这一处：快捷项和数字输入框最后都走 `selectMinutes`，
+ * 如果各写一份，迟早出现「输入框钳了、`start` 没钳」的分叉，
+ * 造出 0 分钟或者 500 分钟的番茄。非有限值（清空后的 NaN、Infinity）按最小合法值处理，不抛错。
+ */
+function clampMinutes(value: number): number {
+  if (!Number.isFinite(value)) return MIN_MINUTES;
+  return Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, Math.round(value)));
+}
+
 export interface PomodoroController {
   /** 当前运行态；null 表示还没开始（或刚结算完）。 */
   run: PomodoroRun | null;
@@ -34,7 +56,7 @@ export interface PomodoroController {
   /** 全部任务：展示已绑定任务标题时要用，候选只取未完成的前 8 条。 */
   tasks: Task[];
   taskCandidates: Task[];
-  /** 生效时长（分钟）：用户选过就用选的，否则用配置推导的课时。 */
+  /** 生效时长（分钟）：用户选过就用选的，否则用配置推导的课时。始终在 MIN_MINUTES–MAX_MINUTES 内。 */
   minutes: number;
   /** 生效科目：用户没显式选过就默认第一个。 */
   subjectId: string | null;
@@ -143,7 +165,8 @@ export function usePomodoro(): PomodoroController {
       // 否则恢复出来的计时会从头开始，或者直接变成 0。
       const recovered = recoverRun(latest, systemClock, systemClock.now());
       setRun(recovered);
-      setSelectedMinutes(Math.round(recovered.plannedMs / MS_PER_MINUTE));
+      // 恢复已选时长：历史数据可能是被改过的、或者小于 1 分钟的脏值，重新钳一次。
+      setSelectedMinutes(clampMinutes(recovered.plannedMs / MS_PER_MINUTE));
       setSelectedSubjectId(recovered.subjectId);
       setSelectedTaskId(recovered.taskId);
 
@@ -180,7 +203,7 @@ export function usePomodoro(): PomodoroController {
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [checkComplete]);
 
-  const minutes = selectedMinutes ?? unitMinutes;
+  const minutes = clampMinutes(selectedMinutes ?? unitMinutes);
   // 新同学第一次进来科目列表可能还没播种完，按第一个默认选中；
   // 已选科目若被删除也自然回落到第一个。
   const subjectId =
@@ -188,18 +211,23 @@ export function usePomodoro(): PomodoroController {
 
   const taskCandidates = useMemo(() => tasks.filter((task) => !task.done).slice(0, 8), [tasks]);
 
-  const selectMinutes = useCallback((next: number) => setSelectedMinutes(next), []);
+  const selectMinutes = useCallback((next: number) => {
+    // 数字输入框会原样把用户敲的值送进来，钳位在这里统一做：
+    // UI 只负责显示，边界由状态层保证，`start` 拿到的 minutes 一定合法。
+    setSelectedMinutes(clampMinutes(next));
+  }, []);
   const selectSubject = useCallback((id: string) => setSelectedSubjectId(id), []);
   const toggleTask = useCallback((id: string) => {
     setSelectedTaskId((current) => (current === id ? null : id));
   }, []);
 
   const start = useCallback(() => {
-    if (run || minutes <= 0) return;
+    if (run) return;
+    // `minutes` 已经由 clampMinutes 保证是 1–180 的整数，这里只需要转成毫秒。
     const next = startRun(
       {
         id: newId(),
-        plannedMs: Math.max(1, Math.round(minutes * MS_PER_MINUTE)),
+        plannedMs: minutes * MS_PER_MINUTE,
         subjectId,
         taskId: selectedTaskId,
       },

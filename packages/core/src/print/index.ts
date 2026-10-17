@@ -14,6 +14,7 @@ export {
   type ProgressDotsBlock,
   type QrCodeBlock,
   ROW_HEIGHT_MM,
+  type ScheduleBlock,
   type SlotsBlock,
   type TableBlock,
   TIME_LOG_ROW_MM,

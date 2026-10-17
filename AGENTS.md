@@ -128,6 +128,9 @@ docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS
   需要「读+修复」的场景（如配置迁移）用 `currentConfigOrDefault`，且只在启动时调一次；
   运行期读用 `readConfig`。
 - 打印层 `PrintLayer` 必须渲染在 `.screen-only` 之外，否则打印时被一起隐藏 → 白纸。
+- **Dexie 的版本号一旦发布就冻结。** 新增表必须新开 `version(N+1)`，
+  绝不能往已有版本的 `stores({...})` 里加一行——Dexie 只按版本号决定跑不跑升级，
+  停在旧版本的浏览器库不会补建表，运行时会直接报「表不存在」。
 
 ## 领域约定
 

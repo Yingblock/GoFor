@@ -15,6 +15,7 @@ export const BLOCK_KINDS = [
   'title',
   'checkboxList',
   'timeLog',
+  'schedule',
   'checkboxGrid',
   'table',
   'slots',
@@ -58,6 +59,19 @@ export interface CheckboxListBlock extends BlockBase {
   /** 显式行数，决定高度。 */
   rows: number;
   showMeta: ('subject' | 'due')[];
+}
+
+/**
+ * 当日课表。
+ *
+ * 数据在打印时由调用方算好（`occurrencesOn(today, ...)`），
+ * 区块本身只负责版式——打印层不应该依赖课表模型，否则模板就没法复用了。
+ */
+export interface ScheduleBlock extends BlockBase {
+  kind: 'schedule';
+  /** 显示几节；多了截断并在末尾标注。 */
+  rows: number;
+  title: string;
 }
 
 /** 时间登记：写在纸上再解析，见 `paper/timeRange.ts`。 */
@@ -128,6 +142,7 @@ export type Block =
   | TitleBlock
   | CheckboxListBlock
   | TimeLogBlock
+  | ScheduleBlock
   | CheckboxGridBlock
   | TableBlock
   | SlotsBlock
@@ -158,6 +173,8 @@ export function blockHeightMm(block: Block): number {
       return BLOCK_PADDING_MM + block.rows * ROW_HEIGHT_MM;
     case 'timeLog':
       return BLOCK_PADDING_MM + block.rows * TIME_LOG_ROW_MM;
+    case 'schedule':
+      return BLOCK_PADDING_MM + block.rows * ROW_HEIGHT_MM;
     case 'checkboxGrid':
       return BLOCK_PADDING_MM + block.rows * CELL_SIZE_MM;
     case 'table':

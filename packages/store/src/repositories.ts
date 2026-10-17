@@ -6,6 +6,7 @@ import {
   type StoredTimetable,
   type StudySession,
   type Subject,
+  type TagPool,
   type Task,
 } from '@gofor/core/domain';
 import type { PomodoroRun } from '@gofor/core/pomodoro';
@@ -36,6 +37,52 @@ export async function saveConfig(database: GoForDb, config: AppConfig): Promise<
 export async function listSubjects(database: GoForDb): Promise<Subject[]> {
   const rows = await database.subjects.toArray();
   return rows.sort((a, b) => a.order - b.order);
+}
+
+/** 新增科目。 */
+export async function createSubject(database: GoForDb, name: string): Promise<Subject> {
+  const all = await listSubjects(database);
+  const subject: Subject = {
+    id: `subject-${Date.now().toString(36)}-${all.length}`,
+    name,
+    order: all.length,
+  };
+  await database.subjects.put(subject);
+  return subject;
+}
+
+/** 改名。科目被课表规则和任务引用，所以只改名字，不动 id。 */
+export async function renameSubject(database: GoForDb, id: string, name: string): Promise<void> {
+  await database.subjects.update(id, { name });
+}
+
+/**
+ * 删除科目。
+ *
+ * 不级联删除引用它的任务与课表规则——那会造成静默的数据丢失。
+ * 引用会变成"未知科目"，由调用方决定怎么处理。
+ */
+export async function deleteSubject(database: GoForDb, id: string): Promise<void> {
+  await database.subjects.delete(id);
+}
+
+/* ------------------------------------------------------------------ 标签池 */
+
+export async function listTagPools(database: GoForDb): Promise<TagPool[]> {
+  return database.tagPools.toArray();
+}
+
+export async function saveTagPool(
+  database: GoForDb,
+  id: string,
+  name: string,
+  tags: string[],
+): Promise<void> {
+  await database.tagPools.put({ id, name, tags });
+}
+
+export async function deleteTagPool(database: GoForDb, id: string): Promise<void> {
+  await database.tagPools.delete(id);
 }
 
 /** 首次启动播种默认科目；已有数据则原样返回。 */
@@ -87,7 +134,7 @@ export async function createTask(database: GoForDb, input: CreateTaskInput): Pro
 }
 
 export type TaskPatch = Partial<
-  Pick<Task, 'title' | 'done' | 'due' | 'optional' | 'subtasks' | 'sortKey'>
+  Pick<Task, 'title' | 'done' | 'due' | 'optional' | 'subtasks' | 'tags' | 'subjectId' | 'sortKey'>
 >;
 
 /** 通用更新。字段级补丁，避免为每个小改动写一个新函数。 */

@@ -31,6 +31,8 @@ export interface Task {
   optional?: boolean;
   /** 子任务。旧数据没有该字段，读取时按空数组处理。 */
   subtasks?: Subtask[];
+  /** 标签。常驻池是科目，用户还可以自建池。旧数据按空数组处理。 */
+  tags?: string[];
   /** 排序用，越大越靠后。 */
   sortKey: number;
   createdAt: number;
@@ -38,9 +40,31 @@ export interface Task {
 }
 
 /** 把可能缺字段的旧数据补成完整形态。 */
-export function normalizeTask(task: Task): Task & { optional: boolean; subtasks: Subtask[] } {
-  return { ...task, optional: task.optional ?? false, subtasks: task.subtasks ?? [] };
+export function normalizeTask(
+  task: Task,
+): Task & { optional: boolean; subtasks: Subtask[]; tags: string[] } {
+  return {
+    ...task,
+    optional: task.optional ?? false,
+    subtasks: task.subtasks ?? [],
+    tags: task.tags ?? [],
+  };
 }
+
+/**
+ * 自定义标签池。
+ *
+ * 科目是**虚拟池**（标签来自 subjects 表），不落这张表——
+ * 否则同一门课会有两份数据，改名时必然不一致。
+ */
+export interface TagPool {
+  id: string;
+  name: string;
+  tags: string[];
+}
+
+/** 科目池的固定 id（虚拟池，不存库）。 */
+export const SUBJECT_TAG_POOL_ID = 'subjects';
 
 /** 一条学习记录的来源。三种来源产出同一种 `StudySession`。 */
 export type SessionSource = 'paperTime' | 'paperGrid' | 'appTimer';

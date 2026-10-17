@@ -7,12 +7,21 @@ import {
   PAPER_SIZES,
   type PageLayout,
   type PaperId,
+  ROW_HEIGHT_MM,
+  type ScheduleBlock,
   type TimeLogBlock,
 } from '@gofor/core/print';
 
 /** 纸面渲染需要的数据。刻意保持扁平，方便以后换成任意来源。 */
 export interface SheetData {
   tasks: Task[];
+  /**
+   * 当日课表，已按时间排好序；没有课就是空数组。
+   *
+   * 时间与科目名在宿主里算好再传进来：打印层只认「一行两列」的扁平数据，
+   * 这样模板以后换数据源（手填、导入）时不用跟着改渲染。
+   */
+  schedule?: { time: string; label: string }[];
 }
 
 export interface PrintSheetProps {
@@ -74,6 +83,76 @@ function CheckboxListView({ block, data }: { block: CheckboxListBlock; data: She
   );
 }
 
+/**
+ * 当日课表。
+ *
+ * 行高与 checkboxList 一致（7mm），因为两者都是"一行一个条目"的书写行；
+ * 高度必须等于 blockHeightMm 的 `8 + rows * 7`，否则分页会算错。
+ * 数据多于 rows 时**不撑开版面**，而是把截断提示压在最后一行右侧，
+ * 否则"预览好好的、打出来错位"——这个项目最不能接受的失败。
+ */
+function ScheduleView({ block, data }: { block: ScheduleBlock; data: SheetData }) {
+  const entries = data.schedule ?? [];
+  const hidden = Math.max(0, entries.length - block.rows);
+
+  return (
+    <div>
+      <div style={{ fontSize: mm(3), fontWeight: 600, marginBottom: mm(1) }}>{block.title}</div>
+      {Array.from({ length: block.rows }, (_, index) => {
+        const entry = entries[index];
+        // 截断提示只落在最后一行，避免额外多出一行把固定高度撑破。
+        const overflow = index === block.rows - 1 ? hidden : 0;
+        return (
+          <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: 课表行是固定长度的位置槽位
+            key={`schedule-row-${index}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: mm(2),
+              height: mm(ROW_HEIGHT_MM),
+              borderBottom: `${mm(0.2)} solid #dcdad2`,
+            }}
+          >
+            <span
+              style={{
+                width: mm(12),
+                flex: 'none',
+                fontSize: mm(3),
+                color: '#6b7280',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {entry?.time ?? ''}
+            </span>
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                textOverflow: 'ellipsis',
+                fontSize: mm(3.4),
+              }}
+            >
+              {entry?.label ?? ''}
+            </span>
+            {overflow > 0 ? (
+              <span style={{ flex: 'none', fontSize: mm(2.6), color: '#6b7280' }}>
+                {`+${overflow} 节课见 App`}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
+      {/* rows 为 0 时没有"最后一行"可放提示，单独补一行，别让数据静默消失。 */}
+      {block.rows === 0 && hidden > 0 ? (
+        <div style={{ fontSize: mm(2.8), color: '#6b7280' }}>{`+${hidden} 节课见 App`}</div>
+      ) : null}
+    </div>
+  );
+}
+
 /** 一个空的时间槽。用描边而不是下划线：手写在框里不容易写出界。 */
 function TimeSlot() {
   return (
@@ -124,6 +203,8 @@ function BlockView({ block, data }: { block: Block; data: SheetData }) {
       return <TitleBlockView text={block.text} />;
     case 'checkboxList':
       return <CheckboxListView block={block} data={data} />;
+    case 'schedule':
+      return <ScheduleView block={block} data={data} />;
     case 'timeLog':
       return <TimeLogView block={block} />;
     case 'slots':

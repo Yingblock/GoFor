@@ -1,5 +1,5 @@
 import { newId, systemClock } from '@gofor/core';
-import { dateKey } from '@gofor/core/domain';
+import { dateKey, type Subject } from '@gofor/core/domain';
 import {
   type Occurrence,
   occurrencesOn,
@@ -7,10 +7,21 @@ import {
   type Term,
   type TimetableData,
 } from '@gofor/core/timetable';
-import { db, loadTimetable, saveTimetable } from '@gofor/store';
+import {
+  createSubject,
+  db,
+  deleteSubject,
+  listSubjects,
+  loadTimetable,
+  renameSubject,
+  saveTimetable,
+} from '@gofor/store';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const TERM_ID = 'default';
+
+/** 科目被删掉后，规则里指向它的 courseId 只剩一个"没有名字的 id"。 */
+const UNKNOWN_SUBJECT_LABEL = '未知科目（已删除）';
 
 const DEFAULT_PERIODS = [
   { index: 1, start: '08:00', end: '08:45' },
@@ -45,6 +56,8 @@ function defaultData(): TimetableData {
   const term: Term = { id: TERM_ID, startDate: mondayOf(dateKey(systemClock)), weeks: 20 };
   return {
     term,
+    // 旧版课表自带一份 courses；现在科目统一走 Dexie 的 subjects 表。
+    // 字段留着只是因为 TimetableData 的类型定义还在用，页面不再读也不再写它。
     courses: [],
     rules: [],
     overrides: [],
@@ -60,6 +73,8 @@ function defaultData(): TimetableData {
 function asTimetable(raw: unknown): TimetableData | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const candidate = raw as Partial<TimetableData>;
+  // `courses` 已经是历史字段，但旧数据里仍然有；只做"存在且是数组"的兼容检查，
+  // 不因为它是空数组就判定数据损坏。
   if (!Array.isArray(candidate.courses)) return null;
   if (!Array.isArray(candidate.rules)) return null;
   if (!Array.isArray(candidate.overrides)) return null;
@@ -74,15 +89,34 @@ function asTimetable(raw: unknown): TimetableData | null {
   return candidate as TimetableData;
 }
 
-/** P1·M2 课程表：录入 + 周视图。 */
+/**
+ * P1·M2 课程表：科目 + 规则录入 + 周视图。
+ *
+ * **科目只存一份**：课表不再维护自己的 `TimetableData.courses`，而是直接读写
+ * Dexie 的 `subjects` 表（番茄钟、作业也用这张表）。
+ * 为什么：两套科目必然漂移——课表里加的科目番茄钟看不到，改个名还得两处同步；
+ * 规则里只存 `courseId = subject.id`，改名只改 subjects 一行，所有引用自动跟着变。
+ * 代价是删科目不能级联删规则，否则就是静默的数据丢失，所以删除走行内二次确认。
+ *
+ * 旧数据的 `courseId` 是旧版自建课程的 id，在 subjects 里查不到；
+ * 那种情况按「未知科目（已删除）」降级显示，不崩、也不偷偷改用户的规则。
+ */
 export function TimetableScreen() {
   const [data, setData] = useState<TimetableData | null>(null);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjectError, setSubjectError] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(mondayOf(dateKey(systemClock)));
   const [saved, setSaved] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
 
+  /** 科目是全局数据，每次写完都重新拉一遍，保证改名/删除立刻反映到规则和周视图。 */
+  const refreshSubjects = useCallback(async () => {
+    setSubjects(await listSubjects(db));
+  }, []);
+
   useEffect(() => {
     void (async () => {
+      await refreshSubjects();
       const raw = await loadTimetable(db, TERM_ID);
       if (raw === undefined) {
         setData(defaultData());
@@ -96,7 +130,7 @@ export function TimetableScreen() {
         setData(defaultData());
       }
     })();
-  }, []);
+  }, [refreshSubjects]);
 
   const weekDates = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
@@ -110,6 +144,12 @@ export function TimetableScreen() {
     return new Map(weekDates.map((date) => [date, occurrencesOn(date, data)]));
   }, [data, weekDates]);
 
+  /** courseId → 科目。用 Map 是因为规则列表和周视图每帧都要查几十次。 */
+  const subjectById = useMemo(
+    () => new Map<string, Subject>(subjects.map((subject) => [subject.id, subject])),
+    [subjects],
+  );
+
   const update = useCallback((patch: (current: TimetableData) => TimetableData) => {
     setData((current) => (current ? patch(current) : current));
     setSaved(false);
@@ -117,17 +157,51 @@ export function TimetableScreen() {
 
   const save = useCallback(async () => {
     if (!data) return;
+    // 只存课表自己的数据（学期/作息/规则/覆盖）；科目在 subjects 表里，不在这里重复存一份。
     await saveTimetable(db, TERM_ID, data, Date.now());
     setSaved(true);
     setWarning(null);
   }, [data]);
+
+  /** 科目写操作统一收口：失败提示 + 成功后刷新，避免三处各写一遍 try/catch。 */
+  const runSubjectWrite = useCallback(
+    async (action: () => Promise<unknown>) => {
+      try {
+        await action();
+        await refreshSubjects();
+        setSubjectError(null);
+      } catch {
+        setSubjectError('科目没保存成功，请再试一次。');
+      }
+    },
+    [refreshSubjects],
+  );
+
+  const handleCreateSubject = useCallback(
+    async (name: string) => runSubjectWrite(() => createSubject(db, name)),
+    [runSubjectWrite],
+  );
+
+  const handleRenameSubject = useCallback(
+    async (id: string, name: string) => runSubjectWrite(() => renameSubject(db, id, name)),
+    [runSubjectWrite],
+  );
+
+  const handleDeleteSubject = useCallback(
+    async (id: string) => runSubjectWrite(() => deleteSubject(db, id)),
+    [runSubjectWrite],
+  );
 
   if (!data) {
     return <div className="text-sm opacity-50">加载课表…</div>;
   }
 
   const periodCount = data.periods.length;
-  const courseName = (id: string) => data.courses.find((item) => item.id === id)?.name ?? '?';
+
+  /** 查不到名字返回 null（科目被删/旧数据），由展示层决定怎么降级。 */
+  const courseName = (id: string): string | null => subjectById.get(id)?.name ?? null;
+  /** 给 aria-label / title 用的一句话名称。 */
+  const courseLabel = (id: string): string => courseName(id) ?? UNKNOWN_SUBJECT_LABEL;
 
   return (
     <div className="space-y-8">
@@ -243,22 +317,34 @@ export function TimetableScreen() {
         </button>
       </section>
 
-      {/* B. 课程与规则 */}
+      {/* B. 科目与规则 */}
       <section className="space-y-3">
         <h2 className="text-sm font-medium opacity-50">课程与规则</h2>
-        <CourseAdder
-          onAdd={(name) =>
-            update((current) => ({
-              ...current,
-              courses: [...current.courses, { id: newId(), name }],
-            }))
-          }
+
+        {/* B1. 科目管理：增 / 改名 / 删。科目只有这一份，其他页面共用。 */}
+        <h3 className="text-xs font-medium opacity-50">科目（全局共用）</h3>
+        <p className="text-[11px] leading-relaxed opacity-40">
+          科目只存一份，番茄钟、作业、课表都读它，所以在这里改名或新增，别的页面也会跟着变。
+        </p>
+        {subjectError ? (
+          <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {subjectError}
+          </p>
+        ) : null}
+        <SubjectManager
+          subjects={subjects}
+          onCreate={handleCreateSubject}
+          onRename={handleRenameSubject}
+          onDelete={handleDeleteSubject}
         />
-        {data.courses.length === 0 ? (
-          <p className="text-xs opacity-40">先加一门课，再排时间。</p>
+
+        {/* B2. 排课规则：下拉列科目名，选中后规则里存 subject.id。 */}
+        <h3 className="pt-2 text-xs font-medium opacity-50">排课规则</h3>
+        {subjects.length === 0 ? (
+          <p className="text-xs opacity-40">先在上面加一门科目，再排时间。</p>
         ) : (
           <RuleAdder
-            courses={data.courses}
+            subjects={subjects}
             periodCount={periodCount}
             onAdd={(rule) => update((current) => ({ ...current, rules: [...current.rules, rule] }))}
           />
@@ -267,7 +353,9 @@ export function TimetableScreen() {
         <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
           {data.rules.map((rule) => (
             <li key={rule.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
-              <span className="font-medium">{courseName(rule.courseId)}</span>
+              <span className="font-medium">
+                <CourseLabel id={rule.courseId} lookup={subjectById} />
+              </span>
               <span className="opacity-50">
                 {rule.byDay.map((day) => DAY_LABELS[day - 1]).join('、')} · 第 {rule.startPeriod} 节
                 {rule.span && rule.span > 1 ? ` 连 ${rule.span} 节` : ''} ·{' '}
@@ -276,7 +364,7 @@ export function TimetableScreen() {
               <span className="flex-1" />
               <input
                 type="date"
-                aria-label={`${courseName(rule.courseId)} 停课日期`}
+                aria-label={`${courseLabel(rule.courseId)} 停课日期`}
                 onChange={(event) => {
                   const date = event.target.value;
                   if (!date) return;
@@ -385,9 +473,13 @@ export function TimetableScreen() {
                     gridColumn: column + 2,
                     gridRow: `${occurrence.startPeriod + 1} / span ${occurrence.span}`,
                   }}
-                  title={`${courseName(occurrence.courseId)} ${occurrence.startMinute}-${occurrence.endMinute}`}
+                  title={`${courseLabel(occurrence.courseId)} ${occurrence.startMinute}-${occurrence.endMinute}`}
                 >
-                  {courseName(occurrence.courseId)}
+                  <CourseLabel
+                    id={occurrence.courseId}
+                    lookup={subjectById}
+                    unknownClassName="text-white/60"
+                  />
                 </div>
               )),
             )}
@@ -409,65 +501,217 @@ export function TimetableScreen() {
   );
 }
 
-function CourseAdder({ onAdd }: { onAdd: (name: string) => void }) {
-  const [name, setName] = useState('');
+/**
+ * 科目名展示。
+ *
+ * 查不到就降级成灰字「未知科目（已删除）」：旧数据的 courseId 指向旧版课程表，
+ * 或者科目刚被删，都走这条路。绝不因为查不到就渲染 `?` 或直接崩。
+ */
+function CourseLabel({
+  id,
+  lookup,
+  unknownClassName = 'italic text-black/40',
+}: {
+  id: string;
+  lookup: ReadonlyMap<string, Subject>;
+  /** 深色课程块里默认的灰色读不清，所以允许调用方覆盖。 */
+  unknownClassName?: string;
+}) {
+  const subject = lookup.get(id);
+  if (subject) return <>{subject.name}</>;
+  return <span className={unknownClassName}>{UNKNOWN_SUBJECT_LABEL}</span>;
+}
+
+/**
+ * 科目管理：新增 / 改名 / 删除。
+ *
+ * 所有写操作都直接落 `subjects` 表，并立即刷新列表；
+ * 课表规则只存科目 id，所以改名不需要碰任何规则。
+ * 删除不级联清规则（那是静默丢数据），改为行内二次确认 + 明确后果说明。
+ */
+function SubjectManager({
+  subjects,
+  onCreate,
+  onRename,
+  onDelete,
+}: {
+  subjects: Subject[];
+  onCreate: (name: string) => Promise<void>;
+  onRename: (id: string, name: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  const submitDraft = () => {
+    const name = draft.trim();
+    if (!name) return;
+    setDraft('');
+    void onCreate(name);
+  };
+
+  const submitRename = (id: string) => {
+    const name = editingName.trim();
+    if (!name) return;
+    setEditingId(null);
+    setEditingName('');
+    void onRename(id, name);
+  };
+
   return (
-    <div className="flex gap-2">
-      <input
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key !== 'Enter') return;
-          const value = name.trim();
-          if (value) {
-            onAdd(value);
-            setName('');
-          }
-        }}
-        placeholder="课程名，如 数学"
-        className="w-40 rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 text-xs outline-none"
-      />
-      <button
-        type="button"
-        onClick={() => {
-          const value = name.trim();
-          if (!value) return;
-          onAdd(value);
-          setName('');
-        }}
-        className="rounded-lg border border-black/10 px-3 py-1.5 text-xs"
-      >
-        加课程
-      </button>
+    <div className="space-y-2">
+      <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
+        {subjects.length === 0 ? (
+          <li className="px-3 py-2 text-xs opacity-40">还没有科目，在下面加一个，比如「数学」。</li>
+        ) : null}
+        {subjects.map((subject) => {
+          const editing = editingId === subject.id;
+          const confirming = pendingDeleteId === subject.id;
+          return (
+            <li key={subject.id} className="px-3 py-2 text-xs">
+              {editing ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={editingName}
+                    onChange={(event) => setEditingName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        setEditingId(null);
+                        return;
+                      }
+                      if (event.key === 'Enter') submitRename(subject.id);
+                    }}
+                    aria-label={`${subject.name} 的新名称`}
+                    className="w-40 rounded border border-black/10 bg-white/70 px-2 py-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => submitRename(subject.id)}
+                    className="rounded-lg bg-[var(--color-ink)] px-3 py-1 text-white"
+                  >
+                    保存
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    className="rounded-lg border border-black/10 px-3 py-1"
+                  >
+                    取消
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{subject.name}</span>
+                  <span className="flex-1" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingDeleteId(null);
+                      setEditingId(subject.id);
+                      setEditingName(subject.name);
+                    }}
+                    className="text-[11px] opacity-40 hover:opacity-70"
+                  >
+                    改名
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingDeleteId(confirming ? null : subject.id)}
+                    className="text-[11px] opacity-40 hover:text-red-500 hover:opacity-90"
+                  >
+                    删除
+                  </button>
+                </div>
+              )}
+
+              {confirming ? (
+                <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800">
+                  <p>
+                    已排的规则不会自动清除，会显示为「未知科目（已删除）」，需要你到下面自己删规则。
+                  </p>
+                  <div className="mt-1.5 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingDeleteId(null);
+                        void onDelete(subject.id);
+                      }}
+                      className="rounded bg-amber-600 px-2 py-1 text-white"
+                    >
+                      确认删除
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeleteId(null)}
+                      className="rounded border border-amber-400 px-2 py-1"
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') submitDraft();
+          }}
+          placeholder="科目名，如 数学"
+          aria-label="新科目名"
+          className="w-40 rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 text-xs outline-none"
+        />
+        <button
+          type="button"
+          onClick={submitDraft}
+          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs"
+        >
+          加科目
+        </button>
+      </div>
     </div>
   );
 }
 
 function RuleAdder({
-  courses,
+  subjects,
   periodCount,
   onAdd,
 }: {
-  courses: { id: string; name: string }[];
+  subjects: Subject[];
   periodCount: number;
   onAdd: (rule: Rule) => void;
 }) {
-  const [courseId, setCourseId] = useState(courses[0]?.id ?? '');
+  const [courseId, setCourseId] = useState(subjects[0]?.id ?? '');
   const [days, setDays] = useState<number[]>([1]);
   const [startPeriod, setStartPeriod] = useState(1);
   const [span, setSpan] = useState(1);
   const [intervalWeeks, setIntervalWeeks] = useState<1 | 2>(1);
 
+  // 选中的科目可能刚在管理区被删掉；这种情况下退回第一个科目，
+  // 而不是留一个已经不存在、会让 select 显示空白的 id。
+  const activeCourseId = subjects.some((subject) => subject.id === courseId)
+    ? courseId
+    : (subjects[0]?.id ?? '');
+
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-black/[0.12] p-2 text-xs">
       <select
-        value={courseId}
+        value={activeCourseId}
         onChange={(event) => setCourseId(event.target.value)}
+        aria-label="科目"
         className="rounded border border-black/10 bg-white/70 px-2 py-1"
       >
-        {courses.map((course) => (
-          <option key={course.id} value={course.id}>
-            {course.name}
+        {subjects.map((subject) => (
+          <option key={subject.id} value={subject.id}>
+            {subject.name}
           </option>
         ))}
       </select>
@@ -534,10 +778,12 @@ function RuleAdder({
       <button
         type="button"
         onClick={() => {
-          if (!courseId || days.length === 0) return;
+          if (!activeCourseId || days.length === 0) return;
           onAdd({
             id: newId(),
-            courseId,
+            // 这里存的是 subjects 表的科目 id（不是旧版自建课程 id），
+            // 所以番茄钟/作业和课表看到的是同一个科目。
+            courseId: activeCourseId,
             byDay: days,
             intervalWeeks,
             startPeriod,

@@ -1,13 +1,17 @@
 import { systemClock } from '@gofor/core';
 import { type AppConfig, mergeConfig } from '@gofor/core/config';
-import { dateKey, type Task } from '@gofor/core/domain';
+import { dateKey, type Subject, type Task } from '@gofor/core/domain';
 import { type Block, materialize, type PaperId, paperFor } from '@gofor/core/print';
+import { occurrencesOn, type TimetableData } from '@gofor/core/timetable';
 import {
   currentConfigOrDefault,
   db,
+  ensureSubjects,
   exportAll,
   importAll,
+  listSubjects,
   listTasks,
+  loadTimetable,
   saveConfig,
 } from '@gofor/store';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -30,6 +34,46 @@ function todayLabel(date: string): string {
   return `${year} 年 ${Number(month)} 月 ${Number(day)} 日`;
 }
 
+/** 与课表页共用同一个库内 id；P1 只有一个学期。 */
+const TIMETABLE_ID = 'default';
+
+/** 当日课表在纸面上的一行：时间 + 科目名。 */
+interface ScheduleEntry {
+  time: string;
+  label: string;
+}
+
+/** 当日第几分钟 → 'HH:mm'。纸面只认字符串，格式化留在宿主层做。 */
+function clockLabel(minute: number): string {
+  const hours = Math.floor(minute / 60);
+  const minutes = minute % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+/**
+ * 库里的课表可能是导入的坏 JSON，所以读取必须防御：形状不对就当「没有课表」。
+ *
+ * 除了需求点名的 `term` / `periods` / `rules`，这里还要求 `courses` / `overrides` /
+ * `weekPatterns` 是数组——`occurrencesOn` 会直接遍历后两者，缺了会抛异常。
+ * `startDate` 只做 `YYYY-MM-DD` 形态检查，真正的日期合法性由展开函数兜住。
+ */
+function asTimetable(raw: unknown): TimetableData | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const candidate = raw as Partial<TimetableData>;
+  if (!Array.isArray(candidate.courses)) return null;
+  if (!Array.isArray(candidate.rules)) return null;
+  if (!Array.isArray(candidate.overrides)) return null;
+  if (!Array.isArray(candidate.periods)) return null;
+  if (!Array.isArray(candidate.weekPatterns)) return null;
+  const term = candidate.term;
+  if (typeof term !== 'object' || term === null) return null;
+  if (typeof term.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(term.startDate)) {
+    return null;
+  }
+  if (typeof term.weeks !== 'number') return null;
+  return candidate as TimetableData;
+}
+
 export function App() {
   const today = dateKey(systemClock);
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -41,8 +85,46 @@ export function App() {
 
   const tasks = useLiveQuery(() => listTasks(db), [], [] as Task[]);
 
+  // 课表存在 Dexie 里是 `unknown`（导入可能带进坏数据），用上面的守卫收窄。
+  const timetable = useLiveQuery(() => loadTimetable(db, TIMETABLE_ID), [], undefined);
+  const subjects = useLiveQuery(() => listSubjects(db), [], [] as Subject[]);
+
+  /**
+   * 当日课表：从 Dexie 一路算到纸面的一行。
+   *
+   * 没有课表 / 课表坏了 / 今天没课，一律给空数组——打印层据此留空行，
+   * 而不是报错或跳过这块版式（版式高度是固定的）。
+   */
+  const schedule = useMemo<ScheduleEntry[]>(() => {
+    const data = asTimetable(timetable);
+    if (!data) return [];
+
+    const subjectNames = new Map(subjects.map((subject) => [subject.id, subject.name]));
+    const courseNames = new Map(data.courses.map((course) => [course.id, course.name]));
+
+    try {
+      const occurrences = occurrencesOn(today, data).sort((a, b) => a.startMinute - b.startMinute);
+      return occurrences.map((occurrence) => ({
+        time: clockLabel(occurrence.startMinute),
+        // 优先按 id 对到科目表；课表里的 Course 是本地快照，对不上时退回它自己的名字，
+        // 免得纸上印出一串 id。
+        label:
+          subjectNames.get(occurrence.courseId) ??
+          courseNames.get(occurrence.courseId) ??
+          occurrence.courseId,
+      }));
+    } catch {
+      // 形状检查挡不住数组元素里的坏字段（比如 period.start 不是字符串），
+      // 宁可纸面上没有课表，也不能让整个 App 白屏。
+      return [];
+    }
+  }, [subjects, timetable, today]);
+
   useEffect(() => {
     void currentConfigOrDefault(db).then((result) => setConfig(result.config));
+    // 科目是全局共享的（课表 / 番茄钟 / 作业都用它）。
+    // 在启动时统一播种，避免"先打开哪个页面决定有没有科目"的不一致。
+    void ensureSubjects(db);
   }, []);
 
   useEffect(() => {
@@ -125,7 +207,7 @@ export function App() {
       case 'timetable':
         return <TimetableScreen />;
       case 'templates':
-        return <TemplateEditorScreen />;
+        return <TemplateEditorScreen schedule={schedule} />;
       case 'pomodoro':
         return <Pomodoro />;
       case 'print':
@@ -134,6 +216,7 @@ export function App() {
             blocks={blocks}
             paper={paper}
             tasks={tasks}
+            schedule={schedule}
             onChangePaper={(next) => void changePaper(next)}
           />
         );
@@ -210,7 +293,7 @@ export function App() {
       </div>
 
       {/* 打印层必须在 .screen-only 之外，否则打印时被一起隐藏成白纸 */}
-      <PrintLayer blocks={blocks} paper={paper} data={{ tasks }} />
+      <PrintLayer blocks={blocks} paper={paper} data={{ tasks, schedule }} />
 
       <input
         ref={fileInputRef}

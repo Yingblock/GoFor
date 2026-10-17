@@ -4,6 +4,7 @@ import type {
   StoredTimetable,
   StudySession,
   Subject,
+  TagPool,
   Task,
 } from '@gofor/core/domain';
 import type { PomodoroRun } from '@gofor/core/pomodoro';
@@ -33,6 +34,7 @@ export class GoForDb extends Dexie {
   focusRuns!: Table<PomodoroRun, string>;
   checkins!: Table<Checkin, string>;
   timetables!: Table<StoredTimetable, string>;
+  tagPools!: Table<TagPool, string>;
 
   constructor(name = 'gofor') {
     super(name);
@@ -56,6 +58,23 @@ export class GoForDb extends Dexie {
       focusRuns: 'id, status, createdAt',
       checkins: 'date',
       timetables: 'id',
+    });
+
+    // v3：标签池。
+    //
+    // 为什么必须新开一个版本而不是塞进 v2：Dexie 只按版本号决定跑不跑升级函数。
+    // 已经停在 v2 的浏览器库不会因为"v2 的 stores 里多写了一行"而补建表，
+    // 结果就是 `listTagPools` 直接报「表不存在」。只要发布过，版本就冻结了。
+    this.version(3).stores({
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+      focusRuns: 'id, status, createdAt',
+      checkins: 'date',
+      timetables: 'id',
+      tagPools: 'id',
     });
   }
 }

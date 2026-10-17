@@ -59,6 +59,20 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 测试：core 161 + store 19 = **180 单测**；e2e **16 项**。
 
+### 初版使用反馈修复（2026-xx）
+
+| 反馈 | 处理 |
+|---|---|
+| 番茄钟要能自定义时长 | 快捷项旁加数字输入（1–180 分钟），开始按钮同步显示 |
+| 专注要全屏 | 运行态改为 `fixed inset-0` 遮罩，纯 CSS（不用 Fullscreen API） |
+| 放弃要二次确认 | 第一次点击变「确认放弃？」，3 秒无操作自动收回 |
+| 作业要支持标签 | 新增标签池：科目为虚拟池（不落库），用户可自建池与标签 |
+| 子项意义不明且点不动 | 改名「步骤」，整行 label 可点、行内输入新建 |
+| 科目要全局共用 | 课表改为读 `subjects` 表，科目增删改一处生效 |
+| 模板要能放当日课表 | 新增 `schedule` 区块，内置「我的一天」已含该区块 |
+| 要更多纸张尺寸 | 9 种（含 B5 JIS 182×257 与 B5 ISO 176×250 单列） |
+| 首页复选框不可选 | 换成真 checkbox，勾掉即从列表消失 |
+
 ### P1 期间的已知简化（写进 LATER，不是缺陷）
 
 - 课表调课只做「停课一次」，`move` / `replace` 未接 UI
@@ -85,6 +99,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 在 `liveQuery` 里写库 | `ReadOnlyError`，整棵组件树白屏 | 配置读取拆成 `readConfig`（只读）/ `currentConfigOrDefault`（启动时修复一次） |
 | 打印层嵌在 `.screen-only` 里 | 打出来是白纸（PDF 只有 938 字节） | `PrintLayer` 必须渲染在 `.screen-only` **之外**；e2e 用 PDF 体积 + 渲染兜住 |
 | `@gofor/core` 根导出带 zod | 只用到时钟的宿主也打进 46KB zod | 子路径导出：`@gofor/core/config`、`/print`、`/paper`、`/domain` |
+| 往已发布的 Dexie 版本里加表 | 老库不会补建，运行时「表不存在」 | 必须新开 `version(N+1)`；已补 v2→v3 迁移测试 |
 | 主 session 里跑 build/e2e/下载 | 用户白等 10–40 分钟，上下文被日志淹没 | **长任务一律子代理或后台作业**，见 AGENTS.md §0 |
 | Biome 扫到 Capacitor 生成的 Java/XML | 4000+ 假错误，`pnpm check` 直接失败 | `biome.json` 的 `files.includes` 排除 `apps/web/android` |
 

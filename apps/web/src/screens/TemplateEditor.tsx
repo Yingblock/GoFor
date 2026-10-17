@@ -6,6 +6,7 @@ import {
   CALIBRATION_TEMPLATE,
   layout,
   materialize,
+  PAPER_IDS,
   PAPER_SIZES,
   type PaperId,
   type PrintTemplate,
@@ -16,7 +17,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PrintPreview } from '../print/PrintSheet.tsx';
 
-const PAPER_OPTIONS: PaperId[] = ['A4', 'A5'];
+// 直接复用 core 的纸张清单：再手写一份数组就会在新增尺寸时悄悄过期。
+const PAPER_OPTIONS: readonly PaperId[] = PAPER_IDS;
 
 /** 可加进模板的区块种类与默认值。 */
 const BLOCK_PRESETS: Record<string, () => Block> = {
@@ -38,6 +40,7 @@ const BLOCK_PRESETS: Record<string, () => Block> = {
     label: '时段',
   }),
   linedBox: () => ({ id: newId(), kind: 'linedBox', span: 12, label: '备注', lines: 3 }),
+  schedule: () => ({ id: newId(), kind: 'schedule', span: 12, rows: 8, title: '今日课表' }),
   hintLine: () => ({
     id: newId(),
     kind: 'hintLine',
@@ -77,8 +80,13 @@ function hasRows(block: Block): block is Block & { rows: number } {
   return 'rows' in block && typeof (block as { rows?: unknown }).rows === 'number';
 }
 
+export interface TemplateEditorScreenProps {
+  /** 当日课表，已排序；没有课就是空数组。编辑器只做预览，不负责算课表。 */
+  schedule: { time: string; label: string }[];
+}
+
 /** P1·M3 模板与校准页：选模板、改区块、换纸张、预览、打印。 */
-export function TemplateEditorScreen() {
+export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
   const today = dateKey(systemClock);
   const [selectedId, setSelectedId] = useState<string>(BUILTIN_TEMPLATES[0]?.id ?? 'day');
   const [paper, setPaper] = useState<PaperId>('A4');
@@ -391,7 +399,7 @@ export function TemplateEditorScreen() {
         <PrintPreview
           blocks={blocks}
           paper={currentTemplate.paper}
-          data={{ tasks: [] as Task[] }}
+          data={{ tasks: [] as Task[], schedule }}
         />
         {selectedId === CALIBRATION_TEMPLATE.id ? (
           <p className="text-[11px] leading-relaxed opacity-45">

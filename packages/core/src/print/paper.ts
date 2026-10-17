@@ -7,7 +7,17 @@
  */
 
 /** 纸张标识。与配置里的 `print.paper` 共用同一份常量，避免两处枚举漂移。 */
-export const PAPER_IDS = ['A4', 'A5', 'B5', 'index-card', 'sticker-50x30'] as const;
+export const PAPER_IDS = [
+  'A4',
+  'A5',
+  'A6',
+  'B5',
+  'B5-ISO',
+  'B6',
+  'letter',
+  'index-card',
+  'sticker-50x30',
+] as const;
 export type PaperId = (typeof PAPER_IDS)[number];
 
 export interface PaperSize {
@@ -19,10 +29,20 @@ export interface PaperSize {
   heightMm: number;
 }
 
+/**
+ * 纸张尺寸（毫米，竖版短边×长边）。
+ *
+ * 注意 B5 有两种：**JIS B5 = 182×257**（国内笔记本/试卷常用），
+ * ISO B5 = 176×250。两者差 6–7mm，打印时会被缩放，所以必须分开。
+ */
 export const PAPER_SIZES: Record<PaperId, PaperSize> = {
   A4: { id: 'A4', name: 'A4', widthMm: 210, heightMm: 297 },
   A5: { id: 'A5', name: 'A5', widthMm: 148, heightMm: 210 },
-  B5: { id: 'B5', name: 'B5', widthMm: 176, heightMm: 250 },
+  A6: { id: 'A6', name: 'A6', widthMm: 105, heightMm: 148 },
+  B5: { id: 'B5', name: 'B5 (JIS)', widthMm: 182, heightMm: 257 },
+  'B5-ISO': { id: 'B5-ISO', name: 'B5 (ISO)', widthMm: 176, heightMm: 250 },
+  B6: { id: 'B6', name: 'B6', widthMm: 128, heightMm: 182 },
+  letter: { id: 'letter', name: 'Letter', widthMm: 215.9, heightMm: 279.4 },
   'index-card': { id: 'index-card', name: '索引卡 (3×5 in)', widthMm: 76.2, heightMm: 127 },
   'sticker-50x30': { id: 'sticker-50x30', name: '标签 50×30', widthMm: 50, heightMm: 30 },
 };

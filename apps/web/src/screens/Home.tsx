@@ -1,7 +1,7 @@
 import { systemClock } from '@gofor/core';
 import { dateKey, type StudySession, type Subject, type Task } from '@gofor/core/domain';
 import { dayTotal, minutesOf, streakDays } from '@gofor/core/stats';
-import { db, listSubjects } from '@gofor/store';
+import { db, listSubjects, setTaskDone } from '@gofor/store';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo } from 'react';
 
@@ -164,7 +164,18 @@ export function Home({ tasks, onNavigate }: HomeProps) {
           <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
             {unfinished.map((task) => (
               <li key={task.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                <span className="size-3 rounded-sm border border-black/25" />
+                {/*
+                  这里只列未完成任务，所以勾选后直接写 done=true；
+                  写完 tasks 的 liveQuery 会刷新，这一条自动从列表里消失，
+                  因此不需要维护本地 checked 状态。
+                */}
+                <input
+                  type="checkbox"
+                  aria-label={`完成 ${task.title}`}
+                  checked={false}
+                  onChange={() => void setTaskDone(db, task.id, true, Date.now())}
+                  className="size-4 shrink-0"
+                />
                 <span className="flex-1">{task.title}</span>
                 {task.due ? <span className="text-[11px] opacity-40">{task.due}</span> : null}
               </li>
