@@ -16,6 +16,7 @@
     "@gofor/store": "workspace:*",
     "@gofor/ui": "workspace:*",
     "@gofor/vision": "workspace:*",
+    "@zxing/library": "^0.21.3",
     "dexie-react-hooks": "^4.4.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

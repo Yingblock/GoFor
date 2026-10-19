@@ -435,9 +435,12 @@ function BarcodeStrip({ page, data }: { page: PageLayout; data: SheetData }) {
     0,
     ...page.placements.map((placement) => placement.yMm + placement.heightMm),
   );
-  const heightMm = 4.6;
+  // 8mm 高：一维码要靠"一行像素"穿过它，纸在照片里一斜（3° 就有约 7mm 的纵向漂移），
+  // 条太矮时任何一行扫描都会在中途跑出条码。8mm 把容忍角提高到约 3°，同时仍塞得进
+  // 默认页边距。空间不够时按可用高度缩，最少 3mm。
+  const heightMm = Math.min(8, page.heightMm - 0.4 - (contentBottom + 1));
+  if (heightMm < 3) return null;
   const topMm = contentBottom + 1;
-  if (topMm + heightMm > page.heightMm - 0.4) return null;
 
   // 0.6mm 是"手机拍 2000px 还能稳解"的舒适区；纸太窄时按可用宽度缩，
   // 但不低于 0.3mm（再小就只是装饰了）。

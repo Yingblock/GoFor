@@ -15,6 +15,14 @@ import {
   inkRatio as visionInkRatio,
   warpQuad,
 } from '@gofor/vision';
+import {
+  BarcodeFormat,
+  BinaryBitmap,
+  DecodeHintType,
+  HybridBinarizer,
+  MultiFormatReader,
+  RGBLuminanceSource,
+} from '@zxing/library';
 
 /** 矫正后的目标宽度（像素）。1000 宽对 A4 来说每格约 40px，足够判"有没有墨"。 */
 const WARP_WIDTH = 1000;
@@ -201,6 +209,130 @@ export function readBarcodeFromPhoto(image: ImageDataLike, quad: Quad): SheetCod
   return null;
 }
 
+/**
+ * ZXing 1D 解码（P2-2.12）。
+ *
+ * 为什么不再自己扫行：手写解码要求条码几乎水平、模块 ≥4px、逐行对齐，
+ * 真实照片里一有旋转/透视/光照不均就废。ZXing 是成熟实现，内部会多行采样、
+ * 局部二值化、TRY_HARDER 重试；实测用户的两张真实照片（1440×1920、1080×2340，
+ * 轻微旋转 + 反光）都能在原生分辨率直接解出。
+ *
+ * 不依赖四角矫正：直接吃原图，解出后用结果点做"是否在框内"校验（见 readSheet）。
+ */
+interface BarcodeHit {
+  text: string;
+  /** 解码结果在**原图**里的中心点；ZXing 没给点时是 undefined。 */
+  center?: { x: number; y: number };
+}
+
+function resolveBarcodeCenter(
+  points: readonly { getX(): number; getY(): number }[] | null | undefined,
+  offsetX = 0,
+  offsetY = 0,
+): { x: number; y: number } | undefined {
+  if (points === null || points === undefined || points.length === 0) return undefined;
+  let sumX = 0;
+  let sumY = 0;
+  for (const point of points) {
+    sumX += point.getX();
+    sumY += point.getY();
+  }
+  return { x: sumX / points.length + offsetX, y: sumY / points.length + offsetY };
+}
+
+/** RGBA → ZXing 要的 ARGB Int32 像素。 */
+function toArgb(image: ImageDataLike): Int32Array {
+  const pixels = new Int32Array(image.width * image.height);
+  const data = image.data;
+  for (let index = 0; index < pixels.length; index += 1) {
+    const base = index * 4;
+    pixels[index] =
+      (255 << 24) |
+      ((data[base] ?? 0) << 16) |
+      ((data[base + 1] ?? 0) << 8) |
+      (data[base + 2] ?? 0);
+  }
+  return pixels;
+}
+
+function decodeWithZxing(
+  image: ImageDataLike,
+  formats: readonly BarcodeFormat[],
+  offset?: { x: number; y: number },
+): BarcodeHit | null {
+  const reader = new MultiFormatReader();
+  const hints = new Map<DecodeHintType, unknown>();
+  hints.set(DecodeHintType.TRY_HARDER, true);
+  hints.set(DecodeHintType.POSSIBLE_FORMATS, [...formats]);
+  try {
+    const source = new RGBLuminanceSource(toArgb(image), image.width, image.height);
+    const bitmap = new BinaryBitmap(new HybridBinarizer(source));
+    const result = reader.decode(bitmap, hints);
+    const center = resolveBarcodeCenter(result.getResultPoints(), offset?.x, offset?.y);
+    return center === undefined ? { text: result.getText() } : { text: result.getText(), center };
+  } catch {
+    // NotFoundException / FormatException / ChecksumException：都按"这张图里没有"处理。
+    return null;
+  }
+}
+
+/** 把整图旋转 180°；手机横竖拿反时条码是倒的，ZXing 的 1D reader 不会自己转。 */
+function rotate180(image: ImageDataLike): ImageDataLike {
+  const width = image.width;
+  const height = image.height;
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const target = ((height - 1 - y) * width + (width - 1 - x)) * 4;
+      const source = (y * width + x) * 4;
+      data[target] = image.data[source] ?? 0;
+      data[target + 1] = image.data[source + 1] ?? 0;
+      data[target + 2] = image.data[source + 2] ?? 0;
+      data[target + 3] = 255;
+    }
+  }
+  return { width, height, data };
+}
+
+/**
+ * 条码兜底：ZXing 先解原图，失败再用半分辨率（有些手机把码拍得很细，
+ * 降采样能消掉 JPEG 振铃），最后试一次 180°。
+ *
+ * 返回值里的 `center` 已换算回原图坐标，调用方据此判断"码是不是在框里"。
+ */
+function decodeBarcodeFromPhoto(image: ImageDataLike): BarcodeHit | null {
+  const direct = decodeWithZxing(image, [BarcodeFormat.CODE_128]);
+  if (direct !== null) return direct;
+
+  const halved = downscaleRgba(image, 2);
+  const halfHit = decodeWithZxing(halved, [BarcodeFormat.CODE_128]);
+  if (halfHit !== null) {
+    return {
+      text: halfHit.text,
+      ...(halfHit.center === undefined
+        ? {}
+        : { center: { x: halfHit.center.x * 2, y: halfHit.center.y * 2 } }),
+    };
+  }
+
+  const flipped = rotate180(image);
+  const flippedHit = decodeWithZxing(flipped, [BarcodeFormat.CODE_128]);
+  if (flippedHit !== null) {
+    return {
+      text: flippedHit.text,
+      ...(flippedHit.center === undefined
+        ? {}
+        : {
+            center: {
+              x: image.width - 1 - flippedHit.center.x,
+              y: image.height - 1 - flippedHit.center.y,
+            },
+          }),
+    };
+  }
+  return null;
+}
+
 /** 纸张比例（宽/高）。用于决定矫正后的画布尺寸。 */
 function paperAspect(paper: string): number {
   const size = PAPER_SIZES[paper as PaperId];
@@ -259,6 +391,24 @@ export function readSheet(image: ImageDataLike, quad: Quad, paper: string): Read
     }
   }
 
+  // 1) ZXing：吃原图，抗旋转/透视/光照；解出后再按四角框做位置校验。
+  const zxingHit = decodeBarcodeFromPhoto(image);
+  if (zxingHit !== null) {
+    const code = parseSheetCode(zxingHit.text);
+    if (code !== null && (zxingHit.center === undefined || isAroundQuad(zxingHit.center, quad))) {
+      const page = warpToPage(image, quad, code.paper);
+      return {
+        ok: true,
+        source: 'barcode',
+        code,
+        page,
+        binary: binaryOfPage(page),
+        pageIndex: code.page - 1,
+      };
+    }
+  }
+
+  // 2) 自己写的解码器兜底（清晰的截图/扫描件；真实照片基本走不到这里）。
   const code = readBarcodeFromPhoto(image, quad);
   if (code !== null) {
     const page = warpToPage(image, quad, code.paper);

@@ -162,6 +162,21 @@ export function DataScreen({ onNotice }: DataScreenProps) {
         </div>
       </Section>
 
+      <Section title="开源许可">
+        <p className="text-caption leading-relaxed opacity-50">
+          用到的第三方组件（ZXing、jsQR、Dexie、React、qrcode 等）及完整许可证文本见
+          <a
+            href="/THIRD-PARTY-NOTICES.txt"
+            target="_blank"
+            rel="noreferrer"
+            className="ml-1 underline"
+          >
+            第三方组件与许可证
+          </a>
+          。
+        </p>
+      </Section>
+
       <Section title="注意">
         <ul className="space-y-1 text-caption leading-relaxed opacity-50">
           <li>

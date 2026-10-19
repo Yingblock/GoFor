@@ -439,27 +439,56 @@ try {
   // 用 canvas 在纸的下半部分涂黑，模拟"填了三格"。坐标清单采样的是归一化矩形，
   // 所以只需要保证墨迹落在那几行里，不用精确到格子。
   const canvasPage = await browser.newPage();
-  const inkSheet = async (b64) =>
-    canvasPage.evaluate(async (data) => {
-      const image = new Image();
-      image.src = `data:image/png;base64,${data}`;
-      await image.decode();
-      const canvas = document.createElement('canvas');
-      canvas.width = image.width;
-      canvas.height = image.height;
-      const context = canvas.getContext('2d');
-      context.drawImage(image, 0, 0);
-      context.fillStyle = '#000000';
-      context.fillRect(
-        0,
-        Math.floor(image.height * 0.78),
-        image.width,
-        Math.ceil(image.height * 0.16),
-      );
-      return canvas.toDataURL('image/png').split(',')[1];
-    }, b64);
+  const inkSheet = async (b64, from = 0.78, to = 0.94) =>
+    canvasPage.evaluate(
+      async ({ data, from, to }) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${data}`;
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const context = canvas.getContext('2d');
+        context.drawImage(image, 0, 0);
+        context.fillStyle = '#000000';
+        context.fillRect(
+          0,
+          Math.floor(image.height * from),
+          image.width,
+          Math.ceil(image.height * (to - from)),
+        );
+        return canvas.toDataURL('image/png').split(',')[1];
+      },
+      { data: b64, from, to },
+    );
+  // 把"二维码被挡住"那张做成更接近真实手机照的样子：旋转 3° + 左上到右下阴影。
+  // 手写解码器在这种图上必挂，ZXing 应该还能解——这条用例防的就是退回脆弱实现。
+  const photoLikeBase64 = await canvasPage.evaluate(async (data) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${data}`;
+    await image.decode();
+    const pad = Math.round(Math.max(image.width, image.height) * 0.04);
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width + pad * 2;
+    canvas.height = image.height + pad * 2;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#e9e7e1';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.translate(canvas.width / 2, canvas.height / 2);
+    context.rotate((3 * Math.PI) / 180);
+    context.translate(-image.width / 2, -image.height / 2);
+    context.drawImage(image, 0, 0);
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    const shade = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+    shade.addColorStop(0, 'rgba(0,0,0,0)');
+    shade.addColorStop(1, 'rgba(0,0,0,0.28)');
+    context.fillStyle = shade;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png').split(',')[1];
+  }, barcodeOnlyPng.toString('base64'));
+
   const inkedBase64 = await inkSheet(sheetPng.toString('base64'));
-  const barcodeInkedBase64 = await inkSheet(barcodeOnlyPng.toString('base64'));
+  const barcodeInkedBase64 = await inkSheet(photoLikeBase64, 0.7, 0.85);
   await canvasPage.close();
 
   const todayKey = new Date().toLocaleDateString('sv-SE');
