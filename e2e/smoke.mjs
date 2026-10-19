@@ -363,6 +363,19 @@ try {
     await noteInputs.first().fill('带错题本');
     await noteInputs.first().press('Enter');
     await sleep(400);
+    const shortWidth = (await noteInputs.first().boundingBox())?.width ?? 0;
+
+    // 备注框要随文字变长，但不能挤占整行；长文本到上限后裁断。
+    await noteInputs.first().fill('这是一条很长的课程备注，用来确认输入框会随文字长度自动变宽');
+    await noteInputs.first().press('Enter');
+    await sleep(400);
+    const longWidth = (await noteInputs.first().boundingBox())?.width ?? 0;
+    check('课程备注框随文字变长', longWidth > shortWidth + 4, `${shortWidth}px → ${longWidth}px`);
+
+    // 恢复短备注，后面的打印断言用这一条。
+    await noteInputs.first().fill('带错题本');
+    await noteInputs.first().press('Enter');
+    await sleep(400);
     noteWritten = true;
   }
   check('首页课表行可写备注', noteWritten, noteWritten ? '' : '今天没有课，跳过');

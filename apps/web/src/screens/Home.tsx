@@ -60,6 +60,10 @@ function ScheduleNoteInput({ entry, date }: { entry: HomeScheduleEntry; date: st
     );
   };
 
+  /*
+   * field-sizing: content 让输入框宽度跟着内容走；max-w 才是"占满可用空间后裁断"，
+   * 超出部分在失焦时以省略号显示。Chromium/Electron 支持；其他内核退化成默认宽度。
+   */
   return (
     <input
       value={draft}
@@ -70,7 +74,8 @@ function ScheduleNoteInput({ entry, date }: { entry: HomeScheduleEntry; date: st
       onKeyDown={(event) => {
         if (event.key === 'Enter') event.currentTarget.blur();
       }}
-      className="w-28 shrink-0 rounded border-b border-line bg-transparent px-1 py-0.5 text-caption outline-none transition-colors duration-fast placeholder:opacity-25 focus:border-accent"
+      title={draft === '' ? '添加课程备注' : draft}
+      className="min-w-16 max-w-[45%] shrink-0 rounded border-b border-line bg-transparent px-1 py-0.5 text-caption text-ellipsis outline-none transition-colors duration-fast placeholder:opacity-25 focus:border-accent md:max-w-[55%] [field-sizing:content]"
     />
   );
 }
