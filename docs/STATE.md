@@ -11,7 +11,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
 任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
 
-验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 111 项浏览器 e2e）：
+验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 89 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
 - ✅ TypeScript 7.0.2 strict
@@ -28,7 +28,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 | 产物 | 状态 | 说明 |
 |---|---|---|
-| `release/GoFor-win-x64.zip` | ✅ 已重建校验（2026-10-19，HEAD `ea1681b`） | 104,761,134 B（99.9 MB）/ 30 文件 / sha256 `89de9371…072feb`；Electron v33，双击 `GoFor.exe`；**固定端口 47821** |
+| `release/GoFor-win-x64.zip` | ✅ 已重建校验（2026-10-20，HEAD `d957f5d`） | 104,763,628 B（99.9 MB）/ 30 文件 / sha256 `947142ff…cd80`；Electron v33，双击 `GoFor.exe`；**固定端口 47821** |
 | `release/GoFor-debug.apk` | ⏸ 暂时停打（用户要求：先只做 Windows，Android 后期适配） | 4.6 MB（4,622,941 B），`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
 | `release/README.md` | ✅ | 安装说明与已知限制 |
 
@@ -57,7 +57,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续学习） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
-测试：core 317 + store 41 + vision 38 = **396 单测**；e2e **111 项**。
+测试：core 348 + store 41 + vision 38 = **427 单测**；e2e **89 项**（含条码兜底）。
 
 ### 第三批反馈修复（2026-xx）
 
@@ -242,9 +242,9 @@ pnpm verify      # typecheck + test + build + e2e
 按 AGENTS 规则 8，用户提的「Code 128 条码兜底」不在 ROADMAP 当前阶段，
 已写进 `docs/LATER.md` 停放，未写代码。
 
-同一天重建了 Windows 包（`ea1681b`）：104,761,134 B / 30 文件 / sha256 `89de9371…`，
+之后又在 `d957f5d` 上重建了 Windows 包：104,763,628 B / 30 文件 / sha256 `947142ff…`，
 `testzip` 无错；包内 `main.cjs` 固定端口 47821 + 单实例，`apps/web/dist` 的
-`index-C0-nPaFT.js` 与包内同名文件哈希一致；4173 preview 已重启到这一版。
+`index-BSqSpCBn.js` 与包内同名文件哈希一致（`b799af3f…`）；4173 preview 已重启到这一版。
 
 同一天按用户确认新增 **P2-2.12 条码兜底**（Code 128，零依赖）：纸尾印 16 字符短码
 （`G1` + `YYMMDD` + 纸张码 + 模板短码 6 位 + 页号），扫描端先二维码（带四角位置校验），
