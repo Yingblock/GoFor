@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildFillLink } from './deeplink.ts';
-import { decodeQr, decodeQrFromGray, encodeQrMatrix, encodeQrSvgPath } from './qr.ts';
+import {
+  decodeQr,
+  decodeQrFromGray,
+  decodeQrLocated,
+  encodeQrMatrix,
+  encodeQrSvgPath,
+} from './qr.ts';
 
 /**
  * 把模块矩阵画成灰度图：白底 255、黑块 0，四周留 4 模块静区。
@@ -108,5 +114,29 @@ describe('二维码：encode → 渲染 → decode 端到端', () => {
     expect(decodeQrFromGray(new Uint8ClampedArray(16), 4, 4)).toBeNull();
     expect(decodeQrFromGray(new Uint8ClampedArray(16), 0, 4)).toBeNull();
     expect(decodeQr(new Uint8ClampedArray(16), 2, 2)).toBeNull();
+  });
+});
+
+describe('二维码：解码位置（供四角框校验）', () => {
+  it('返回的中心点落在码的几何中心附近', () => {
+    const { width } = renderToGray(TEXT, 8, 4);
+    const located = decodeQrLocated(renderToRgba(TEXT, 8, 4), width, width);
+    expect(located?.data).toBe(TEXT);
+    // 二维码画在正中，中心就是整图中心；jsQR 的四个角取平均会有几模块误差。
+    expect(Math.abs((located?.center.x ?? 0) - width / 2)).toBeLessThan(width * 0.12);
+    expect(Math.abs((located?.center.y ?? 0) - width / 2)).toBeLessThan(width * 0.12);
+  });
+
+  it('缩小一半后坐标也按比例缩回（解码方自己换算）', () => {
+    const full = renderToGray(TEXT, 8, 4);
+    const half = renderToGray(TEXT, 4, 4);
+    const located = decodeQrLocated(renderToRgba(TEXT, 4, 4), half.width, half.height);
+    expect(located?.data).toBe(TEXT);
+    expect(Math.abs((located?.center.x ?? 0) - half.width / 2)).toBeLessThan(full.width * 0.12);
+  });
+
+  it('没有码时返回 null', () => {
+    expect(decodeQrLocated(new Uint8ClampedArray(64 * 64 * 4).fill(255), 64, 64)).toBeNull();
+    expect(decodeQrLocated(new Uint8ClampedArray(10), 4, 4)).toBeNull();
   });
 });

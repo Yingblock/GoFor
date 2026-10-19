@@ -31,7 +31,9 @@ export {
 export {
   decodeQr,
   decodeQrFromGray,
+  decodeQrLocated,
   encodeQrMatrix,
   encodeQrSvgPath,
+  type LocatedQr,
   type QrMatrix,
 } from './qr.ts';

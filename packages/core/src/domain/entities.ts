@@ -252,6 +252,14 @@ export interface ScanBatch {
   /** pending = 等用户确认；applied = 已写进其它表；discarded = 用户丢弃。 */
   status: 'pending' | 'applied' | 'discarded';
   appliedAt: number | null;
+  /**
+   * 坐标清单从哪来的：
+   * - `stored`：打印时固化在库里的（默认，且旧批次没有这个字段也按它处理）；
+   * - `rebuilt`：库里没有这张纸的清单（旧版本打印的），按当前模板临时重建。
+   *
+   * 重建可能与纸上实际行数不同，所以必须在待确认页明确提醒，不能静默。
+   */
+  manifestSource?: 'stored' | 'rebuilt';
 }
 
 /**

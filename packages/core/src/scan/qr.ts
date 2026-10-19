@@ -89,6 +89,40 @@ export function decodeQr(image: Uint8ClampedArray, width: number, height: number
   return decoded?.data ?? null;
 }
 
+/** 二维码解出来的内容 + 它在图里的中心点（像素）。 */
+export interface LocatedQr {
+  data: string;
+  center: { x: number; y: number };
+}
+
+/**
+ * 解码并返回**位置**。
+ *
+ * 位置是给扫描链路做"这个码是不是在用户框的这张纸里"的判断用的：
+ * 同一张照片里可能同时躺着两张纸（或屏幕上的另一个二维码），
+ * 只按"图里有没有码"找，会把别人的码当成本次的纸，日期/模板全错。
+ *
+ * jsQR 返回的是找到的定位图案四个角，这里取平均当中心——
+ * 我们只需要"大致在哪"，不需要精确到模块。
+ */
+export function decodeQrLocated(
+  image: Uint8ClampedArray,
+  width: number,
+  height: number,
+): LocatedQr | null {
+  if (!isValidImageSize(image, width, height, 4)) return null;
+  const decoded = jsQR(image, width, height, { inversionAttempts: 'attemptBoth' });
+  if (decoded === null) return null;
+  const { topLeftCorner, topRightCorner, bottomRightCorner, bottomLeftCorner } = decoded.location;
+  return {
+    data: decoded.data,
+    center: {
+      x: (topLeftCorner.x + topRightCorner.x + bottomRightCorner.x + bottomLeftCorner.x) / 4,
+      y: (topLeftCorner.y + topRightCorner.y + bottomRightCorner.y + bottomLeftCorner.y) / 4,
+    },
+  };
+}
+
 /**
  * 从灰度图解码。失败返回 null。
  *

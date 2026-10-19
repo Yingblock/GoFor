@@ -28,7 +28,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 | 产物 | 状态 | 说明 |
 |---|---|---|
-| `release/GoFor-win-x64.zip` | ✅ 已重建校验 | 99.9 MB（104,752,083 B）/ CRC 通过；Electron v33，双击 `GoFor.exe`；**固定端口 47821** |
+| `release/GoFor-win-x64.zip` | ✅ 已重建校验 | 99.9 MB（104,759,518 B）/ CRC 通过；Electron v33，双击 `GoFor.exe`；**固定端口 47821** |
 | `release/GoFor-debug.apk` | ⏸ 暂时停打（用户要求：先只做 Windows，Android 后期适配） | 4.6 MB（4,622,941 B），`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
 | `release/README.md` | ✅ | 安装说明与已知限制 |
 
@@ -194,6 +194,8 @@ P1 的 15 项已全部落地，收尾质量问题也修完了（见上）。下�
 | e2e 用 `page.pdf` 量纸张不带 `preferCSSPageSize` | Chromium 一律给 Letter（612×792pt），会误判"纸张没生效" | `page.pdf({ preferCSSPageSize: true })`，再解析 `/MediaBox` 断言尺寸 |
 | Windows 壳用 `listen(0)` 随机端口 | 每次启动 origin 变化 → IndexedDB 按 origin 隔离 → 用户看到「关掉窗口数据全丢」 | 固定端口 47821 + 单实例锁；任何壳/本地服务**都不能用随机端口承载应用** |
 | 备份/导入只藏在 ⌘K 里 | 用户找不到恢复入口，丢数据时以为没救 | 新增「数据与备份」页（导出/导入/存储承诺/上次备份）+ 备份横幅上直接给「从备份导入」 |
+| 二维码只在整张照片上解、不校验位置 | 同一张照片里两张纸（或屏幕上的码）会被当成这次的纸，日期/模板全错 | 解出后按四角外接矩形校验（允许 10% 外溢）；多尺度解码兜大图 |
+| 旧版本打印的纸没有坐标快照 | 扫回来直接报「没有坐标记录」，旧纸变废纸 | 给「按当前模板重建坐标」按钮（显式确认 + 待确认页标红），**不静默**用当前数据重建 |
 | 二维码印 12mm | 预览截图里只有 29px，jsQR 解不出来；纸上手机也可能扫不出 | 加到 16mm；e2e 用 4 倍像素密度截图当"照片" |
 | e2e 只 `server.kill()` 父进程 | 每跑一次漏一个 `vite preview` 占着 4173；下一次 e2e 连上**旧构建**的服务，照样"全绿"（假绿） | `spawn(..., { detached: true })` 后按进程组清；开跑前先查端口，有人应答就直接报错 |
 | Biome 扫到 Capacitor 生成的 Java/XML | 4000+ 假错误，`pnpm check` 直接失败 | `biome.json` 的 `files.includes` 排除 `apps/web/android` |
@@ -225,6 +227,15 @@ pnpm verify      # typecheck + test + build + e2e
 
 ## 最近一次更新
 
-建立 GitHub 仓库（private）、P0–P8 milestones 与 labels；P0 的 7 个 issue 已关闭，
-P1 拆成 16 个 open issue（#8–#23）。补了 README，并把 Android Capacitor 壳与
-Windows 便携打包试验入库（都只是验证壳，不是正式分发方案）。
+2026-10-19：P2 扫描链路两处修复。
+
+1. **二维码位置校验**：二维码仍然从整张照片解码（纸张尺寸写在码里，先矫正会循环依赖），
+   但解出后按手动四角的**外接矩形**校验（允许 10% 外溢）。明显在框外的码不认，
+   避免同一张照片里另一张纸/屏幕上的码把日期与模板带错。顺带加了多尺度解码（原图、
+   1/2、1/4、1/8），大图里二维码小的时候多一次机会。
+2. **旧纸缺坐标清单**：旧版本打印的纸没有 `sheetManifests` 快照，以前只能看到
+   「没有坐标记录」死路。现在给一个显式按钮「按当前模板重建坐标并继续」，
+   重建后写回快照；待确认页会标红提醒"行数可能和纸上不同"。**不静默重建**。
+
+按 AGENTS 规则 8，用户提的「Code 128 条码兜底」不在 ROADMAP 当前阶段，
+已写进 `docs/LATER.md` 停放，未写代码。

@@ -1,18 +1,39 @@
 import { newId } from '@gofor/core';
-import { dateKey, type ScanBatch, type ScanResult } from '@gofor/core/domain';
-import { classifyInk, type InkReading, type SheetManifest } from '@gofor/core/scan';
+import {
+  dateKey,
+  type ScanBatch,
+  type ScanResult,
+  type SheetManifestRecord,
+} from '@gofor/core/domain';
+import { materialize, PAPER_IDS, type PaperId } from '@gofor/core/print';
+import {
+  buildSheetManifest,
+  classifyInk,
+  type InkReading,
+  type SheetManifest,
+} from '@gofor/core/scan';
 import {
   db,
   getSheetManifest,
   listScanBatches,
+  listTasks,
+  listTemplates,
   saveScanBatch,
+  saveSheetManifest,
+  sheetManifestId,
   updateScanBatchStatus,
 } from '@gofor/store';
 import { Badge, Button, Card, EmptyState, Section } from '@gofor/ui';
-import { binarize, detectPageQuad, type Quad, toGray } from '@gofor/vision';
+import { binarize, detectPageQuad, type ImageDataLike, type Quad, toGray } from '@gofor/vision';
 import { useCallback, useEffect, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '../clock.ts';
+import { todayLabel } from '../format.ts';
+import {
+  isBuiltinTemplateId,
+  parseStoredTemplate,
+  resolvePrintTemplate,
+} from '../print/template.ts';
 
 import { CameraCapture } from './scan/CameraCapture.tsx';
 import { CornerPicker } from './scan/CornerPicker.tsx';
@@ -20,16 +41,32 @@ import { type LoadedPhoto, loadPhotoFile } from './scan/capture.ts';
 import { readSheet, sampleTargets } from './scan/pipeline.ts';
 import { ScanReview } from './scan/ScanReview.tsx';
 
-type Stage = 'pick' | 'corner' | 'review';
+type Stage = 'pick' | 'corner' | 'rebuild' | 'review';
 
 /**
- * 扫描回填（P2-2.2 / 2.4 / 2.5）。
+ * 「这张纸没有坐标记录」时保留的上下文。
+ *
+ * 重建坐标需要照片本身（重新采样）和纸的身份（模板/日期/纸张/页），
+ * 所以整份存下来，而不是只留一句错误文案——错误文案没法继续。
+ */
+interface MissingManifest {
+  templateId: string;
+  date: string;
+  paper: string;
+  /** 0 起的页号；二维码只印在第 1 页，所以是 0。 */
+  pageIndex: number;
+  page: ImageDataLike;
+  binary: Uint8Array;
+}
+
+/**
+ * 扫描回填（P2-2.2 / 2.3 / 2.4 / 2.5）。
  *
  * 流程刻意做成"每步都能退回去"：
  *   选照片 → 手动点四角 → 识别 → 待确认列表 → 应用/丢弃
  * 任何一步失败都停在原地给原因，不自动跳到下一步，也不自动写数据。
  */
-export function ScanScreen() {
+export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
   const [stage, setStage] = useState<Stage>('pick');
   const [photo, setPhoto] = useState<LoadedPhoto | null>(null);
   const [initialQuad, setInitialQuad] = useState<Quad | undefined>(undefined);
@@ -38,6 +75,7 @@ export function ScanScreen() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [missing, setMissing] = useState<MissingManifest | null>(null);
 
   const refreshRecent = useCallback(async () => {
     setRecent(await listScanBatches(db, 8));
@@ -53,6 +91,7 @@ export function ScanScreen() {
     const guess = detectPageQuad(binarize(toGray(loaded.image)), loaded.width, loaded.height);
     setPhoto(loaded);
     setInitialQuad(guess ?? undefined);
+    setMissing(null);
     setStage('corner');
   };
 
@@ -75,47 +114,166 @@ export function ScanScreen() {
     setCameraOpen(false);
   };
 
+  /**
+   * 采样并进入待确认。
+   *
+   * 只取**这一页**的 target：以前把所有页的 target 都摊到一张照片上采样，
+   * 第 2 页起的坐标会落到第 1 页的纸上，结果必然全错（而且不报错）。
+   */
+  const finishScan = async (input: {
+    manifest: SheetManifest;
+    manifestSource: 'stored' | 'rebuilt';
+    templateId: string;
+    date: string;
+    paper: string;
+    pageIndex: number;
+    page: ImageDataLike;
+    binary: Uint8Array;
+  }) => {
+    const pageManifest = input.manifest.pages.find((page) => page.index === input.pageIndex);
+    if (pageManifest === undefined) {
+      setError(`这张纸的第 ${input.pageIndex + 1} 页没有坐标记录，没法回填。重新打印一次再扫。`);
+      return;
+    }
+
+    const scoped: SheetManifest = { ...input.manifest, pages: [pageManifest] };
+    const readings: InkReading[] = sampleTargets(input.binary, input.page, pageManifest.targets);
+    const results: ScanResult[] = classifyInk(scoped, readings);
+
+    const next: ScanBatch = {
+      id: newId(),
+      createdAt: appClock.now(),
+      date: input.date,
+      templateId: input.templateId,
+      paper: input.paper,
+      results,
+      status: 'pending',
+      appliedAt: null,
+      manifestSource: input.manifestSource,
+    };
+    await saveScanBatch(db, next);
+    setBatch(next);
+    setMissing(null);
+    await refreshRecent();
+    setStage('review');
+  };
+
   const onQuad = async (quad: Quad) => {
     if (photo === null) return;
     setBusy(true);
     setError(null);
+    setMissing(null);
     try {
       const sheet = readSheet(photo.image, quad, '');
       if (!sheet.ok) {
         setError(sheet.reason);
         return;
       }
-      const { link, page, binary } = sheet;
-      const record = await getSheetManifest(db, link.templateId, link.date, link.paper);
+
+      const { link, page, binary, pageIndex } = sheet;
+      const record: SheetManifestRecord | undefined = await getSheetManifest(
+        db,
+        link.templateId,
+        link.date,
+        link.paper,
+      );
+
       if (record === undefined) {
-        setError(
-          `这张纸没有坐标记录（模板 ${link.templateId}、${link.date}、${link.paper}）。` +
-            '多半是旧版本打印的：用当前版本重新打印一次，再扫就有坐标了。',
-        );
+        // 关键：**不静默用当前数据重建**。旧纸上没有清单，重建的行数可能与纸上不同，
+        // 直接把勾选记到别人头上是静默错数据；必须让用户明确点一次。
+        setMissing({
+          templateId: link.templateId,
+          date: link.date,
+          paper: link.paper,
+          pageIndex,
+          page,
+          binary,
+        });
+        setStage('rebuild');
         return;
       }
 
       const manifest = JSON.parse(record.json) as SheetManifest;
-      const targets = manifest.pages.flatMap((item) => item.targets);
-      const readings: InkReading[] = sampleTargets(binary, page, targets);
-      const results: ScanResult[] = classifyInk(manifest, readings);
-
-      const next: ScanBatch = {
-        id: newId(),
-        createdAt: appClock.now(),
-        date: link.date,
+      await finishScan({
+        manifest,
+        manifestSource: 'stored',
         templateId: link.templateId,
+        date: link.date,
         paper: link.paper,
-        results,
-        status: 'pending',
-        appliedAt: null,
-      };
-      await saveScanBatch(db, next);
-      setBatch(next);
-      await refreshRecent();
-      setStage('review');
+        pageIndex,
+        page,
+        binary,
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '识别失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * 按当前模板重建坐标清单，然后立刻继续扫描。
+   *
+   * 只允许用户显式触发（按钮），不自动：重建用的是**现在的**作业列表，
+   * 如果纸上的行数/顺序变过，第 N 行就会指到别人头上。
+   */
+  const rebuildAndContinue = async () => {
+    if (missing === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (!PAPER_IDS.includes(missing.paper as PaperId)) {
+        setError(`这张纸的纸张「${missing.paper}」不认识，没法重建坐标。`);
+        return;
+      }
+
+      const customs = await listTemplates(db);
+      if (!isBuiltinTemplateId(missing.templateId)) {
+        const stored = customs.find((template) => template.id === missing.templateId);
+        if (stored === undefined || parseStoredTemplate(stored.json) === null) {
+          setError('找不到这张纸用的模板（可能已经删了），没法重建坐标。重新打印一次再扫。');
+          return;
+        }
+      }
+
+      const paper = missing.paper as PaperId;
+      const template = resolvePrintTemplate(missing.templateId, paper, customs);
+      const tasks = await listTasks(db);
+      const blocks = materialize(template, {
+        date: missing.date,
+        dateLabel: todayLabel(missing.date),
+      });
+      const manifest = buildSheetManifest({
+        templateId: template.id,
+        date: missing.date,
+        paper,
+        blocks,
+        bindings: { 'tasks.today': tasks.map((task) => task.id) },
+        labels: { 'tasks.today': tasks.map((task) => task.title) },
+      });
+
+      // 存下来：下次扫同一张纸就不用再重建，也留下"这份坐标是什么时候算的"。
+      await saveSheetManifest(db, {
+        id: sheetManifestId(template.id, missing.date, paper),
+        templateId: template.id,
+        date: missing.date,
+        paper,
+        json: JSON.stringify(manifest),
+        createdAt: appClock.now(),
+      });
+
+      await finishScan({
+        manifest,
+        manifestSource: 'rebuilt',
+        templateId: template.id,
+        date: missing.date,
+        paper,
+        pageIndex: missing.pageIndex,
+        page: missing.page,
+        binary: missing.binary,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '重建坐标失败');
     } finally {
       setBusy(false);
     }
@@ -128,6 +286,7 @@ export function ScanScreen() {
     setBatch(null);
     setCameraOpen(false);
     setError(null);
+    setMissing(null);
   };
 
   const resume = async (item: ScanBatch) => {
@@ -141,6 +300,7 @@ export function ScanScreen() {
         <div className="space-y-3">
           <p className="text-caption leading-relaxed opacity-40">
             纸上的二维码里写着模板与日期，所以同一张纸扫两次也能对上同一天。
+            拍照时把四个角拖到纸边、让二维码留在框里——位置明显在框外的码不会被采用。
             识别只是猜测，进「待确认」后由你决定写不写。
           </p>
 
@@ -196,6 +356,40 @@ export function ScanScreen() {
             onCancel={reset}
           />
         </section>
+      ) : null}
+
+      {missing !== null && stage === 'rebuild' ? (
+        <Section title="这张纸缺少坐标记录">
+          <Card padding="md" className="space-y-3 border-warn/40 bg-warn/10 text-small">
+            <p>
+              纸上的身份读出来了（模板 {missing.templateId}、{missing.date}、{missing.paper}），
+              但本机没有这张纸打印时固化的坐标清单。多半是旧版本打印的：那个版本还没开始记录坐标。
+            </p>
+            <p className="opacity-70">
+              可以按<strong>当前模板</strong>重建一份坐标继续扫。注意：重建用的是现在的作业列表，如果纸上
+              行数或顺序和现在不同，勾选可能对到别的行——后面的「待确认」页会标出来，你可以
+              逐条取消。最稳的做法还是用当前版本重新打印一次。
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                variant="primary"
+                size="md"
+                disabled={busy}
+                onClick={() => void rebuildAndContinue()}
+              >
+                按当前模板重建坐标并继续
+              </Button>
+              {onOpenPrint === undefined ? null : (
+                <Button variant="secondary" onClick={onOpenPrint}>
+                  去打印页重新打印
+                </Button>
+              )}
+              <Button variant="ghost" onClick={reset}>
+                取消
+              </Button>
+            </div>
+          </Card>
+        </Section>
       ) : null}
 
       {batch !== null && stage === 'review' ? (

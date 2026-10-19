@@ -22,6 +22,7 @@ import { BackupBanner } from './components/BackupBanner.tsx';
 import { type Command, CommandPalette } from './components/CommandPalette.tsx';
 import { ScreenBoundary } from './components/ErrorBoundary.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
+import { todayLabel } from './format.ts';
 import { groupOf, type ScreenId, titleOf } from './nav.ts';
 import { PrintLayer, type SheetData } from './print/PrintSheet.tsx';
 import { printTemplateChoices, resolvePrintTemplate } from './print/template.ts';
@@ -40,11 +41,6 @@ import { Tasks } from './screens/Tasks.tsx';
 import { TemplateEditorScreen } from './screens/TemplateEditor.tsx';
 import { TimetableScreen } from './screens/Timetable.tsx';
 import { ToolboxScreen } from './screens/Toolbox.tsx';
-
-function todayLabel(date: string): string {
-  const [year, month, day] = date.split('-');
-  return `${year} 年 ${Number(month)} 月 ${Number(day)} 日`;
-}
 
 /** 与课表页共用同一个库内 id；P1 只有一个学期。 */
 const TIMETABLE_ID = 'default';
@@ -344,7 +340,7 @@ export function App() {
         );
       case 'capture':
       case 'scan':
-        return <ScanScreen />;
+        return <ScanScreen onOpenPrint={() => navigate('print')} />;
       case 'mood':
         return <MoodScreen />;
       case 'report':
