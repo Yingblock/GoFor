@@ -213,8 +213,13 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
 - **只打 Windows 包**（`bash tools/package-windows/build.sh` → `release/GoFor-win-x64.zip`）。
   Android（Capacitor + gradle）**暂时不打**，等后期适配；不要因为"顺手"又去 `cap sync` / `assembleDebug`。
 - 打包产物不进 git（`release/` 已 ignore）；**发布 GitHub Release 必须用户明确要求**，默认只本地构建。
-- 构建完按用户要求把最新版跑起来时，用 `pnpm build` + `pnpm preview`（固定 4173 端口），
-  地址给用户 `http://127.0.0.1:4173/`；不要用随机端口（IndexedDB 按 origin 隔离）。
+- **4173 由 systemd 用户服务托管，不要再用 `pnpm preview &` / `nohup` 临时起**：
+  `~/.config/systemd/user/gofor-preview.service`（`Restart=always`、已 `enable`，
+  用户 `Linger=yes`，所以关终端/WSL 会话结束都不影响）。
+  - 重建 dist 后**不用重启服务**（`vite preview` 每次请求读磁盘）；
+  - 换 node 版本后改 unit 里的绝对路径，再 `systemctl --user daemon-reload && systemctl --user restart gofor-preview`；
+  - 看状态/日志：`systemctl --user status gofor-preview` / `journalctl --user -u gofor-preview -f`。
+  - 地址固定 `http://127.0.0.1:4173/`；不要用随机端口（IndexedDB 按 origin 隔离）。
 
 ## 常用命令
 
