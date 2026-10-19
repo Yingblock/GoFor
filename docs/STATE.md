@@ -28,7 +28,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 | 产物 | 状态 | 说明 |
 |---|---|---|
-| `release/GoFor-win-x64.zip` | ✅ 已重建校验 | 99.9 MB（104,759,518 B）/ CRC 通过；Electron v33，双击 `GoFor.exe`；**固定端口 47821** |
+| `release/GoFor-win-x64.zip` | ✅ 已重建校验（2026-10-19，HEAD `ea1681b`） | 104,761,134 B（99.9 MB）/ 30 文件 / sha256 `89de9371…072feb`；Electron v33，双击 `GoFor.exe`；**固定端口 47821** |
 | `release/GoFor-debug.apk` | ⏸ 暂时停打（用户要求：先只做 Windows，Android 后期适配） | 4.6 MB（4,622,941 B），`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
 | `release/README.md` | ✅ | 安装说明与已知限制 |
 
@@ -239,3 +239,7 @@ pnpm verify      # typecheck + test + build + e2e
 
 按 AGENTS 规则 8，用户提的「Code 128 条码兜底」不在 ROADMAP 当前阶段，
 已写进 `docs/LATER.md` 停放，未写代码。
+
+同一天重建了 Windows 包（`ea1681b`）：104,761,134 B / 30 文件 / sha256 `89de9371…`，
+`testzip` 无错；包内 `main.cjs` 固定端口 47821 + 单实例，`apps/web/dist` 的
+`index-C0-nPaFT.js` 与包内同名文件哈希一致；4173 preview 已重启到这一版。
