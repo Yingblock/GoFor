@@ -61,11 +61,11 @@ export function WeekSection({
   const setWeekStart = onWeekStartChange;
 
   const cellBorderClass = editing
-    ? 'border-b border-l border-dashed border-black/20'
-    : 'border-b border-black/[0.04] border-l border-black/[0.06]';
+    ? 'border-b border-l border-dashed border-line-strong'
+    : 'border-b border-line border-l border-line';
   const gridFrameClass = editing
-    ? 'border-dashed border-black/25 bg-white/70'
-    : 'border-black/[0.08] bg-white/50';
+    ? 'border-dashed border-line-strong bg-card-soft'
+    : 'border-line bg-card-faint';
 
   const courseLabel = (id: string): string => subjectById.get(id)?.name ?? UNKNOWN_SUBJECT_LABEL;
 
@@ -133,21 +133,21 @@ export function WeekSection({
           <button
             type="button"
             onClick={() => setWeekStart(addDays(weekStart, -7))}
-            className="rounded border border-black/10 px-2 py-1 text-xs opacity-60"
+            className="rounded border border-line px-2 py-1 text-xs opacity-60"
           >
             ← 上一周
           </button>
           <button
             type="button"
             onClick={() => setWeekStart(mondayOf(today))}
-            className="rounded border border-black/10 px-2 py-1 text-xs opacity-60"
+            className="rounded border border-line px-2 py-1 text-xs opacity-60"
           >
             本周
           </button>
           <button
             type="button"
             onClick={() => setWeekStart(addDays(weekStart, 7))}
-            className="rounded border border-black/10 px-2 py-1 text-xs opacity-60"
+            className="rounded border border-line px-2 py-1 text-xs opacity-60"
           >
             下一周 →
           </button>
@@ -165,8 +165,8 @@ export function WeekSection({
             aria-pressed={editing}
             className={`ml-auto rounded border px-2 py-1 text-xs ${
               editing
-                ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
-                : 'border-black/10 opacity-60'
+                ? 'border-[var(--color-strong)] bg-[var(--color-strong)] text-on-strong'
+                : 'border-line opacity-60'
             }`}
           >
             {editing ? '退出编辑' : '编辑模式'}
@@ -187,12 +187,12 @@ export function WeekSection({
               className="grid min-w-[640px] text-[11px]"
               style={{ gridTemplateColumns: '52px repeat(7, minmax(0, 1fr))' }}
             >
-              <div className="border-b border-black/[0.06] p-1.5" />
+              <div className="border-b border-line p-1.5" />
               {weekDates.map((date, index) => (
                 <div
                   key={date}
-                  className={`border-b border-l border-black/[0.06] p-1.5 text-center ${
-                    date === today ? 'bg-black/[0.05] font-medium' : 'opacity-60'
+                  className={`border-b border-l border-line p-1.5 text-center ${
+                    date === today ? 'bg-overlay font-medium' : 'opacity-60'
                   }`}
                 >
                   {DAY_LABELS[index]}
@@ -230,7 +230,7 @@ export function WeekSection({
                       key={key}
                       type="button"
                       onClick={(event) => openAddPopover(event, column + 1, period.index)}
-                      className={`${cellClass} cursor-pointer bg-black/[0.015] text-left hover:bg-black/[0.06]`}
+                      className={`${cellClass} cursor-pointer bg-overlay text-left hover:bg-overlay`}
                       style={style}
                       aria-label={`${DAY_LABELS[column]} 第 ${period.index} 节加课`}
                     />
@@ -247,14 +247,14 @@ export function WeekSection({
                     gridRow: `${occurrence.startPeriod + 1} / span ${occurrence.span}`,
                   };
                   const title = `${courseLabel(occurrence.courseId)} ${occurrence.startMinute}-${occurrence.endMinute}`;
-                  const blockClass = `m-0.5 overflow-hidden rounded bg-[var(--color-ink)]/85 px-1.5 py-1 text-left text-white ${
-                    editing ? 'cursor-pointer ring-1 ring-white/40 hover:brightness-110' : ''
+                  const blockClass = `m-0.5 overflow-hidden rounded bg-[var(--color-strong)]/85 px-1.5 py-1 text-left text-on-strong ${
+                    editing ? 'cursor-pointer ring-1 ring-line-strong hover:brightness-110' : ''
                   }`;
                   const label = (
                     <CourseLabel
                       id={occurrence.courseId}
                       lookup={subjectById}
-                      unknownClassName="text-white/60"
+                      unknownClassName="text-on-strong/60"
                     />
                   );
                   if (!editing) {
@@ -287,7 +287,7 @@ export function WeekSection({
               ref={popoverRef}
               role="dialog"
               aria-label="编辑格子"
-              className="absolute z-20 w-56 rounded-xl border border-black/10 bg-white p-2 text-xs shadow-lg"
+              className="absolute z-20 w-56 rounded-xl border border-line bg-card p-2 text-xs shadow-lg"
               style={{ left: popover.x, top: popover.y }}
             >
               {popover.kind === 'add' ? (
@@ -308,7 +308,7 @@ export function WeekSection({
                             onClick={() =>
                               void addRuleForSubject(subject, popover.day, popover.periodIndex)
                             }
-                            className="w-full rounded px-2 py-1 text-left hover:bg-black/[0.06]"
+                            className="w-full rounded px-2 py-1 text-left hover:bg-overlay"
                           >
                             {subject.name}
                           </button>

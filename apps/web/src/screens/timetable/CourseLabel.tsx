@@ -12,7 +12,7 @@ export const UNKNOWN_SUBJECT_LABEL = '未知科目（已删除）';
 export function CourseLabel({
   id,
   lookup,
-  unknownClassName = 'italic text-black/40',
+  unknownClassName = 'italic text-muted',
 }: {
   id: string;
   lookup: ReadonlyMap<string, Subject>;

@@ -37,7 +37,7 @@ export function ToolboxScreen() {
         {EXERCISES.map((exercise) => (
           <div
             key={exercise.id}
-            className="flex flex-col justify-between rounded-xl border border-black/[0.08] bg-white/50 p-4"
+            className="flex flex-col justify-between rounded-xl border border-line bg-card-faint p-4"
           >
             <div>
               <div className="flex items-baseline justify-between gap-2">
@@ -51,7 +51,7 @@ export function ToolboxScreen() {
             <button
               type="button"
               onClick={() => setActive({ key: newId(), exercise })}
-              className="mt-4 self-start rounded-lg bg-[var(--color-ink)] px-4 py-2 text-xs text-white transition hover:opacity-90"
+              className="mt-4 self-start rounded-lg bg-[var(--color-strong)] px-4 py-2 text-xs text-on-strong transition hover:opacity-90"
             >
               开始
             </button>
@@ -172,7 +172,7 @@ function ExerciseSession({ exercise, onExit }: ExerciseSessionProps) {
           <button
             type="button"
             onClick={onExit}
-            className="rounded-xl bg-[var(--color-ink)] px-5 py-2.5 text-sm text-white transition hover:opacity-90"
+            className="rounded-xl bg-[var(--color-strong)] px-5 py-2.5 text-sm text-on-strong transition hover:opacity-90"
           >
             回到工具箱
           </button>
@@ -217,10 +217,10 @@ function ExerciseSession({ exercise, onExit }: ExerciseSessionProps) {
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={Math.round(progress.progress * 100)}
-            className="h-2 overflow-hidden rounded-full bg-black/[0.06]"
+            className="h-2 overflow-hidden rounded-full bg-overlay"
           >
             <div
-              className="h-full rounded-full bg-[var(--color-ink)] transition-[width] duration-200"
+              className="h-full rounded-full bg-[var(--color-strong)] transition-[width] duration-200"
               style={{ width: `${Math.round(progress.progress * 100)}%` }}
             />
           </div>
@@ -233,7 +233,7 @@ function ExerciseSession({ exercise, onExit }: ExerciseSessionProps) {
           <button
             type="button"
             onClick={paused ? resume : pause}
-            className="min-w-[8.5rem] rounded-xl border border-black/10 bg-white/60 px-4 py-3 text-sm transition hover:bg-white"
+            className="min-w-[8.5rem] rounded-xl border border-line bg-card-soft px-4 py-3 text-sm transition hover:bg-card"
           >
             {paused ? '继续' : '暂停'}
           </button>

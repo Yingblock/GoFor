@@ -740,7 +740,7 @@ export function PrintPreviewDialog({
       role="dialog"
       aria-modal="true"
       aria-label="打印预览"
-      className="fixed inset-0 z-50 flex flex-col bg-black/30 p-2 sm:p-6 animate-fade-in"
+      className="fixed inset-0 z-50 flex flex-col bg-scrim p-2 sm:p-6 animate-fade-in"
     >
       <div className="mx-auto flex h-full w-full min-w-0 max-w-3xl flex-col overflow-hidden rounded-2xl bg-paper shadow-pop animate-pop-in">
         <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
@@ -759,7 +759,7 @@ export function PrintPreviewDialog({
           </button>
         </header>
 
-        <div ref={hostRef} className="min-h-0 flex-1 overflow-auto bg-black/[0.06] p-3">
+        <div ref={hostRef} className="min-h-0 flex-1 overflow-auto bg-overlay p-3">
           <div
             className="mx-auto"
             style={{
@@ -821,7 +821,7 @@ export function PrintPreviewDialog({
           <button
             type="button"
             onClick={() => window.print()}
-            className="rounded-lg bg-ink px-3 py-1.5 text-xs text-white"
+            className="rounded-lg bg-strong px-3 py-1.5 text-xs text-on-strong"
           >
             继续打印
           </button>

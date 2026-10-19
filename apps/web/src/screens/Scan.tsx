@@ -357,7 +357,7 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
               >
                 用相机拍
               </Button>
-              <label className="cursor-pointer rounded-md border border-line bg-white/70 px-4 py-2 text-small transition duration-fast ease-standard hover:bg-white">
+              <label className="cursor-pointer rounded-md border border-line bg-card-soft px-4 py-2 text-small transition duration-fast ease-standard hover:bg-card">
                 选一张照片
                 <input
                   type="file"

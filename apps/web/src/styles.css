@@ -27,6 +27,16 @@
   --color-ok: oklch(0.58 0.13 155);
   --color-warn: oklch(0.68 0.14 75);
 
+  /* 深色主题用到的语义色：卡片/填充按钮/遮罩。深色下由 [data-theme="dark"] 覆盖。 */
+  --color-card: oklch(1 0 0);
+  --color-card-soft: oklch(1 0 0 / 0.7);
+  --color-card-faint: oklch(1 0 0 / 0.5);
+  --color-strong: oklch(0.26 0.03 260);
+  --color-on-strong: oklch(1 0 0);
+  --color-overlay: oklch(0.26 0.03 260 / 0.06);
+  --color-line-strong: oklch(0.26 0.03 260 / 0.25);
+  --color-scrim: oklch(0 0 0 / 0.3);
+
   /* ------------------------------------------------------------ 圆角 */
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
@@ -104,6 +114,41 @@
  * 必须显式 @source，否则组件里的类名不会生成 CSS。 */
 @source "../../../packages/ui/src";
 
+/*
+ * 深色主题（P2-2.16）。
+ *
+ * Tailwind v4 的工具类引用 `--color-*` 变量（例如 bg-ink → var(--color-ink)），
+ * 所以这里只覆盖变量，不改任何组件代码；但 `bg-white` / `border-black/10` 这类
+ * 原生色工具类不引用变量，已统一换成上面的语义 token（bg-card / border-line…）。
+ *
+ * 打印纸面永远是白的：`PrintSheet` 用内联色，不受主题影响。
+ */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-ink: oklch(0.93 0.012 260);
+  --color-paper: oklch(0.17 0.012 260);
+  --color-muted: oklch(0.72 0.015 260);
+  --color-line: oklch(0.93 0.012 260 / 0.12);
+  --color-line-strong: oklch(0.93 0.012 260 / 0.3);
+
+  --color-card: oklch(0.225 0.012 260);
+  --color-card-soft: oklch(0.24 0.012 260 / 0.72);
+  --color-card-faint: oklch(0.24 0.012 260 / 0.5);
+  --color-strong: oklch(0.86 0.01 260);
+  --color-on-strong: oklch(0.16 0.015 260);
+  --color-overlay: oklch(0.93 0.012 260 / 0.07);
+  --color-scrim: oklch(0 0 0 / 0.55);
+
+  --color-accent: oklch(0.72 0.12 255);
+  --color-danger: oklch(0.68 0.17 27);
+  --color-ok: oklch(0.7 0.12 155);
+  --color-warn: oklch(0.8 0.13 75);
+
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.4);
+  --shadow-pop: 0 12px 32px oklch(0 0 0 / 0.55), 0 2px 8px oklch(0 0 0 / 0.35);
+}
+
 html,
 body,
 #root {
@@ -156,6 +201,13 @@ body {
 /* 屏幕上隐藏真实打印层，只在打印时显示 */
 .print-root {
   display: none;
+  /* 纸面永远是深色字：深色主题下 body 的 ink 会变成浅色，继承过去就成了浅字白纸。 */
+  color: #111;
+}
+
+/* 预览与真实打印共用纸面，颜色不能跟主题走 */
+.print-page {
+  color: #111;
 }
 
 @media print {

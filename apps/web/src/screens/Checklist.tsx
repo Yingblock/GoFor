@@ -133,8 +133,8 @@ export function ChecklistScreen() {
                 aria-current={checklist.id === selectedId ? 'true' : undefined}
                 className={`w-full rounded-lg border px-3 py-2 text-left text-body transition-colors duration-fast ${focusRing} ${
                   checklist.id === selectedId
-                    ? 'border-ink/15 bg-white'
-                    : 'border-line bg-white/50 hover:bg-white/80'
+                    ? 'border-ink/15 bg-card'
+                    : 'border-line bg-card-faint hover:bg-card-soft'
                 }`}
               >
                 <span className="block truncate">{checklist.name}</span>

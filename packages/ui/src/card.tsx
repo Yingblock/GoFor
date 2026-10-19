@@ -6,8 +6,8 @@ export type CardPadding = 'none' | 'sm' | 'md';
 export type CardElevation = 'none' | 'card' | 'pop';
 
 const TONES: Record<CardTone, string> = {
-  default: 'border-line bg-white/60',
-  solid: 'border-line bg-white',
+  default: 'border-line bg-card-soft',
+  solid: 'border-line bg-card',
   success: 'border-ok/25 bg-ok/10',
   danger: 'border-danger/25 bg-danger/10',
 };

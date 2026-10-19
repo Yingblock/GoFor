@@ -12,8 +12,8 @@ export function Select({ invalid = false, className, ref, ...rest }: SelectProps
     <select
       ref={ref}
       className={cn(
-        'block w-full rounded-md border bg-white/70 px-3 py-2 text-body outline-none transition duration-fast ease-standard focus:bg-white disabled:cursor-not-allowed disabled:opacity-50',
-        invalid ? 'border-danger' : 'border-line focus:border-ink/25',
+        'block w-full rounded-md border bg-card-soft px-3 py-2 text-body outline-none transition duration-fast ease-standard focus:bg-card disabled:cursor-not-allowed disabled:opacity-50',
+        invalid ? 'border-danger' : 'border-line focus:border-strong/25',
         focusRing,
         className,
       )}

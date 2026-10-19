@@ -148,6 +148,9 @@ docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS
     `text-body`、`duration-fast` 等），不要手写颜色/圆角/阴影/时长的魔法值。
     Tailwind v4 用 CSS-first 配置（`apps/web/src/styles.css` 的 `@theme`），**不要新建
     `tailwind.config.js`**。详见 `docs/DESIGN-SYSTEM.md`。
+    **深色主题（P2-2.16）只覆盖 token**：不要写 `bg-white` / `border-black/10` 这类原生色，
+    分别用 `bg-card` / `bg-card-soft` / `border-line` / `bg-strong` / `text-on-strong` /
+    `bg-overlay` / `bg-scrim`；纸面（`.print-page`）固定白底黑字，不跟主题变。
 12. **实现新功能前先找现成稳定方案，避免重复造轮子。**
     - 先查三处：平台内建 API（浏览器/Chromium/Node/系统）、仓库已有依赖、成熟开源库。
     - 再评估五件事：**许可证**（必须能随包分发，见规则 4）、维护状态与版本、

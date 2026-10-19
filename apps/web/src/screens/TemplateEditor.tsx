@@ -110,7 +110,7 @@ function NumberField({
           if (!Number.isFinite(parsed)) return;
           onChange(Math.min(max, Math.max(min, parsed)));
         }}
-        className="w-14 rounded border border-line bg-white/70 px-1.5 py-0.5"
+        className="w-14 rounded border border-line bg-card-soft px-1.5 py-0.5"
       />
     </label>
   );
@@ -135,7 +135,7 @@ function TextField({
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={`rounded border border-line bg-white/70 px-1.5 py-0.5 ${className}`}
+        className={`rounded border border-line bg-card-soft px-1.5 py-0.5 ${className}`}
       />
     </label>
   );
@@ -181,7 +181,7 @@ function SlotsLabelsField({
         onKeyDown={(event) => {
           if (event.key === 'Enter') commit();
         }}
-        className="w-48 rounded border border-line bg-white/70 px-1.5 py-0.5"
+        className="w-48 rounded border border-line bg-card-soft px-1.5 py-0.5"
       />
     </label>
   );
@@ -266,7 +266,7 @@ function BlockFields({ block, onChange }: { block: Block; onChange: (next: Block
                   onChange({ ...block, dayPart: value });
                 }
               }}
-              className="rounded border border-line bg-white/70 px-1 py-0.5"
+              className="rounded border border-line bg-card-soft px-1 py-0.5"
             >
               {DAY_PARTS.map((part) => (
                 <option key={part} value={part}>
@@ -546,9 +546,7 @@ export function TemplateEditorScreen({
                 type="button"
                 onClick={() => setSelectedId(template.id)}
                 className={`w-full rounded px-2 py-1 text-left text-[13px] ${
-                  selectedId === template.id
-                    ? 'bg-black/[0.06] font-medium'
-                    : 'hover:bg-black/[0.03]'
+                  selectedId === template.id ? 'bg-overlay font-medium' : 'hover:bg-overlay'
                 }`}
               >
                 {template.name}
@@ -561,8 +559,8 @@ export function TemplateEditorScreen({
               onClick={() => setSelectedId(CALIBRATION_TEMPLATE.id)}
               className={`w-full rounded px-2 py-1 text-left text-[13px] ${
                 selectedId === CALIBRATION_TEMPLATE.id
-                  ? 'bg-black/[0.06] font-medium'
-                  : 'hover:bg-black/[0.03]'
+                  ? 'bg-overlay font-medium'
+                  : 'hover:bg-overlay'
               }`}
             >
               打印校准页
@@ -584,8 +582,8 @@ export function TemplateEditorScreen({
                   onClick={() => setSelectedId(`${CUSTOM_TEMPLATE_PREFIX}${item.id}`)}
                   className={`w-full rounded px-2 py-1 text-left text-[13px] ${
                     selectedId === `${CUSTOM_TEMPLATE_PREFIX}${item.id}`
-                      ? 'bg-black/[0.06] font-medium'
-                      : 'hover:bg-black/[0.03]'
+                      ? 'bg-overlay font-medium'
+                      : 'hover:bg-overlay'
                   }`}
                 >
                   {item.name}
@@ -610,7 +608,7 @@ export function TemplateEditorScreen({
                 onChange={(event) =>
                   updateDraft((current) => ({ ...current, name: event.target.value }))
                 }
-                className="w-48 rounded border border-line bg-white/70 px-2 py-0.5 text-sm font-medium"
+                className="w-48 rounded border border-line bg-card-soft px-2 py-0.5 text-sm font-medium"
               />
             </label>
           ) : (
@@ -626,7 +624,7 @@ export function TemplateEditorScreen({
               }}
               className={`rounded border px-2 py-0.5 text-xs ${
                 currentTemplate.paper === option
-                  ? 'border-[var(--color-ink)] font-medium'
+                  ? 'border-[var(--color-strong)] font-medium'
                   : 'border-line opacity-60'
               }`}
             >
@@ -653,7 +651,7 @@ export function TemplateEditorScreen({
               <button
                 type="button"
                 onClick={() => void save()}
-                className="rounded-lg bg-ink px-3 py-1.5 text-xs text-white"
+                className="rounded-lg bg-strong px-3 py-1.5 text-xs text-on-strong"
               >
                 保存
               </button>
@@ -676,13 +674,13 @@ export function TemplateEditorScreen({
             onClick={() => void printCurrent()}
             disabled={printing}
             title="先把当前模板与纸张设为打印预设，再打开系统打印框"
-            className="rounded-lg bg-ink px-3 py-1.5 text-xs text-white disabled:opacity-60"
+            className="rounded-lg bg-strong px-3 py-1.5 text-xs text-on-strong disabled:opacity-60"
           >
             {printing ? '准备打印…' : '打印这个模板'}
           </button>
         </div>
 
-        <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
+        <ul className="divide-y divide-line rounded-xl border border-line bg-card-faint">
           {(draft?.blocks ?? currentTemplate.blocks).map((block, index) => (
             <li key={block.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
               <span className="w-8 tabular-nums opacity-35">{index + 1}</span>

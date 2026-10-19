@@ -109,7 +109,7 @@ export function DebugPanel() {
   const shifted = offset !== 0;
 
   return (
-    <details className="max-h-[52vh] overflow-y-auto rounded-lg border border-line bg-white/60 px-3 py-2 text-caption">
+    <details className="max-h-[52vh] overflow-y-auto rounded-lg border border-line bg-card-soft px-3 py-2 text-caption">
       <summary className="cursor-pointer select-none font-medium opacity-60">
         调试 · 当前时间
         {shifted ? <span className="ml-1.5 text-danger">{formatOffset(offset)}</span> : null}

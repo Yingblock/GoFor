@@ -110,7 +110,7 @@ export function PrintScreen({
         <button
           type="button"
           onClick={() => setPreviewOpen(true)}
-          className="rounded-lg bg-ink px-4 py-2 text-sm text-white"
+          className="rounded-lg bg-strong px-4 py-2 text-sm text-on-strong"
         >
           打印预览
         </button>
@@ -128,7 +128,7 @@ export function PrintScreen({
             aria-label="打印模板"
             value={templateId}
             onChange={(event) => onChangeTemplate(event.target.value)}
-            className="max-w-44 rounded-lg border border-line bg-white/70 px-2 py-1.5 text-xs"
+            className="max-w-44 rounded-lg border border-line bg-card-soft px-2 py-1.5 text-xs"
           >
             {options.map((template) => (
               <option key={template.id} value={template.id}>
@@ -146,7 +146,7 @@ export function PrintScreen({
             type="button"
             onClick={() => onChangePaper(size)}
             className={`rounded-lg border px-3 py-1.5 text-xs ${
-              paper === size ? 'border-[var(--color-ink)] font-medium' : 'border-line opacity-60'
+              paper === size ? 'border-[var(--color-strong)] font-medium' : 'border-line opacity-60'
             }`}
           >
             {PAPER_SIZES[size].name}

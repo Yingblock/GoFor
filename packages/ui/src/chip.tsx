@@ -33,7 +33,7 @@ export function Chip({
     <span
       className={cn(
         BASE,
-        active ? 'border-ink/20 bg-ink/[0.08] text-ink' : 'border-line bg-white/70 text-ink/60',
+        active ? 'border-ink/20 bg-ink/[0.08] text-ink' : 'border-line bg-card-soft text-ink/60',
         disabled ? 'opacity-50' : '',
         className,
       )}

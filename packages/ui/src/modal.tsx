@@ -79,7 +79,7 @@ export function Modal({
         type="button"
         aria-label={closeLabel}
         onClick={() => closeRef.current()}
-        className="absolute inset-0 cursor-default bg-black/30 animate-fade-in"
+        className="absolute inset-0 cursor-default bg-scrim animate-fade-in"
       />
       <div
         ref={panelRef}
@@ -88,7 +88,7 @@ export function Modal({
         aria-labelledby={titleId}
         tabIndex={-1}
         className={cn(
-          'relative flex max-h-[85vh] w-full flex-col overflow-hidden rounded-lg border border-line bg-white shadow-pop animate-pop-in',
+          'relative flex max-h-[85vh] w-full flex-col overflow-hidden rounded-lg border border-line bg-card shadow-pop animate-pop-in',
           SIZES[size],
           focusRing,
           className,

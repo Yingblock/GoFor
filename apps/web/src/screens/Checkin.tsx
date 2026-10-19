@@ -258,7 +258,9 @@ function HistoryGrid({ habit, today, historyFrom, doneKeys }: HistoryGridProps) 
             aria-label={`${date} ${done ? '已打卡' : '未打卡'}`}
             title={`${date}${isToday ? '（今天）' : ''} · ${done ? '已打卡' : '未打卡'} · 历史只读`}
             className={`size-5 cursor-not-allowed rounded-sm border text-micro leading-none tabular-nums ${
-              done ? 'border-ink bg-ink text-white' : 'border-line bg-white/60 text-ink/40'
+              done
+                ? 'border-strong bg-strong text-on-strong'
+                : 'border-line bg-card-soft text-ink/40'
             } ${isToday ? 'ring-1 ring-accent ring-offset-1' : ''}`}
           >
             {Number(date.slice(8, 10))}

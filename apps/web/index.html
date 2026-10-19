@@ -11,6 +11,21 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>GoFor</title>
+    <script>
+      // 在样式与 React 之前设好主题，避免深色模式启动闪白（P2-2.16）。
+      // var 必须放在脚本顶层：Biome 不允许 try 里声明提升到全局的 var。
+      var goforTheme = null;
+      try {
+        goforTheme = localStorage.getItem('gofor.ui.theme');
+      } catch {
+        goforTheme = null;
+      }
+      var goforDark =
+        goforTheme === 'dark' ||
+        (goforTheme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = goforDark ? 'dark' : 'light';
+      document.documentElement.style.colorScheme = goforDark ? 'dark' : 'light';
+    </script>
   </head>
   <body>
     <div id="root"></div>

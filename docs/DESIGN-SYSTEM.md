@@ -156,7 +156,7 @@ import { Button, Card, Section, StatCard } from '@gofor/ui';
 // 旧：每处手写一套
 <section>
   <h2 className="mb-3 text-sm font-medium opacity-50">统计</h2>
-  <div className="rounded-xl border border-black/[0.08] bg-white/60 px-4 py-3">…</div>
+  <div className="rounded-xl border border-line bg-card-soft px-4 py-3">…</div>
 </section>
 
 // 新：组件 + token
@@ -169,28 +169,27 @@ import { Button, Card, Section, StatCard } from '@gofor/ui';
 
 ## 5. 当前迁移状态
 
-已迁移（第一阶段）：
+**全部迁移完成（2026-10-20）**：`apps/web/src` 与 `packages/ui/src` 不再用
+`bg-white*` / `border-black*` / `text-black` 这类原生色；统一走 `@theme` token
+（`bg-card` / `bg-card-soft` / `border-line` / `bg-overlay` / `bg-strong` / `text-on-strong` / `bg-scrim`）。
+新增页面照抄现有组件即可，不需要再逐个迁移。
 
-- `apps/web/src/styles.css`（token / 动画 / reduced-motion / `@source`）
-- `packages/ui/**`
-- `apps/web/src/components/{Sidebar,BackupBanner,ErrorBoundary,CommandPalette}.tsx`
-- `apps/web/src/screens/Home.tsx`
+## 6. 深色主题（P2-2.16）
 
-**尚未迁移（下一阶段，从易到难）**：
-
-| 屏幕 | 备注 |
-|---|---|
-| `screens/Tasks.tsx` | 输入框 / Chip / 勾选列表 |
-| `screens/Checklist.tsx` | 列表 + 按钮 |
-| `screens/Checkin.tsx` | 表单 + 统计 |
-| `screens/DataScreen.tsx` | 按钮 + 危险操作 |
-| `screens/Diary.tsx` / `screens/Mood.tsx` | 表单 + textarea |
-| `screens/Report.tsx` | 统计卡 |
-| `screens/Scan.tsx`、`screens/scan/*` | 进度、按钮、预览卡 |
-| `screens/Toolbox.tsx` / `screens/ComingSoon.tsx` | 简单空态 |
-| `App.tsx` 外壳 | 顶栏按钮、折叠按钮（`aria-label` 不可改） |
-| `components/DebugPanel.tsx` | 临时调试入口 |
-| `screens/Pomodoro.tsx`、`screens/Timetable.tsx`、`screens/timetable/*`、`screens/PrintScreen.tsx`、`screens/TemplateEditor.tsx`、`print/*` | **由并行任务负责，本轮不碰** |
-
-`@gofor/ui` 里目前 `Modal` / `Field` / `Select` / `Textarea` / `ProgressBar` / `Badge` / `Chip` / `Divider`
-已定义但还没有宿主使用，下一阶段迁移时优先接上。
+- 三态：跟随系统 / 浅色 / 深色；存在 `localStorage['gofor.ui.theme']`，
+  入口在侧栏底部（折叠态只留图标）。
+- 实现只改 `<html data-theme="light|dark">`，颜色全在 `styles.css`：
+  `:root[data-theme="dark"]` 覆盖同一批 `--color-*` 变量；组件不感知主题。
+- 新增颜色时**先加 token**，再在浅色与深色两处各写一次，禁止在组件里写死颜色。
+- 语义色约定：
+  | token | 用途 |
+  |---|---|
+  | `ink` / `paper` | 正文前景 / 应用背景 |
+  | `card` / `card-soft` / `card-faint` | 实心卡片 / 半透明卡片 / 更淡的底 |
+  | `line` / `line-strong` | 描边 / 选中描边 |
+  | `strong` / `on-strong` | 实心按钮背景 / 其上的文字 |
+  | `overlay` | 悬停、表头等淡底 |
+  | `scrim` | 模态/抽屉遮罩 |
+- **纸面不跟主题**：`.print-root` / `.print-page` 固定 `color:#111`，背景仍为白；
+  深色下打印预览看起来仍是白纸黑字。
+- 首屏在 `index.html` 内联脚本里先设好 `data-theme`，避免深色启动闪白。

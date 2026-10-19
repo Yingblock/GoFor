@@ -2,6 +2,7 @@ import { IconButton } from '@gofor/ui';
 import { useEffect, useState } from 'react';
 import { groupOf, NAV, type ScreenId } from '../nav.ts';
 import { DebugPanel } from './DebugPanel.tsx';
+import { ThemeToggle } from './ThemeToggle.tsx';
 
 export interface SidebarProps {
   screen: ScreenId;
@@ -48,7 +49,7 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
           type="button"
           aria-label="关闭菜单"
           onClick={onClose}
-          className="fixed inset-0 z-30 bg-black/20 md:hidden"
+          className="fixed inset-0 z-30 bg-scrim md:hidden"
         />
       ) : null}
 
@@ -164,6 +165,11 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
             ))}
           </div>
         </nav>
+
+        {/* 主题切换：折叠态只留图标，随时够得着。 */}
+        <div className="border-t border-line px-3 py-2">
+          <ThemeToggle collapsed={collapsed} />
+        </div>
 
         {/* 折叠后 56px 放不下这些文字；它们不是导航功能，桌面折叠时收起来。 */}
         <div

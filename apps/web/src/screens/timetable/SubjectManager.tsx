@@ -41,7 +41,7 @@ export function SubjectManager({
 
   return (
     <div className="space-y-2">
-      <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
+      <ul className="divide-y divide-line rounded-xl border border-line bg-card-faint">
         {subjects.length === 0 ? (
           <li className="px-3 py-2 text-xs opacity-40">还没有科目，在下面加一个，比如「数学」。</li>
         ) : null}
@@ -63,19 +63,19 @@ export function SubjectManager({
                       if (event.key === 'Enter') submitRename(subject.id);
                     }}
                     aria-label={`${subject.name} 的新名称`}
-                    className="w-40 rounded border border-black/10 bg-white/70 px-2 py-1"
+                    className="w-40 rounded border border-line bg-card-soft px-2 py-1"
                   />
                   <button
                     type="button"
                     onClick={() => submitRename(subject.id)}
-                    className="rounded-lg bg-[var(--color-ink)] px-3 py-1 text-white"
+                    className="rounded-lg bg-[var(--color-strong)] px-3 py-1 text-on-strong"
                   >
                     保存
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditingId(null)}
-                    className="rounded-lg border border-black/10 px-3 py-1"
+                    className="rounded-lg border border-line px-3 py-1"
                   >
                     取消
                   </button>
@@ -145,12 +145,12 @@ export function SubjectManager({
           }}
           placeholder="科目名，如 数学"
           aria-label="新科目名"
-          className="w-40 rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 text-xs outline-none"
+          className="w-40 rounded-lg border border-line bg-card-soft px-3 py-1.5 text-xs outline-none"
         />
         <button
           type="button"
           onClick={submitDraft}
-          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs"
+          className="rounded-lg border border-line px-3 py-1.5 text-xs"
         >
           加科目
         </button>

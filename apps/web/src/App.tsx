@@ -413,11 +413,11 @@ export function App() {
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-black/[0.06] bg-[var(--color-paper)]/90 px-4 py-3 backdrop-blur md:px-8">
+          <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-[var(--color-paper)]/90 px-4 py-3 backdrop-blur md:px-8">
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
-              className="rounded-md border border-black/10 px-2 py-1 text-xs md:hidden"
+              className="rounded-md border border-line px-2 py-1 text-xs md:hidden"
               aria-label="打开菜单"
             >
               ☰
@@ -430,7 +430,7 @@ export function App() {
             <button
               type="button"
               onClick={() => setCollapsed((current) => !current)}
-              className="hidden rounded-md border border-black/10 px-2 py-1 text-xs opacity-60 transition hover:opacity-100 md:inline-flex"
+              className="hidden rounded-md border border-line px-2 py-1 text-xs opacity-60 transition hover:opacity-100 md:inline-flex"
               aria-label={collapsed ? '展开侧栏' : '折叠侧栏'}
               aria-expanded={!collapsed}
               aria-controls="app-sidebar"
@@ -453,14 +453,14 @@ export function App() {
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className="rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 text-xs opacity-70"
+              className="rounded-lg border border-line bg-card-soft px-3 py-1.5 text-xs opacity-70"
             >
               命令 ⌘K
             </button>
           </header>
 
           {notice ? (
-            <div className="mx-4 mt-3 rounded-lg bg-black/[0.05] px-3 py-2 text-xs opacity-70 md:mx-8">
+            <div className="mx-4 mt-3 rounded-lg bg-overlay px-3 py-2 text-xs opacity-70 md:mx-8">
               {notice}
             </div>
           ) : null}

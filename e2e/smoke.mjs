@@ -746,7 +746,8 @@ try {
   // 折叠态逐个图标点过去：每个条目都要点得到，名字来自 aria-label / title。
   // 只取「有 title 的按钮」：折叠态图标 + GoFor 标题按钮。
   // （✕ 关闭按钮在桌面是 display:none 但仍有 aria-label，不能混进来。）
-  const iconButtons = page.locator('#app-sidebar button[title]');
+  // 主题切换也带 title，但它不是导航入口：必须排除，否则会被当成"点不到"的图标。
+  const iconButtons = page.locator('#app-sidebar button[title]:not([aria-label^="主题："])');
   const iconCount = await iconButtons.count();
   const iconNames = [];
   for (let index = 0; index < iconCount; index++) {
@@ -828,6 +829,32 @@ try {
   await sleep(300);
 
   /* ---------------------------------------------------- 数据与备份页 */
+
+  /* -------------------------------------------------------------- 主题 */
+
+  // P2-2.16：侧栏底部三态切换（跟随系统/浅色/深色）；深色要能持久化。
+  const themeButton = page.getByRole('button', { name: /主题：/ });
+  check('侧栏有主题切换', (await themeButton.count()) > 0);
+
+  for (let i = 0; i < 3; i += 1) {
+    const current = await page.evaluate(() => document.documentElement.dataset.theme);
+    if (current === 'dark') break;
+    await themeButton.click();
+    await sleep(120);
+  }
+  check(
+    '可切到深色主题',
+    (await page.evaluate(() => document.documentElement.dataset.theme)) === 'dark',
+  );
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('text=拍照录入', { timeout: 15000 });
+  check(
+    '深色主题刷新后保持',
+    (await page.evaluate(() => document.documentElement.dataset.theme)) === 'dark',
+  );
+  // 还原到「跟随系统」（下一次点击循环回 system），避免影响后面的截图/PDF 用例。
+  await page.getByRole('button', { name: /主题：/ }).click();
+  await sleep(120);
 
   await openGroup(page, '导出');
   await clickItem(page, '数据与备份');

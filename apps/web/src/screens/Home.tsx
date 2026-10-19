@@ -151,7 +151,7 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
         <button
           type="button"
           onClick={() => onNavigate('capture')}
-          className="flex items-center gap-3 rounded-lg border border-line bg-white/60 px-4 py-4 text-left shadow-card transition duration-base ease-standard hover:bg-white"
+          className="flex items-center gap-3 rounded-lg border border-line bg-card-soft px-4 py-4 text-left shadow-card transition duration-base ease-standard hover:bg-card"
         >
           <span className="text-2xl">📷</span>
           <span>
@@ -163,7 +163,7 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
         <button
           type="button"
           onClick={() => onNavigate('print')}
-          className="flex items-center gap-3 rounded-lg border border-line bg-white/60 px-4 py-4 text-left shadow-card transition duration-base ease-standard hover:bg-white"
+          className="flex items-center gap-3 rounded-lg border border-line bg-card-soft px-4 py-4 text-left shadow-card transition duration-base ease-standard hover:bg-card"
         >
           <span className="text-2xl">🖨</span>
           <span>

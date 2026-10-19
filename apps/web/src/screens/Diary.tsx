@@ -57,8 +57,8 @@ function trendX(dayIndex: number): number {
 
 const MOOD_VALUES = [1, 2, 3, 4, 5] as const;
 
-const chipOn = 'rounded-full bg-[var(--color-ink)] px-2.5 py-1 text-[11px] text-white';
-const chipOff = 'rounded-full border border-black/10 bg-white/60 px-2.5 py-1 text-[11px]';
+const chipOn = 'rounded-full bg-[var(--color-strong)] px-2.5 py-1 text-[11px] text-on-strong';
+const chipOff = 'rounded-full border border-line bg-card-soft px-2.5 py-1 text-[11px]';
 
 /**
  * 情绪日记。
@@ -201,7 +201,7 @@ export function DiaryScreen() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
-      <section className="space-y-3 rounded-xl border border-black/[0.08] bg-white/50 p-4">
+      <section className="space-y-3 rounded-xl border border-line bg-card-faint p-4">
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-medium opacity-50">写今天的</h2>
           <span className="text-[11px] opacity-35">{today}</span>
@@ -216,7 +216,7 @@ export function DiaryScreen() {
           rows={4}
           placeholder="今天发生了什么？怎么想的？不用写长。"
           aria-label="今天的日记"
-          className="w-full resize-y rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm leading-relaxed outline-none"
+          className="w-full resize-y rounded-lg border border-line bg-card-soft px-3 py-2 text-sm leading-relaxed outline-none"
         />
 
         <div className="flex flex-wrap items-center gap-2">
@@ -287,13 +287,13 @@ export function DiaryScreen() {
               }}
               placeholder="新标签，回车添加"
               aria-label="新标签"
-              className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 text-xs outline-none"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-card-soft px-3 py-1.5 text-xs outline-none"
             />
             <button
               type="button"
               onClick={() => addTag(tagDraft)}
               disabled={tagDraft.trim() === ''}
-              className="rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 text-[11px] opacity-70 transition disabled:opacity-30"
+              className="rounded-lg border border-line bg-card-soft px-3 py-1.5 text-[11px] opacity-70 transition disabled:opacity-30"
             >
               添加
             </button>
@@ -305,7 +305,7 @@ export function DiaryScreen() {
             type="button"
             onClick={() => void onSave()}
             disabled={saving || text.trim() === ''}
-            className="rounded-lg bg-[var(--color-ink)] px-4 py-2 text-xs text-white transition disabled:opacity-40"
+            className="rounded-lg bg-[var(--color-strong)] px-4 py-2 text-xs text-on-strong transition disabled:opacity-40"
           >
             {saving ? '保存中…' : '保存'}
           </button>
@@ -325,11 +325,11 @@ export function DiaryScreen() {
         </div>
 
         {trend.points.length === 0 ? (
-          <p className="rounded-xl border border-black/[0.08] bg-white/50 px-4 py-8 text-center text-[11px] opacity-35">
+          <p className="rounded-xl border border-line bg-card-faint px-4 py-8 text-center text-[11px] opacity-35">
             还没有心情记录。
           </p>
         ) : (
-          <div className="rounded-xl border border-black/[0.08] bg-white/50 px-4 py-3">
+          <div className="rounded-xl border border-line bg-card-faint px-4 py-3">
             <svg
               viewBox={`0 0 ${TREND_WIDTH} ${TREND_HEIGHT}`}
               preserveAspectRatio="none"
@@ -402,26 +402,23 @@ export function DiaryScreen() {
         </div>
 
         {entries.length === 0 ? (
-          <p className="rounded-xl border border-black/[0.08] bg-white/50 px-4 py-8 text-center text-[11px] opacity-35">
+          <p className="rounded-xl border border-line bg-card-faint px-4 py-8 text-center text-[11px] opacity-35">
             最近 {RECENT_DAYS} 天还没有日记。
           </p>
         ) : (
           <ul className="space-y-2">
             {entries.map((entry) => (
-              <li
-                key={entry.id}
-                className="rounded-xl border border-black/[0.08] bg-white/50 px-4 py-3"
-              >
+              <li key={entry.id} className="rounded-xl border border-line bg-card-faint px-4 py-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[11px] tabular-nums opacity-50">{entry.date}</span>
                     {entry.mood !== null ? (
-                      <span className="rounded-full bg-black/[0.06] px-2 py-0.5 text-[10px] opacity-60">
+                      <span className="rounded-full bg-overlay px-2 py-0.5 text-[10px] opacity-60">
                         心情 {entry.mood}
                       </span>
                     ) : null}
                     {entry.date === today ? (
-                      <span className="rounded-full bg-black/[0.06] px-2 py-0.5 text-[10px] opacity-60">
+                      <span className="rounded-full bg-overlay px-2 py-0.5 text-[10px] opacity-60">
                         今天
                       </span>
                     ) : null}
@@ -464,7 +461,7 @@ export function DiaryScreen() {
                     {entry.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="rounded-full bg-black/[0.04] px-2 py-0.5 text-[10px] opacity-50"
+                        className="rounded-full bg-overlay px-2 py-0.5 text-[10px] opacity-50"
                       >
                         #{tag}
                       </span>

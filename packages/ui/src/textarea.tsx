@@ -11,8 +11,8 @@ export function Textarea({ invalid = false, className, ref, ...rest }: TextareaP
     <textarea
       ref={ref}
       className={cn(
-        'block w-full resize-y rounded-md border bg-white/70 px-3 py-2 text-body leading-relaxed outline-none transition duration-fast ease-standard placeholder:opacity-40 focus:bg-white disabled:cursor-not-allowed disabled:opacity-50',
-        invalid ? 'border-danger' : 'border-line focus:border-ink/25',
+        'block w-full resize-y rounded-md border bg-card-soft px-3 py-2 text-body leading-relaxed outline-none transition duration-fast ease-standard placeholder:opacity-40 focus:bg-card disabled:cursor-not-allowed disabled:opacity-50',
+        invalid ? 'border-danger' : 'border-line focus:border-strong/25',
         focusRing,
         className,
       )}

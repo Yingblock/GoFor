@@ -28,7 +28,7 @@ interface MoodSliderProps {
 /** 一根 1–5 的滑块 + 数字显示。数字必须可见：滑块位置不够精确，也不方便回看。 */
 function MoodSlider({ label, value, onChange }: MoodSliderProps) {
   return (
-    <label className="block rounded-xl border border-black/[0.08] bg-white/50 px-4 py-3">
+    <label className="block rounded-xl border border-line bg-card-faint px-4 py-3">
       <span className="flex items-baseline justify-between">
         <span className="text-sm">{label}</span>
         <span className="text-xl font-semibold tabular-nums">{value}</span>
@@ -131,7 +131,7 @@ export function MoodScreen() {
             type="button"
             onClick={() => void onSave()}
             disabled={saving}
-            className="rounded-lg bg-[var(--color-ink)] px-4 py-2 text-xs text-white transition disabled:opacity-40"
+            className="rounded-lg bg-[var(--color-strong)] px-4 py-2 text-xs text-on-strong transition disabled:opacity-40"
           >
             {saving ? '保存中…' : '保存今天'}
           </button>
@@ -150,10 +150,10 @@ export function MoodScreen() {
           <span className="text-[11px] opacity-35">睡眠 / 心情 / 专注</span>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-black/[0.08] bg-white/50">
+        <div className="overflow-hidden rounded-xl border border-line bg-card-faint">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-black/[0.06] text-left text-[11px] opacity-40">
+              <tr className="border-b border-line text-left text-[11px] opacity-40">
                 <th className="px-4 py-2 font-normal">日期</th>
                 <th className="px-3 py-2 font-normal">睡眠</th>
                 <th className="px-3 py-2 font-normal">心情</th>
@@ -164,11 +164,11 @@ export function MoodScreen() {
               {recentDates.map((date, index) => {
                 const entry = byDate.get(date);
                 return (
-                  <tr key={date} className="border-b border-black/[0.04] last:border-b-0">
+                  <tr key={date} className="border-b border-line last:border-b-0">
                     <td className="px-4 py-2 tabular-nums opacity-60">
                       {date}
                       {index === 0 ? (
-                        <span className="ml-2 rounded-full bg-black/[0.06] px-1.5 py-0.5 text-[10px] opacity-60">
+                        <span className="ml-2 rounded-full bg-overlay px-1.5 py-0.5 text-[10px] opacity-60">
                           今天
                         </span>
                       ) : null}

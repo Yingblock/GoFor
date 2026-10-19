@@ -51,7 +51,7 @@ function StatCard({
   empty?: boolean | undefined;
 }) {
   return (
-    <div className="rounded-xl border border-black/[0.08] bg-white/50 px-4 py-3">
+    <div className="rounded-xl border border-line bg-card-faint px-4 py-3">
       <div className="text-[11px] opacity-45">{label}</div>
       <div
         className={`mt-1 tabular-nums ${empty === true ? 'text-sm font-normal opacity-40' : 'text-xl font-semibold'}`}
@@ -268,19 +268,19 @@ export function ReportScreen() {
 
       <Section title="每天学习分钟">
         {maxDaily === 0 ? (
-          <p className="rounded-xl border border-black/[0.08] bg-white/50 px-4 py-6 text-center text-[11px] opacity-35">
+          <p className="rounded-xl border border-line bg-card-faint px-4 py-6 text-center text-[11px] opacity-35">
             还没有数据
           </p>
         ) : (
-          <div className="space-y-2 rounded-xl border border-black/[0.08] bg-white/50 px-4 py-3">
+          <div className="space-y-2 rounded-xl border border-line bg-card-faint px-4 py-3">
             {daily.map((entry) => (
               <div key={entry.date} className="flex items-center gap-2 text-[11px]">
                 <span className="w-20 shrink-0 opacity-45">
                   {weekdayLabel(entry.date)} {entry.date.slice(5)}
                 </span>
-                <div className="h-3 flex-1 overflow-hidden rounded-full bg-black/[0.05]">
+                <div className="h-3 flex-1 overflow-hidden rounded-full bg-overlay">
                   <div
-                    className="h-full rounded-full bg-[var(--color-ink)] opacity-70"
+                    className="h-full rounded-full bg-[var(--color-strong)] opacity-70"
                     style={{
                       width: `${maxDaily === 0 ? 0 : Math.round((entry.minutes / maxDaily) * 100)}%`,
                     }}
@@ -297,14 +297,14 @@ export function ReportScreen() {
 
       <Section title="分心次数（番茄钟 +1）">
         {distraction.sessionCount === 0 ? (
-          <div className="space-y-1 rounded-xl border border-black/[0.08] bg-white/50 px-4 py-6 text-center text-[11px] opacity-35">
+          <div className="space-y-1 rounded-xl border border-line bg-card-faint px-4 py-6 text-center text-[11px] opacity-35">
             <p>还没有数据</p>
             <p className="text-[10px] leading-relaxed opacity-80">
               番茄钟里点「我分心了」并完成番茄后，这里才有记录。
             </p>
           </div>
         ) : (
-          <div className="space-y-2 rounded-xl border border-black/[0.08] bg-white/50 px-4 py-3">
+          <div className="space-y-2 rounded-xl border border-line bg-card-faint px-4 py-3">
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-xl font-semibold tabular-nums">{distraction.total} 次</span>
               <span className="text-[11px] opacity-40">本周（周一到今天）累计</span>
@@ -314,9 +314,9 @@ export function ReportScreen() {
                 <span className="w-20 shrink-0 opacity-45">
                   {weekdayLabel(entry.date)} {entry.date.slice(5)}
                 </span>
-                <div className="h-3 flex-1 overflow-hidden rounded-full bg-black/[0.05]">
+                <div className="h-3 flex-1 overflow-hidden rounded-full bg-overlay">
                   <div
-                    className="h-full rounded-full bg-[var(--color-ink)] opacity-70"
+                    className="h-full rounded-full bg-[var(--color-strong)] opacity-70"
                     style={{
                       width: `${distraction.maxDaily === 0 ? 0 : Math.round((entry.count / distraction.maxDaily) * 100)}%`,
                     }}
@@ -337,11 +337,11 @@ export function ReportScreen() {
 
       <Section title="科目分布">
         {topSubjects.length === 0 ? (
-          <p className="rounded-xl border border-black/[0.08] bg-white/50 px-4 py-6 text-center text-[11px] opacity-35">
+          <p className="rounded-xl border border-line bg-card-faint px-4 py-6 text-center text-[11px] opacity-35">
             还没有数据
           </p>
         ) : (
-          <div className="space-y-2 rounded-xl border border-black/[0.08] bg-white/50 px-4 py-3">
+          <div className="space-y-2 rounded-xl border border-line bg-card-faint px-4 py-3">
             {topSubjects.map((entry) => {
               const percent =
                 totalMinutes === 0 ? 0 : Math.round((entry.minutes / totalMinutes) * 100);
@@ -353,9 +353,9 @@ export function ReportScreen() {
                   <span className="w-20 shrink-0 truncate opacity-60">
                     {subjectName(entry.subjectId)}
                   </span>
-                  <div className="h-3 flex-1 overflow-hidden rounded-full bg-black/[0.05]">
+                  <div className="h-3 flex-1 overflow-hidden rounded-full bg-overlay">
                     <div
-                      className="h-full rounded-full bg-[var(--color-ink)] opacity-50"
+                      className="h-full rounded-full bg-[var(--color-strong)] opacity-50"
                       style={{ width: `${percent}%` }}
                     />
                   </div>
@@ -374,11 +374,11 @@ export function ReportScreen() {
 
       <Section title="三滑块平均">
         {moodSummary === null ? (
-          <p className="rounded-xl border border-black/[0.08] bg-white/50 px-4 py-6 text-center text-[11px] opacity-35">
+          <p className="rounded-xl border border-line bg-card-faint px-4 py-6 text-center text-[11px] opacity-35">
             还没有数据
           </p>
         ) : (
-          <div className="grid gap-2 rounded-xl border border-black/[0.08] bg-white/50 px-4 py-3 sm:grid-cols-3">
+          <div className="grid gap-2 rounded-xl border border-line bg-card-faint px-4 py-3 sm:grid-cols-3">
             {(
               [
                 ['睡眠', moodSummary.sleep],
@@ -399,9 +399,9 @@ export function ReportScreen() {
       </Section>
 
       <Section title="复习完成度">
-        <div className="rounded-xl border border-dashed border-black/15 bg-white/30 px-4 py-3">
+        <div className="rounded-xl border border-dashed border-line-strong bg-card-faint px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-black/[0.06] px-2 py-0.5 text-[10px] opacity-60">
+            <span className="rounded-full bg-overlay px-2 py-0.5 text-[10px] opacity-60">
               P4 接入
             </span>
             <span className="text-sm opacity-60">还没有数据</span>

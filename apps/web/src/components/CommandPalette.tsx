@@ -58,7 +58,7 @@ export function CommandPalette({ open, commands, onClose }: CommandPaletteProps)
         type="button"
         aria-label="关闭命令面板"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-black/30"
+        className="absolute inset-0 cursor-default bg-scrim"
       />
       <Card
         tone="solid"

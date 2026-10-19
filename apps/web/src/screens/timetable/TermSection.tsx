@@ -59,7 +59,7 @@ export function TermSection({ data, periodErrors, update }: TermSectionProps) {
                   term: { ...current.term, startDate: event.target.value },
                 }))
               }
-              className="rounded border border-black/10 bg-white/70 px-2 py-1"
+              className="rounded border border-line bg-card-soft px-2 py-1"
             />
           </label>
           <label className="flex items-center gap-1.5">
@@ -75,7 +75,7 @@ export function TermSection({ data, periodErrors, update }: TermSectionProps) {
                   term: { ...current.term, weeks: Number(event.target.value) },
                 }))
               }
-              className="w-16 rounded border border-black/10 bg-white/70 px-2 py-1"
+              className="w-16 rounded border border-line bg-card-soft px-2 py-1"
             />
           </label>
         </div>
@@ -92,7 +92,7 @@ export function TermSection({ data, periodErrors, update }: TermSectionProps) {
                 onChange={(event) =>
                   update((current) => updatePeriodAt(current, index, { start: event.target.value }))
                 }
-                className="rounded border border-black/10 bg-white/70 px-2 py-1"
+                className="rounded border border-line bg-card-soft px-2 py-1"
               />
               <span className="opacity-30">—</span>
               <input
@@ -102,7 +102,7 @@ export function TermSection({ data, periodErrors, update }: TermSectionProps) {
                 onChange={(event) =>
                   update((current) => updatePeriodAt(current, index, { end: event.target.value }))
                 }
-                className="rounded border border-black/10 bg-white/70 px-2 py-1"
+                className="rounded border border-line bg-card-soft px-2 py-1"
               />
               <button
                 type="button"

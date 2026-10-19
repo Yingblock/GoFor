@@ -131,7 +131,7 @@ export function CoursesSection({
               value={courseFilter}
               onChange={(event) => setCourseFilter(event.target.value)}
               aria-label="按科目筛选规则"
-              className="rounded-sm border border-line bg-white/70 px-2 py-1"
+              className="rounded-sm border border-line bg-card-soft px-2 py-1"
             >
               <option value="">全部科目</option>
               {subjects.map((subject) => (
@@ -150,7 +150,7 @@ export function CoursesSection({
               value={dayFilter}
               onChange={(event) => setDayFilter(Number(event.target.value))}
               aria-label="按星期筛选规则"
-              className="rounded-sm border border-line bg-white/70 px-2 py-1"
+              className="rounded-sm border border-line bg-card-soft px-2 py-1"
             >
               <option value={ALL_DAYS}>全部星期</option>
               {DAY_LABELS.map((label, index) => (
@@ -164,7 +164,7 @@ export function CoursesSection({
               value={weekFilter}
               onChange={(event) => setWeekFilter(Number(event.target.value))}
               aria-label="按每周单周筛选规则"
-              className="rounded-sm border border-line bg-white/70 px-2 py-1"
+              className="rounded-sm border border-line bg-card-soft px-2 py-1"
             >
               <option value={ALL_WEEKS}>每周·单周</option>
               <option value={1}>每周</option>
@@ -187,7 +187,7 @@ export function CoursesSection({
           </div>
         ) : null}
 
-        <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
+        <ul className="divide-y divide-line rounded-xl border border-line bg-card-faint">
           {filteredRules.map((rule) => (
             <li key={rule.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
               <span className="font-medium">
@@ -209,7 +209,7 @@ export function CoursesSection({
                     addCancelOverride(current, { id: newId(), ruleId: rule.id, date }),
                   );
                 }}
-                className="rounded-sm border border-line bg-white/70 px-2 py-1"
+                className="rounded-sm border border-line bg-card-soft px-2 py-1"
               />
               <button
                 type="button"

@@ -8,7 +8,7 @@ const BASE =
 
 /** default：常规表单；flush：命令面板那种只有下划线的输入框。 */
 const VARIANTS: Record<InputVariant, string> = {
-  default: 'rounded-md border bg-white/70 px-3 py-2 text-body focus:bg-white',
+  default: 'rounded-md border bg-card-soft px-3 py-2 text-body focus:bg-card',
   flush: 'rounded-none border-0 border-b bg-transparent px-4 py-3 text-base focus:bg-transparent',
 };
 
@@ -25,7 +25,9 @@ export function Input({
   ref,
   ...rest
 }: InputProps) {
-  const border = invalid ? 'border-danger focus:border-danger' : 'border-line focus:border-ink/25';
+  const border = invalid
+    ? 'border-danger focus:border-danger'
+    : 'border-line focus:border-strong/25';
 
   return (
     <input

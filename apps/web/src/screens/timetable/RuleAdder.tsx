@@ -25,12 +25,12 @@ export function RuleAdder({
     : (subjects[0]?.id ?? '');
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-black/[0.12] p-2 text-xs">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line p-2 text-xs">
       <select
         value={activeCourseId}
         onChange={(event) => setCourseId(event.target.value)}
         aria-label="科目"
-        className="rounded border border-black/10 bg-white/70 px-2 py-1"
+        className="rounded border border-line bg-card-soft px-2 py-1"
       >
         {subjects.map((subject) => (
           <option key={subject.id} value={subject.id}>
@@ -57,8 +57,8 @@ export function RuleAdder({
               aria-pressed={active}
               className={`rounded border px-1.5 py-0.5 ${
                 active
-                  ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
-                  : 'border-black/10'
+                  ? 'border-[var(--color-strong)] bg-[var(--color-strong)] text-on-strong'
+                  : 'border-line'
               }`}
             >
               {label.slice(1)}
@@ -75,7 +75,7 @@ export function RuleAdder({
           max={periodCount}
           value={startPeriod}
           onChange={(event) => setStartPeriod(Number(event.target.value))}
-          className="w-14 rounded border border-black/10 bg-white/70 px-1.5 py-0.5"
+          className="w-14 rounded border border-line bg-card-soft px-1.5 py-0.5"
         />
         <span className="opacity-60">节，连</span>
         <input
@@ -84,7 +84,7 @@ export function RuleAdder({
           max={4}
           value={span}
           onChange={(event) => setSpan(Number(event.target.value))}
-          className="w-12 rounded border border-black/10 bg-white/70 px-1.5 py-0.5"
+          className="w-12 rounded border border-line bg-card-soft px-1.5 py-0.5"
         />
         <span className="opacity-60">节</span>
       </label>
@@ -92,7 +92,7 @@ export function RuleAdder({
       <select
         value={intervalWeeks}
         onChange={(event) => setIntervalWeeks(event.target.value === '2' ? 2 : 1)}
-        className="rounded border border-black/10 bg-white/70 px-2 py-1"
+        className="rounded border border-line bg-card-soft px-2 py-1"
       >
         <option value={1}>每周</option>
         <option value={2}>单周</option>
@@ -113,7 +113,7 @@ export function RuleAdder({
             span,
           });
         }}
-        className="rounded-lg bg-[var(--color-ink)] px-3 py-1.5 text-xs text-white"
+        className="rounded-lg bg-[var(--color-strong)] px-3 py-1.5 text-xs text-on-strong"
       >
         加规则
       </button>

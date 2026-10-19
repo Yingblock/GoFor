@@ -130,7 +130,7 @@ export function CornerPicker({
               top: `${(point.y / naturalHeight) * 100}%`,
             }}
             className={cn(
-              'absolute size-9 -translate-x-1/2 -translate-y-1/2 touch-none rounded-full border-2 border-white bg-ink shadow-card',
+              'absolute size-9 -translate-x-1/2 -translate-y-1/2 touch-none rounded-full border-2 border-white bg-strong shadow-card',
               focusRing,
             )}
           />

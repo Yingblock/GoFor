@@ -331,7 +331,7 @@ export function TimetableScreen() {
         <button
           type="button"
           onClick={handleManualSave}
-          className="rounded-lg bg-[var(--color-ink)] px-4 py-2 text-sm text-white"
+          className="rounded-lg bg-[var(--color-strong)] px-4 py-2 text-sm text-on-strong"
         >
           立即保存
         </button>

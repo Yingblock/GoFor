@@ -30,12 +30,12 @@ const ABANDON_HOLD_MS = 5000;
 const ABANDON_HOLD_REFRESH_MS = 50;
 
 const chipBase = 'rounded-full px-3 py-1.5 text-xs transition';
-const chipOn = 'bg-[var(--color-ink)] text-white';
-const chipOff = 'border border-black/10 bg-white/60 hover:bg-white';
+const chipOn = 'bg-[var(--color-strong)] text-on-strong';
+const chipOff = 'border border-line bg-card-soft hover:bg-card';
 
 /** 遮罩里的按钮基类：等宽等高的 flex-1，按钮文字长短不同也不会把布局顶歪。 */
 const overlayButtonBase = 'min-w-[8.5rem] flex-1 rounded-xl px-4 py-3 text-sm transition';
-const overlayGhost = `${overlayButtonBase} border border-black/10 bg-white/60 hover:bg-white`;
+const overlayGhost = `${overlayButtonBase} border border-line bg-card-soft hover:bg-card`;
 
 /**
  * 番茄钟界面。
@@ -125,7 +125,7 @@ function FocusSetup({ controller }: { controller: PomodoroController }) {
               onChange={(event) => onMinutesInput(event.target.value)}
               // 失焦时把草稿拉回真正的生效值：用户敲了 999 看到的是钳位后的 180，不留歧义。
               onBlur={() => setDraft(String(controller.minutes))}
-              className="w-20 rounded-lg border border-black/10 bg-white/60 px-2 py-1.5 text-right text-sm tabular-nums transition focus:border-black/25 focus:outline-none"
+              className="w-20 rounded-lg border border-line bg-card-soft px-2 py-1.5 text-right text-sm tabular-nums transition focus:border-line-strong focus:outline-none"
             />
             <span className="opacity-50">分钟</span>
           </label>
@@ -158,7 +158,7 @@ function FocusSetup({ controller }: { controller: PomodoroController }) {
           <span className="text-[11px] opacity-35">可选 · 再点一次取消</span>
         </div>
         {controller.taskCandidates.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-black/[0.12] px-4 py-4 text-center text-xs opacity-40">
+          <p className="rounded-xl border border-dashed border-line px-4 py-4 text-center text-xs opacity-40">
             {controller.tasks.length === 0 ? '还没有作业，不绑也能开始' : '今天的作业都完成了'}
           </p>
         ) : (
@@ -184,7 +184,7 @@ function FocusSetup({ controller }: { controller: PomodoroController }) {
           type="button"
           onClick={controller.start}
           disabled={controller.subjects.length === 0}
-          className="w-full rounded-xl bg-[var(--color-ink)] px-6 py-4 text-base text-white transition hover:opacity-90 disabled:opacity-30"
+          className="w-full rounded-xl bg-[var(--color-strong)] px-6 py-4 text-base text-on-strong transition hover:opacity-90 disabled:opacity-30"
         >
           开始专注 {controller.minutes} 分钟
         </button>
@@ -318,7 +318,7 @@ function HoldAbandonButton({ onAbandon }: { onAbandon: () => void }) {
       onBlur={cancelHold}
       // 长按触发系统右键菜单/文字选择会打断手势，统一按掉；文案不被选中。
       onContextMenu={(event) => event.preventDefault()}
-      className={`${overlayButtonBase} relative touch-none select-none overflow-hidden border border-black/10 bg-white/60 ${
+      className={`${overlayButtonBase} relative touch-none select-none overflow-hidden border border-line bg-card-soft ${
         holding ? 'opacity-100' : 'opacity-40 hover:opacity-70'
       }`}
     >
@@ -385,7 +385,7 @@ function FocusSession({ controller }: { controller: PomodoroController }) {
             {run.phase === 'focus' ? '专注' : '休息'} · {plannedMinutes} 分钟
           </span>
           {paused ? (
-            <span className="rounded-full bg-black/[0.07] px-2 py-0.5 text-[10px] normal-case tracking-normal">
+            <span className="rounded-full bg-overlay px-2 py-0.5 text-[10px] normal-case tracking-normal">
               已暂停
             </span>
           ) : null}
@@ -406,10 +406,10 @@ function FocusSession({ controller }: { controller: PomodoroController }) {
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={percent}
-            className="h-2 overflow-hidden rounded-full bg-black/[0.06]"
+            className="h-2 overflow-hidden rounded-full bg-overlay"
           >
             <div
-              className="h-full rounded-full bg-[var(--color-ink)]"
+              className="h-full rounded-full bg-[var(--color-strong)]"
               style={{ width: `${percent}%` }}
             />
           </div>
