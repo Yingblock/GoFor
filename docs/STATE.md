@@ -28,7 +28,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 | 产物 | 状态 | 说明 |
 |---|---|---|
-| `release/GoFor-win-x64.zip` | ✅ 本地预览包（2026-10-20，HEAD `ae7f097`，P2-2.17 v1，**未发布**） | 104,876,156 B / 31 文件 / sha256 `34384a8e…947c`；Electron v33，双击 `GoFor.exe`；**固定端口 47821**。已发布的是 `v0.2.6-p2`（对应 740e3b9） |
+| `release/GoFor-win-x64.zip` | ✅ 本地预览包（2026-10-20，HEAD `5e37d90`，P2-2.17 v1 + 课表备注布局修复，**未发布**） | 104,876,277 B / 31 文件 / sha256 `6aadffc4…7982`；Electron v33，双击 `GoFor.exe`；**固定端口 47821**。已发布的是 `v0.2.6-p2`（对应 740e3b9，不含备注布局修复） |
 | `release/GoFor-debug.apk` | ⏸ 暂时停打（用户要求：先只做 Windows，Android 后期适配） | 4.6 MB（4,622,941 B），`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
 | `release/README.md` | ✅ | 安装说明与已知限制 |
 
@@ -209,6 +209,7 @@ P1 / P2 已完成（含 P2-2.12 条码、2.13 打卡行、2.15 课程备注、2.
 | 二维码印 12mm | 预览截图里只有 29px，jsQR 解不出来；纸上手机也可能扫不出 | 加到 16mm；e2e 用 4 倍像素密度截图当"照片" |
 | e2e 只 `server.kill()` 父进程 | 每跑一次漏一个 `vite preview` 占着 4173；下一次 e2e 连上**旧构建**的服务，照样"全绿"（假绿） | `spawn(..., { detached: true })` 后按进程组清；开跑前先查端口，有人应答就直接报错 |
 | Biome 扫到 Capacitor 生成的 Java/XML | 4000+ 假错误，`pnpm check` 直接失败 | `biome.json` 的 `files.includes` 排除 `apps/web/android` |
+| 用整份 verify 日志 `grep -c "^✓"` 数 e2e 项数 | 多算 2 项（vite build 也打 `✓ 497 modules transformed`、`✓ built in`），文档里的 e2e 数被虚高（曾把 96 记成 98） | 只数 e2e 段：`grep -c "^✓" <e2e 自己的输出>`，或核对 `smoke.mjs` 的 `check()` 调用点 |
 
 ## 什么坏了 / 什么没做完
 
