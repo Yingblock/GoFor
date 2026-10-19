@@ -28,7 +28,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 | 产物 | 状态 | 说明 |
 |---|---|---|
-| `release/GoFor-win-x64.zip` | ✅ 已重建校验（2026-10-20，HEAD `de9d878`） | 104,874,251 B（100.0 MiB）/ 31 文件 / sha256 `6cc67090…a285`；Electron v33，双击 `GoFor.exe`；**固定端口 47821** |
+| `release/GoFor-win-x64.zip` | ✅ 本地预览包（2026-10-20，HEAD `ae7f097`，P2-2.17 v1，**未发布**） | 104,876,156 B / 31 文件 / sha256 `34384a8e…947c`；Electron v33，双击 `GoFor.exe`；**固定端口 47821**。已发布的是 `v0.2.6-p2`（对应 740e3b9） |
 | `release/GoFor-debug.apk` | ⏸ 暂时停打（用户要求：先只做 Windows，Android 后期适配） | 4.6 MB（4,622,941 B），`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
 | `release/README.md` | ✅ | 安装说明与已知限制 |
 
@@ -247,6 +247,8 @@ pnpm verify      # typecheck + test + build + e2e
 sha256 `14cdc2ee…1779`，release notes 含已知问题）：深色主题 / 打卡上纸 / 课程备注 / ZXing 条码。
 
 同日 **P2-2.17 v1**：四角定位块 + 自动找纸 + 勾选框窄采样（详见下一条）。
+本地预览包按 `ae7f097` 重建：104,876,156 B / 31 文件 / sha256 `34384a8e…`，
+`testzip` 无错，包内 `index-BQ2Q3sLr.js` 与本地 dist 一致；**未发 Release**。
 
 
 2026-10-20 **P2-2.17 v1**：每页四角印 3mm 定位块（`FIDUCIAL_*` 常量在 core，打印/扫描共用），
