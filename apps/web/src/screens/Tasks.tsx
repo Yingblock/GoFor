@@ -18,6 +18,7 @@ import {
   setTaskDone,
   updateTask,
 } from '@gofor/store';
+import { Badge, Button, Card, Checkbox, Chip, EmptyState, focusRing, Input } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -87,32 +88,23 @@ function TagChoices({ pools, isSelected, onToggle }: TagChoicesProps) {
     <>
       {pools.map((pool) => (
         <div key={pool.id} className="space-y-1">
-          <div className="flex items-center gap-1.5 text-[10px] opacity-45">
+          <div className="flex items-center gap-1.5 text-micro opacity-45">
             <span>{pool.name}</span>
             {pool.id === SUBJECT_TAG_POOL_ID ? <span>（跟随科目列表）</span> : null}
           </div>
           <div className="flex flex-wrap gap-1">
             {pool.tags.length === 0 ? (
-              <span className="text-[10px] opacity-30">还没有标签</span>
+              <span className="text-micro opacity-30">还没有标签</span>
             ) : (
-              pool.tags.map((tag) => {
-                const selected = isSelected(pool, tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => onToggle(pool.id, tag)}
-                    className={
-                      selected
-                        ? 'rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-[11px] text-white'
-                        : 'rounded-full border border-black/10 px-2 py-0.5 text-[11px] opacity-60 transition hover:opacity-100'
-                    }
-                  >
-                    {tag}
-                  </button>
-                );
-              })
+              pool.tags.map((tag) => (
+                <Chip
+                  key={tag}
+                  active={isSelected(pool, tag)}
+                  onClick={() => onToggle(pool.id, tag)}
+                >
+                  {tag}
+                </Chip>
+              ))
             )}
           </div>
         </div>
@@ -152,7 +144,7 @@ function TagPanel({ task, pools, subjects, onToggle, onCreate }: TagPanelProps) 
   };
 
   return (
-    <div className="mt-2 ml-7 space-y-2 rounded-lg border border-black/[0.08] bg-white/70 p-2.5">
+    <Card padding="none" className="mt-2 ml-7 space-y-2 p-2.5">
       <TagChoices
         pools={pools}
         isSelected={(pool, tag) => isTagSelected(task, pool, tag, subjects)}
@@ -160,41 +152,37 @@ function TagPanel({ task, pools, subjects, onToggle, onCreate }: TagPanelProps) 
       />
 
       {writablePools.length === 0 ? (
-        <p className="border-t border-black/[0.06] pt-2 text-[10px] opacity-40">
+        <p className="border-t border-line pt-2 text-micro opacity-40">
           想加自己的标签，先在下方「标签管理」里建一个池。
         </p>
       ) : (
-        <div className="flex flex-wrap items-center gap-1.5 border-t border-black/[0.06] pt-2">
-          <span className="text-[10px] opacity-40">新建标签加到</span>
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-line pt-2">
+          <span className="text-micro opacity-40">新建标签加到</span>
           {writablePools.map((pool) => (
-            <button
+            <Chip
               key={pool.id}
-              type="button"
+              active={targetPool !== undefined && pool.id === targetPool.id}
               onClick={() => setTargetPoolId(pool.id)}
-              className={
-                targetPool !== undefined && pool.id === targetPool.id
-                  ? 'rounded-full bg-black/[0.08] px-2 py-0.5 text-[10px]'
-                  : 'rounded-full px-2 py-0.5 text-[10px] opacity-40 hover:opacity-70'
-              }
             >
               {pool.name}
-            </button>
+            </Chip>
           ))}
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                submit();
-              }
-            }}
-            placeholder="新建标签，回车确认"
-            className="w-40 rounded border border-black/10 bg-white/70 px-2 py-1 text-[11px] outline-none"
-          />
+          <div className="w-40">
+            <Input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  submit();
+                }
+              }}
+              placeholder="新建标签，回车确认"
+            />
+          </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -246,125 +234,108 @@ function TagManager({ subjects, pools }: TagManagerProps) {
   }, []);
 
   return (
-    <section className="rounded-xl border border-black/[0.08] bg-white/50">
+    <Card as="section" padding="none">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between px-4 py-2.5 text-left text-xs opacity-60 hover:opacity-100"
+        className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-small opacity-60 transition-opacity duration-fast hover:opacity-100 ${focusRing}`}
       >
         <span>标签管理</span>
         <span className="opacity-50">{open ? '收起' : '展开'}</span>
       </button>
 
       {open ? (
-        <div className="space-y-3 border-t border-black/[0.06] px-4 py-3 text-xs">
+        <div className="space-y-3 border-t border-line px-4 py-3 text-small">
           <p className="opacity-40">
             「科目」是常驻池，标签跟着科目列表走，不能在这里增删；自定义池只收集标签，不影响任务。
           </p>
 
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={poolName}
-              onChange={(event) => setPoolName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  void createPool();
-                }
-              }}
-              placeholder="新建池，如：错因"
-              className="w-48 rounded border border-black/10 bg-white/70 px-2 py-1 outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => void createPool()}
-              className="rounded-lg bg-[var(--color-ink)] px-3 py-1 text-[11px] text-white"
-            >
+            <div className="w-48">
+              <Input
+                value={poolName}
+                onChange={(event) => setPoolName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    void createPool();
+                  }
+                }}
+                placeholder="新建池，如：错因"
+              />
+            </div>
+            <Button variant="primary" size="sm" onClick={() => void createPool()}>
               新建池
-            </button>
-            <span className="text-[10px] opacity-30">
+            </Button>
+            <span className="text-micro opacity-30">
               {subjects.length} 个科目 · {customPools.length} 个自定义池
             </span>
           </div>
 
           {customPools.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-black/[0.12] px-3 py-4 text-center text-[11px] opacity-40">
+            <EmptyState size="sm">
               还没有自定义池。可以先建「错因」「章节」这类池，再到任务上打标签。
-            </p>
+            </EmptyState>
           ) : (
             <ul className="space-y-2">
               {customPools.map((pool) => (
-                <li key={pool.id} className="space-y-1.5 rounded-lg border border-black/[0.06] p-2">
+                <li key={pool.id} className="space-y-1.5 rounded-lg border border-line p-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{pool.name}</span>
-                    <span className="text-[10px] opacity-30">{pool.tags.length} 个标签</span>
+                    <span className="text-micro opacity-30">{pool.tags.length} 个标签</span>
                     <span className="flex-1" />
                     {pendingDeleteId === pool.id ? (
-                      <span className="flex flex-wrap items-center gap-2 text-[10px] text-amber-700">
+                      <span className="flex flex-wrap items-center gap-2 text-micro text-warn">
                         <span>任务上已打的同名标签不会自动清除，需要自己摘。确定删除？</span>
-                        <button
-                          type="button"
+                        <Button
+                          variant="danger"
+                          size="sm"
                           onClick={() => {
                             void deleteTagPool(db, pool.id);
                             setPendingDeleteId(null);
                           }}
-                          className="rounded border border-amber-300 px-2 py-0.5"
                         >
                           删除池
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPendingDeleteId(null)}
-                          className="rounded border border-black/10 px-2 py-0.5 opacity-60"
-                        >
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(null)}>
                           取消
-                        </button>
+                        </Button>
                       </span>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => setPendingDeleteId(pool.id)}
-                        className="rounded border border-black/10 px-2 py-0.5 text-[10px] opacity-50 hover:opacity-80"
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(pool.id)}>
                         删除池
-                      </button>
+                      </Button>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-1">
                     {pool.tags.map((tag) => (
-                      <span
+                      <Chip
                         key={tag}
-                        className="flex items-center gap-1 rounded-full bg-black/[0.06] px-2 py-0.5 text-[10px] opacity-70"
+                        removeLabel={`从池「${pool.name}」删除标签`}
+                        onRemove={() => void removePoolTag(pool, tag)}
                       >
                         {tag}
-                        <button
-                          type="button"
-                          aria-label={`从池「${pool.name}」删除标签 ${tag}`}
-                          onClick={() => void removePoolTag(pool, tag)}
-                          className="opacity-50 hover:opacity-90"
-                        >
-                          ×
-                        </button>
-                      </span>
+                      </Chip>
                     ))}
-                    <input
-                      value={tagDrafts[pool.id] ?? ''}
-                      onChange={(event) =>
-                        setTagDrafts((current) => ({
-                          ...current,
-                          [pool.id]: event.target.value,
-                        }))
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          void addPoolTag(pool);
+                    <div className="w-32">
+                      <Input
+                        value={tagDrafts[pool.id] ?? ''}
+                        onChange={(event) =>
+                          setTagDrafts((current) => ({
+                            ...current,
+                            [pool.id]: event.target.value,
+                          }))
                         }
-                      }}
-                      placeholder="加标签，回车"
-                      className="w-32 rounded border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] outline-none"
-                    />
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            void addPoolTag(pool);
+                          }
+                        }}
+                        placeholder="加标签，回车"
+                      />
+                    </div>
                   </div>
                 </li>
               ))}
@@ -372,7 +343,7 @@ function TagManager({ subjects, pools }: TagManagerProps) {
           )}
         </div>
       ) : null}
-    </section>
+    </Card>
   );
 }
 
@@ -566,38 +537,36 @@ export function Tasks({ tasks }: { tasks: Task[] }) {
 
   return (
     <div className="space-y-5">
-      <div className="space-y-2 rounded-xl border border-black/[0.08] bg-white/50 p-3">
+      <Card padding="none" className="space-y-2 p-3">
         <div className="flex gap-2">
-          <input
+          <Input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') void add();
             }}
             placeholder="加一项作业，回车确认"
-            className="flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm outline-none"
+            className="flex-1"
           />
-          <button
-            type="button"
-            onClick={() => void add()}
-            className="rounded-lg bg-[var(--color-ink)] px-4 py-2 text-sm text-white"
-          >
+          <Button variant="primary" size="md" onClick={() => void add()}>
             添加
-          </button>
+          </Button>
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs opacity-70">
-          <label className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-3 text-small opacity-70">
+          <label htmlFor="task-due" className="flex items-center gap-1.5">
             <span>截止</span>
-            <input
-              type="date"
-              value={due}
-              onChange={(event) => setDue(event.target.value)}
-              className="rounded border border-black/10 bg-white/70 px-2 py-1"
-            />
+            <div className="w-36">
+              <Input
+                id="task-due"
+                type="date"
+                value={due}
+                onChange={(event) => setDue(event.target.value)}
+              />
+            </div>
           </label>
-          <label className="flex items-center gap-1.5">
-            <input
-              type="checkbox"
+          <label htmlFor="task-optional" className="flex items-center gap-1.5">
+            <Checkbox
+              id="task-optional"
               checked={optional}
               onChange={(event) => setOptional(event.target.checked)}
             />
@@ -608,231 +577,211 @@ export function Tasks({ tasks }: { tasks: Task[] }) {
             与任务行的「标签」按钮保持同一套交互：点开行内面板、按池列出、点一下切换。
             数量直接写在按钮上，收起时也能看出这条草稿带了几个标签。
           */}
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             aria-label="添加栏标签"
             aria-expanded={draftTagPanelOpen}
             onClick={() => setDraftTagPanelOpen((value) => !value)}
-            className={`rounded border px-2 py-1 text-[11px] transition ${
-              draftTags.length > 0
-                ? 'border-black/20 bg-black/[0.06]'
-                : 'border-black/10 bg-white/70'
-            }`}
+            className={draftTags.length > 0 ? 'bg-ink/[0.06]' : undefined}
           >
             标签{draftTags.length > 0 ? ` · ${draftTags.length}` : ''}
-          </button>
+          </Button>
         </div>
 
         <div className="flex flex-wrap items-center gap-1">
           {draftTags.length === 0 ? (
-            <span className="text-[11px] opacity-35">未选标签</span>
+            <span className="text-caption opacity-35">未选标签</span>
           ) : (
             draftTags.map((tag) => (
-              <span
+              <Chip
                 key={tag}
-                className="flex items-center gap-1 rounded-full bg-black/[0.06] px-2 py-0.5 text-[11px] opacity-70"
+                removeLabel="移除标签"
+                onRemove={() => setDraftTags((current) => current.filter((item) => item !== tag))}
               >
                 {tag}
-                <button
-                  type="button"
-                  aria-label={`移除标签 ${tag}`}
-                  onClick={() => setDraftTags((current) => current.filter((item) => item !== tag))}
-                  className="opacity-50 hover:opacity-90"
-                >
-                  ×
-                </button>
-              </span>
+              </Chip>
             ))
           )}
         </div>
 
         {draftTagPanelOpen ? (
-          <div className="space-y-2 rounded-lg border border-black/[0.08] bg-white/70 p-2.5">
+          <Card padding="none" className="space-y-2 p-2.5">
             <TagChoices
               pools={pools}
               isSelected={(_pool, tag) => draftTags.includes(tag)}
               onToggle={toggleDraftTag}
             />
-            <p className="border-t border-black/[0.06] pt-2 text-[10px] opacity-40">
+            <p className="border-t border-line pt-2 text-micro opacity-40">
               新标签去下方「标签管理」里建，建好就能在这里选。
             </p>
-          </div>
+          </Card>
         ) : null}
-      </div>
+      </Card>
 
       {normalized.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-black/[0.12] px-4 py-10 text-center text-xs opacity-40">
-          还没有作业
-        </p>
+        <EmptyState size="md">还没有作业</EmptyState>
       ) : (
-        <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
-          {normalized.map((task, index) => {
-            const subject = subjects.find((item) => item.id === task.subjectId);
-            const doneSubtasks = task.subtasks.filter((item) => item.done).length;
-            // 旧数据可能只有 subjectId、没有对应标签，这里补一个展示，不改库。
-            const visibleTags = new Set(task.tags);
-            if (subject !== undefined) visibleTags.add(subject.name);
+        <Card padding="none" className="overflow-hidden">
+          <ul className="divide-y divide-line">
+            {normalized.map((task, index) => {
+              const subject = subjects.find((item) => item.id === task.subjectId);
+              const doneSubtasks = task.subtasks.filter((item) => item.done).length;
+              // 旧数据可能只有 subjectId、没有对应标签，这里补一个展示，不改库。
+              const visibleTags = new Set(task.tags);
+              if (subject !== undefined) visibleTags.add(subject.name);
 
-            return (
-              <li key={task.id} className="group px-4 py-2.5">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    aria-label={`完成 ${task.title}`}
-                    checked={task.done}
-                    onChange={(event) =>
-                      void setTaskDone(db, task.id, event.target.checked, Date.now())
-                    }
-                    className="size-4 shrink-0"
-                  />
-                  <span
-                    className={`min-w-0 flex-1 break-words text-sm ${task.done ? 'line-through opacity-40' : ''}`}
-                  >
-                    {task.title}
-                  </span>
-
-                  {visibleTags.size > 0 ? (
-                    <span className="flex min-w-0 flex-wrap items-center gap-1">
-                      {[...visibleTags].map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full bg-black/[0.06] px-1.5 py-0.5 text-[10px] opacity-60"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </span>
-                  ) : null}
-
-                  {task.optional ? (
-                    <span className="rounded bg-black/[0.06] px-1.5 py-0.5 text-[10px] opacity-60">
-                      选做
-                    </span>
-                  ) : null}
-                  {task.due ? (
-                    <span className="text-[11px] tabular-nums opacity-40">{task.due}</span>
-                  ) : null}
-                  {task.subtasks.length > 0 ? (
-                    <span className="text-[11px] tabular-nums opacity-40">
-                      {doneSubtasks}/{task.subtasks.length} 步
-                    </span>
-                  ) : null}
-
-                  {/* 触屏没有 hover，小屏常显操作，桌面保持悬停出现。 */}
-                  <span className="flex items-center gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
-                    <button
-                      type="button"
-                      aria-label="上移"
-                      onClick={() => void moveTask(normalized, index, -1, Date.now())}
-                      className="px-1 text-xs opacity-50"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="下移"
-                      onClick={() => void moveTask(normalized, index, 1, Date.now())}
-                      className="px-1 text-xs opacity-50"
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="标签"
-                      aria-expanded={tagPanelTaskId === task.id}
-                      onClick={() =>
-                        setTagPanelTaskId((current) => (current === task.id ? null : task.id))
-                      }
-                      className="px-1 text-xs opacity-50"
-                    >
-                      标签
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="添加步骤"
-                      onClick={() =>
-                        setSubtaskDraft((current) =>
-                          current?.taskId === task.id ? null : { taskId: task.id, value: '' },
-                        )
-                      }
-                      className="px-1 text-xs opacity-50"
-                    >
-                      + 步骤
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void deleteTask(db, task.id)}
-                      className="px-1 text-xs opacity-50"
-                    >
-                      删除
-                    </button>
-                  </span>
-                </div>
-
-                {task.subtasks.length > 0 ? (
-                  <ul className="mt-1.5 ml-7 space-y-0.5">
-                    {task.subtasks.map((subtask) => (
-                      <li key={subtask.id}>
-                        {/*
-                          用 label 包住整行：点标题、点空白都能切换，
-                          比原来只有 12px 的小方块可点（手指几乎不可能命中）好按得多。
-                          label 会原生命中 checkbox，所以不需要再手写 onClick 和
-                          stopPropagation —— 没有父级点击处理器，也没有双重触发。
-                        */}
-                        <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 transition hover:bg-black/[0.03]">
-                          <input
-                            type="checkbox"
-                            aria-label={`完成步骤 ${subtask.title}`}
-                            checked={subtask.done}
-                            onChange={() => void toggleSubtask(task, subtask.id)}
-                            className="size-4 shrink-0"
-                          />
-                          <span
-                            className={`min-w-0 break-words text-xs ${subtask.done ? 'line-through opacity-40' : 'opacity-70'}`}
-                          >
-                            {subtask.title}
-                          </span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-
-                {subtaskDraft !== null && subtaskDraft.taskId === task.id ? (
-                  <div className="mt-1 ml-7">
-                    <input
-                      ref={subtaskInputRef}
-                      value={subtaskDraft.value}
+              return (
+                <li key={task.id} className="group px-4 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      aria-label={`完成 ${task.title}`}
+                      checked={task.done}
                       onChange={(event) =>
-                        setSubtaskDraft({ taskId: task.id, value: event.target.value })
+                        void setTaskDone(db, task.id, event.target.checked, Date.now())
                       }
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          void addSubtask(task);
-                        }
-                        if (event.key === 'Escape') setSubtaskDraft(null);
-                      }}
-                      placeholder="这一步做什么？回车添加"
-                      className="w-full rounded border border-black/10 bg-white/70 px-2 py-1 text-xs outline-none"
                     />
-                  </div>
-                ) : null}
+                    <span
+                      className={`min-w-0 flex-1 break-words text-body ${task.done ? 'line-through opacity-40' : ''}`}
+                    >
+                      {task.title}
+                    </span>
 
-                {tagPanelTaskId === task.id ? (
-                  <TagPanel
-                    key={task.id}
-                    task={task}
-                    pools={pools}
-                    subjects={subjects}
-                    onToggle={(target, poolId, tag) => void toggleTag(target, poolId, tag)}
-                    onCreate={(target, poolId, tag) => void addTagToPool(target, poolId, tag)}
-                  />
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+                    {visibleTags.size > 0 ? (
+                      <span className="flex min-w-0 flex-wrap items-center gap-1">
+                        {[...visibleTags].map((tag) => (
+                          <Badge key={tag}>{tag}</Badge>
+                        ))}
+                      </span>
+                    ) : null}
+
+                    {task.optional ? <Badge>选做</Badge> : null}
+                    {task.due ? (
+                      <span className="text-caption tabular-nums opacity-40">{task.due}</span>
+                    ) : null}
+                    {task.subtasks.length > 0 ? (
+                      <span className="text-caption tabular-nums opacity-40">
+                        {doneSubtasks}/{task.subtasks.length} 步
+                      </span>
+                    ) : null}
+
+                    {/* 触屏没有 hover，小屏常显操作，桌面保持悬停出现。 */}
+                    <span className="flex items-center gap-1 opacity-100 transition-opacity duration-fast sm:opacity-0 sm:group-hover:opacity-100">
+                      <button
+                        type="button"
+                        aria-label="上移"
+                        onClick={() => void moveTask(normalized, index, -1, Date.now())}
+                        className={`px-1 text-small opacity-50 transition-opacity duration-fast hover:opacity-80 ${focusRing}`}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="下移"
+                        onClick={() => void moveTask(normalized, index, 1, Date.now())}
+                        className={`px-1 text-small opacity-50 transition-opacity duration-fast hover:opacity-80 ${focusRing}`}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="标签"
+                        aria-expanded={tagPanelTaskId === task.id}
+                        onClick={() =>
+                          setTagPanelTaskId((current) => (current === task.id ? null : task.id))
+                        }
+                        className={`px-1 text-small opacity-50 transition-opacity duration-fast hover:opacity-80 ${focusRing}`}
+                      >
+                        标签
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="添加步骤"
+                        onClick={() =>
+                          setSubtaskDraft((current) =>
+                            current?.taskId === task.id ? null : { taskId: task.id, value: '' },
+                          )
+                        }
+                        className={`px-1 text-small opacity-50 transition-opacity duration-fast hover:opacity-80 ${focusRing}`}
+                      >
+                        + 步骤
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteTask(db, task.id)}
+                        className={`px-1 text-small opacity-50 transition-opacity duration-fast hover:opacity-80 ${focusRing}`}
+                      >
+                        删除
+                      </button>
+                    </span>
+                  </div>
+
+                  {task.subtasks.length > 0 ? (
+                    <ul className="mt-1.5 ml-7 space-y-0.5">
+                      {task.subtasks.map((subtask) => (
+                        <li key={subtask.id}>
+                          {/*
+                            用 label 包住整行：点标题、点空白都能切换，
+                            比原来只有 12px 的小方块可点（手指几乎不可能命中）好按得多。
+                            label 会原生命中 checkbox，所以不需要再手写 onClick 和
+                            stopPropagation —— 没有父级点击处理器，也没有双重触发。
+                          */}
+                          <label
+                            htmlFor={`subtask-${subtask.id}`}
+                            className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 transition-colors duration-fast hover:bg-ink/[0.03]"
+                          >
+                            <Checkbox
+                              id={`subtask-${subtask.id}`}
+                              aria-label={`完成步骤 ${subtask.title}`}
+                              checked={subtask.done}
+                              onChange={() => void toggleSubtask(task, subtask.id)}
+                            />
+                            <span
+                              className={`min-w-0 break-words text-small ${subtask.done ? 'line-through opacity-40' : 'opacity-70'}`}
+                            >
+                              {subtask.title}
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+
+                  {subtaskDraft !== null && subtaskDraft.taskId === task.id ? (
+                    <div className="mt-1 ml-7">
+                      <Input
+                        ref={subtaskInputRef}
+                        value={subtaskDraft.value}
+                        onChange={(event) =>
+                          setSubtaskDraft({ taskId: task.id, value: event.target.value })
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            void addSubtask(task);
+                          }
+                          if (event.key === 'Escape') setSubtaskDraft(null);
+                        }}
+                        placeholder="这一步做什么？回车添加"
+                      />
+                    </div>
+                  ) : null}
+
+                  {tagPanelTaskId === task.id ? (
+                    <TagPanel
+                      key={task.id}
+                      task={task}
+                      pools={pools}
+                      subjects={subjects}
+                      onToggle={(target, poolId, tag) => void toggleTag(target, poolId, tag)}
+                      onCreate={(target, poolId, tag) => void addTagToPool(target, poolId, tag)}
+                    />
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       )}
 
       <TagManager subjects={subjects} pools={pools} />

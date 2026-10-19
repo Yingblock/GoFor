@@ -1,4 +1,5 @@
 import { db, importAll } from '@gofor/store';
+import { Button, Card, Section } from '@gofor/ui';
 import { useEffect, useRef, useState } from 'react';
 import {
   type BackupCounts,
@@ -95,9 +96,8 @@ export function DataScreen({ onNotice }: DataScreenProps) {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium opacity-50">数据在哪</h2>
-        <div className="space-y-2 rounded-xl border border-black/[0.08] bg-white/50 px-4 py-3 text-xs leading-relaxed">
+      <Section title="数据在哪">
+        <Card padding="md" className="space-y-2 text-small leading-relaxed">
           <p>
             全部数据都存在这台设备本地（浏览器的 IndexedDB），不联网、不上传。
             每次改动都是即时写入的，关掉窗口或刷新都不会丢。
@@ -109,65 +109,61 @@ export function DataScreen({ onNotice }: DataScreenProps) {
             真正会丢的情况只有三种：清站点数据/清缓存、换设备、系统重装。
             所以下面的「导出备份」才是保险——导出的 JSON 也可以直接导回来。
           </p>
-        </div>
-      </section>
+        </Card>
+      </Section>
 
-      <section className="space-y-3">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-medium opacity-50">备份与恢复</h2>
-          <span className={`text-[11px] ${overdue ? 'text-amber-600' : 'opacity-40'}`}>
+      <Section
+        title="备份与恢复"
+        actions={
+          <span className={`text-caption tabular-nums ${overdue ? 'text-warn' : 'opacity-40'}`}>
             {lastAt === null ? '还没有备份记录' : `上次备份：${formatWhen(lastAt)}`}
           </span>
-        </div>
+        }
+      >
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="primary" size="md" onClick={() => void exportNow()} disabled={busy}>
+              {busy ? '处理中…' : '导出备份（JSON）'}
+            </Button>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void exportNow()}
-            disabled={busy}
-            className="rounded-lg bg-[var(--color-ink)] px-4 py-2 text-xs text-white disabled:opacity-50"
-          >
-            {busy ? '处理中…' : '导出备份（JSON）'}
-          </button>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+            >
+              从备份导入
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              aria-label="选择备份文件"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void importFile(file);
+                event.target.value = '';
+              }}
+            />
+          </div>
 
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={busy}
-            className="rounded-lg border border-black/10 bg-white/70 px-4 py-2 text-xs disabled:opacity-50"
-          >
-            从备份导入
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json,.json"
-            aria-label="选择备份文件"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void importFile(file);
-              event.target.value = '';
-            }}
-          />
-        </div>
-
-        <p className="text-[11px] leading-relaxed opacity-40">
-          导入是合并而不是覆盖：同 id 更新、新 id 追加，所以拿一份旧备份导进来不会把
-          现在更新的记录删掉。导入的是全部表：作业、学习记录、打卡、课表、标签、模板、
-          清单、三格自评、日记、工具箱记录与扫描批次。
-        </p>
-
-        {error ? (
-          <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
-            {error}
+          <p className="text-caption leading-relaxed opacity-40">
+            导入是合并而不是覆盖：同 id 更新、新 id 追加，所以拿一份旧备份导进来不会把
+            现在更新的记录删掉。导入的是全部表：作业、学习记录、打卡、课表、标签、模板、
+            清单、三格自评、日记、工具箱记录与扫描批次。
           </p>
-        ) : null}
-      </section>
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium opacity-50">注意</h2>
-        <ul className="space-y-1 text-[11px] leading-relaxed opacity-50">
+          {error ? (
+            <Card tone="danger" padding="sm" elevation="none" className="text-small text-danger">
+              {error}
+            </Card>
+          ) : null}
+        </div>
+      </Section>
+
+      <Section title="注意">
+        <ul className="space-y-1 text-caption leading-relaxed opacity-50">
           <li>
             · Windows 版是本地壳：数据绑定在固定地址（`127.0.0.1:47821`）下，同一时间只开一个窗口。
           </li>
@@ -178,7 +174,7 @@ export function DataScreen({ onNotice }: DataScreenProps) {
           <li>· 手机浏览器/PWA 与 Windows 壳是两套独立数据，互不同步（同步属于 P7 云存档）。</li>
           <li>· 备份文件是明文 JSON，自己存网盘时注意这一点。</li>
         </ul>
-      </section>
+      </Section>
     </div>
   );
 }

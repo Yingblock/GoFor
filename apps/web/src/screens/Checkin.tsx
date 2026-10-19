@@ -8,6 +8,17 @@ import {
   isHabitCheckableOn,
 } from '@gofor/core/habits';
 import { db, deleteHabit, listHabitLogs, listHabits, saveHabit, setHabitLog } from '@gofor/store';
+import {
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  Chip,
+  EmptyState,
+  focusRing,
+  Input,
+  Section,
+} from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useMemo, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
@@ -121,19 +132,19 @@ function HabitFormPanel({ title, initial, submitLabel, onSubmit, onCancel }: Hab
   };
 
   return (
-    <div className="space-y-2.5 rounded-xl border border-black/[0.08] bg-white/70 p-3">
-      <div className="flex items-center justify-between text-xs">
+    <Card padding="none" className="space-y-2.5 p-3">
+      <div className="flex items-center justify-between text-small">
         <span className="opacity-60">{title}</span>
         <button
           type="button"
           onClick={onCancel}
-          className="text-[11px] opacity-40 hover:opacity-70"
+          className={`text-caption opacity-40 transition-opacity duration-fast hover:opacity-70 ${focusRing}`}
         >
           取消
         </button>
       </div>
 
-      <input
+      <Input
         value={name}
         onChange={(event) => setName(event.target.value)}
         onKeyDown={(event) => {
@@ -144,18 +155,16 @@ function HabitFormPanel({ title, initial, submitLabel, onSubmit, onCancel }: Hab
           if (event.key === 'Escape') onCancel();
         }}
         placeholder="打卡项名称，如：背单词"
-        className="w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm outline-none"
       />
 
-      <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-        <span className="text-[10px] opacity-40">重复</span>
+      <div className="flex flex-wrap items-center gap-1.5 text-caption">
+        <span className="text-micro opacity-40">重复</span>
         {WEEKDAYS.map((day) => {
           const selected = weekdays.includes(day.value);
           return (
-            <button
+            <Chip
               key={day.value}
-              type="button"
-              aria-pressed={selected}
+              active={selected}
               onClick={() =>
                 setWeekdays((current) =>
                   selected
@@ -163,63 +172,51 @@ function HabitFormPanel({ title, initial, submitLabel, onSubmit, onCancel }: Hab
                     : [...current, day.value],
                 )
               }
-              className={
-                selected
-                  ? 'rounded-full bg-[var(--color-ink)] px-2 py-0.5 text-white'
-                  : 'rounded-full border border-black/10 px-2 py-0.5 opacity-60 transition hover:opacity-100'
-              }
             >
               {day.label}
-            </button>
+            </Chip>
           );
         })}
-        <span className="text-[10px] opacity-30">不选 = 每天</span>
+        <span className="text-micro opacity-30">不选 = 每天</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 text-[11px] opacity-70">
-        <label className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-3 text-caption opacity-70">
+        <label htmlFor="habit-start" className="flex items-center gap-1.5">
           <span>开始</span>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-            className="rounded border border-black/10 bg-white/70 px-2 py-1"
-          />
+          <div className="w-32">
+            <Input
+              id="habit-start"
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+            />
+          </div>
         </label>
-        <label className="flex items-center gap-1.5">
+        <label htmlFor="habit-end" className="flex items-center gap-1.5">
           <span>结束</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(event) => setEndDate(event.target.value)}
-            className="rounded border border-black/10 bg-white/70 px-2 py-1"
-          />
-          <span className="text-[10px] opacity-50">留空 = 长期</span>
+          <div className="w-32">
+            <Input
+              id="habit-end"
+              type="date"
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+            />
+          </div>
+          <span className="text-micro opacity-50">留空 = 长期</span>
         </label>
       </div>
 
-      {rangeInvalid ? (
-        <p className="text-[10px] text-amber-700">结束日期不能早于开始日期。</p>
-      ) : null}
+      {rangeInvalid ? <p className="text-micro text-danger">结束日期不能早于开始日期。</p> : null}
 
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!canSubmit}
-          className="rounded-lg bg-[var(--color-ink)] px-3 py-1.5 text-xs text-white disabled:opacity-30"
-        >
+        <Button variant="primary" size="sm" onClick={submit} disabled={!canSubmit}>
           {submitLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs opacity-60"
-        >
+        </Button>
+        <Button variant="secondary" size="sm" onClick={onCancel}>
           取消
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -244,7 +241,7 @@ function HistoryGrid({ habit, today, historyFrom, doneKeys }: HistoryGridProps) 
   const dates = habitDatesBetween(habit, historyFrom, today);
 
   if (dates.length === 0) {
-    return <p className="mt-1.5 text-[10px] opacity-30">最近两周没有安排打卡。</p>;
+    return <p className="mt-1.5 text-micro opacity-30">最近两周没有安排打卡。</p>;
   }
 
   return (
@@ -260,11 +257,9 @@ function HistoryGrid({ habit, today, historyFrom, doneKeys }: HistoryGridProps) 
             aria-disabled="true"
             aria-label={`${date} ${done ? '已打卡' : '未打卡'}`}
             title={`${date}${isToday ? '（今天）' : ''} · ${done ? '已打卡' : '未打卡'} · 历史只读`}
-            className={`size-5 cursor-not-allowed rounded border text-[9px] leading-none tabular-nums ${
-              done
-                ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
-                : 'border-black/20 bg-white/60 text-black/40'
-            } ${isToday ? 'ring-1 ring-[var(--color-accent)] ring-offset-1' : ''}`}
+            className={`size-5 cursor-not-allowed rounded-sm border text-micro leading-none tabular-nums ${
+              done ? 'border-ink bg-ink text-white' : 'border-line bg-white/60 text-ink/40'
+            } ${isToday ? 'ring-1 ring-accent ring-offset-1' : ''}`}
           >
             {Number(date.slice(8, 10))}
           </button>
@@ -272,7 +267,7 @@ function HistoryGrid({ habit, today, historyFrom, doneKeys }: HistoryGridProps) 
       })}
       {/* 格子是 disabled 的，点下去不会发生任何事；所以就地写清"只读"，
           而不是让用户点完猜自己是不是点错了。 */}
-      <span className="ml-1 text-[10px] opacity-30">只读</span>
+      <span className="ml-1 text-micro opacity-30">只读</span>
     </div>
   );
 }
@@ -406,43 +401,40 @@ export function CheckinScreen() {
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <input
-                type="checkbox"
+              <Checkbox
                 aria-label={`完成 ${habit.name}`}
                 checked={done}
                 disabled={!checkable}
                 onChange={() => void toggleToday(habit)}
                 title={checkable ? '勾上表示今天完成了' : '今天不用打卡'}
-                className={`size-4 shrink-0 ${checkable ? '' : 'cursor-not-allowed opacity-30'}`}
+                className={checkable ? '' : 'cursor-not-allowed opacity-30'}
               />
-              <span className="min-w-0 flex-1 break-words text-sm">{habit.name}</span>
+              <span className="min-w-0 flex-1 break-words text-body">{habit.name}</span>
 
               {!checkable ? (
-                <span className="rounded bg-black/[0.06] px-1.5 py-0.5 text-[10px] opacity-50">
-                  今天不用
-                </span>
+                <Badge>今天不用</Badge>
               ) : (
-                <span className="text-[10px] opacity-40">{done ? '已打卡' : '未打卡'}</span>
+                <span className="text-micro opacity-40">{done ? '已打卡' : '未打卡'}</span>
               )}
 
-              <span className="text-[10px] tabular-nums opacity-30">{describeSchedule(habit)}</span>
+              <span className="text-micro tabular-nums opacity-30">{describeSchedule(habit)}</span>
 
               {/* 触屏没有 hover，小屏常显操作，桌面悬停出现（沿用作业清单的做法）。 */}
-              <span className="flex items-center gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
+              <span className="flex items-center gap-1 opacity-100 transition-opacity duration-fast sm:opacity-0 sm:group-hover:opacity-100">
                 <button
                   type="button"
                   onClick={() => {
                     setPendingDeleteId(null);
                     setFormTarget({ habitId: habit.id });
                   }}
-                  className="px-1 text-xs opacity-50"
+                  className={`px-1 text-small opacity-50 transition-opacity duration-fast hover:opacity-80 ${focusRing}`}
                 >
                   编辑
                 </button>
                 <button
                   type="button"
                   onClick={() => setPendingDeleteId(habit.id)}
-                  className="px-1 text-xs opacity-50"
+                  className={`px-1 text-small opacity-50 transition-opacity duration-fast hover:opacity-80 ${focusRing}`}
                 >
                   删除
                 </button>
@@ -457,22 +449,14 @@ export function CheckinScreen() {
             />
 
             {pendingDeleteId === habit.id ? (
-              <p className="mt-2 flex flex-wrap items-center gap-2 pl-7 text-[11px] text-amber-700">
+              <p className="mt-2 flex flex-wrap items-center gap-2 pl-7 text-caption text-danger">
                 <span>删除「{habit.name}」会连它的全部历史打卡一起删掉，无法恢复。确定？</span>
-                <button
-                  type="button"
-                  onClick={() => void removeHabit(habit)}
-                  className="rounded border border-amber-300 px-2 py-0.5"
-                >
+                <Button variant="danger" size="sm" onClick={() => void removeHabit(habit)}>
                   确认删除
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPendingDeleteId(null)}
-                  className="rounded border border-black/10 px-2 py-0.5 opacity-60"
-                >
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(null)}>
                   取消
-                </button>
+                </Button>
               </p>
             ) : null}
           </>
@@ -485,21 +469,21 @@ export function CheckinScreen() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
         <span className="flex items-baseline gap-2">
-          <span className="text-3xl font-semibold tabular-nums">{streak}</span>
-          <span className="text-sm opacity-50">天最长连续</span>
+          <span className="text-metric font-semibold tabular-nums">{streak}</span>
+          <span className="text-body opacity-50">天最长连续</span>
         </span>
-        <span className="text-xs tabular-nums opacity-40">今天 {today}</span>
+        <span className="text-small tabular-nums opacity-40">今天 {today}</span>
         <span className="flex-1" />
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => {
             setPendingDeleteId(null);
             setFormTarget({ habitId: null });
           }}
-          className="rounded-lg bg-[var(--color-ink)] px-3 py-1.5 text-xs text-white"
         >
           新建打卡项
-        </button>
+        </Button>
       </div>
 
       {creating ? (
@@ -513,32 +497,28 @@ export function CheckinScreen() {
         />
       ) : null}
 
-      <section className="space-y-2">
-        <h2 className="text-xs opacity-40">今天该打卡</h2>
+      <Section title="今天该打卡">
         {dueToday.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-black/[0.12] px-4 py-8 text-center text-xs opacity-40">
-            今天没有要打卡的项。用右上角「新建打卡项」加一项。
-          </p>
+          <EmptyState size="md">今天没有要打卡的项。用右上角「新建打卡项」加一项。</EmptyState>
         ) : (
-          <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
-            {dueToday.map((habit) => renderRow(habit))}
-          </ul>
+          <Card padding="none" className="overflow-hidden">
+            <ul className="divide-y divide-line">{dueToday.map((habit) => renderRow(habit))}</ul>
+          </Card>
         )}
-      </section>
+      </Section>
 
       {idleToday.length > 0 ? (
-        <section className="space-y-2">
-          <h2 className="text-xs opacity-40">今天不用打卡</h2>
-          <p className="text-[10px] leading-relaxed opacity-35">
-            这些项的重复规则不含今天（或在起止日期之外），只能看历史、改规则。
-          </p>
-          <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
-            {idleToday.map((habit) => renderRow(habit))}
-          </ul>
-        </section>
+        <Section
+          title="今天不用打卡"
+          description="这些项的重复规则不含今天（或在起止日期之外），只能看历史、改规则。"
+        >
+          <Card padding="none" className="overflow-hidden">
+            <ul className="divide-y divide-line">{idleToday.map((habit) => renderRow(habit))}</ul>
+          </Card>
+        </Section>
       ) : null}
 
-      <p className="text-[11px] leading-relaxed opacity-35">
+      <p className="text-caption leading-relaxed opacity-35">
         方格是最近 {HISTORY_DAYS} 天的历史，只读：打卡记录的是"我做到了"，
         允许回头补勾或取消，统计就成了可以随时改写的数字。今天能不能打只看今天——
         未来还没发生，所以不渲染、也不允许提前勾。连续天数取「今天该打卡的项里最长的一条」：

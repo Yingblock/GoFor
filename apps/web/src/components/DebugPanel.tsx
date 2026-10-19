@@ -1,3 +1,4 @@
+import { Button, Input } from '@gofor/ui';
 import { useState } from 'react';
 import { applyOffsetTo, effectiveNow, getOffsetMs, resetOffset } from '../clock.ts';
 
@@ -108,10 +109,10 @@ export function DebugPanel() {
   const shifted = offset !== 0;
 
   return (
-    <details className="max-h-[52vh] overflow-y-auto rounded-xl border border-black/[0.08] bg-white/60 px-3 py-2 text-[11px]">
+    <details className="max-h-[52vh] overflow-y-auto rounded-lg border border-line bg-white/60 px-3 py-2 text-caption">
       <summary className="cursor-pointer select-none font-medium opacity-60">
         调试 · 当前时间
-        {shifted ? <span className="ml-1.5 text-red-600">{formatOffset(offset)}</span> : null}
+        {shifted ? <span className="ml-1.5 text-danger">{formatOffset(offset)}</span> : null}
       </summary>
 
       <dl className="mt-2 space-y-1">
@@ -121,55 +122,47 @@ export function DebugPanel() {
         </div>
         <div className="flex items-baseline justify-between gap-2">
           <dt className="shrink-0 opacity-45">生效时间</dt>
-          <dd className={`font-mono tabular-nums ${shifted ? 'font-semibold text-red-600' : ''}`}>
+          <dd className={`font-mono tabular-nums ${shifted ? 'font-semibold text-danger' : ''}`}>
             {formatLocal(effectiveNow())}
           </dd>
         </div>
         {shifted ? (
-          <div className="text-right text-[10px] text-red-600">偏移 {formatOffset(offset)}</div>
+          <div className="text-right text-micro text-danger">偏移 {formatOffset(offset)}</div>
         ) : null}
       </dl>
 
       <div className="mt-2 grid grid-cols-2 gap-1.5">
         {QUICK_SHIFTS.map((action) => (
-          <button
+          <Button
             key={action.label}
-            type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => shiftBy(action.deltaMs)}
-            className="rounded-lg border border-black/10 bg-white/70 px-2 py-1 text-[11px] hover:bg-white"
           >
             {action.label}
-          </button>
+          </Button>
         ))}
       </div>
 
-      <input
+      <Input
         type="datetime-local"
         step={60}
         value={inputValue}
         onChange={(event) => setInputValue(event.target.value)}
         aria-label="设为指定时间"
-        className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-2 py-1 text-[11px]"
+        className="mt-2"
       />
 
       <div className="mt-1.5 flex gap-1.5">
-        <button
-          type="button"
-          onClick={setToInput}
-          className="flex-1 rounded-lg bg-[var(--color-ink)] px-2 py-1 text-[11px] text-white hover:opacity-90"
-        >
+        <Button variant="primary" size="sm" onClick={setToInput} className="flex-1">
           设为此时间
-        </button>
-        <button
-          type="button"
-          onClick={() => resetOffset()}
-          className="flex-1 rounded-lg border border-black/10 bg-white/70 px-2 py-1 text-[11px] hover:bg-white"
-        >
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => resetOffset()} className="flex-1">
           重置
-        </button>
+        </Button>
       </div>
 
-      <p className="mt-2 text-[10px] leading-relaxed opacity-35">
+      <p className="mt-2 text-micro leading-relaxed opacity-35">
         调试功能，正式版删除 · TODO(debug-clock)
       </p>
     </details>

@@ -1,5 +1,5 @@
 import { formatClock, progress, remainingMs } from '@gofor/core/pomodoro';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '../clock.ts';
 import {
@@ -13,23 +13,29 @@ import {
 const MINUTE_PRESETS = [25, 45, 90];
 
 /**
- * 「确认放弃？」自动收回的毫秒数。
+ * 「长按放弃」的判定阈值：按住满这么久才真的放弃。
  *
- * 用 setTimeout 而不是领域层的 `Clock`：它只控制一个 UI 确认窗口的寿命，
- * 不参与任何计时计算（剩余时间每次都由 `remainingMs(run, appClock)` 现算），
- * 所以不会影响「计时必须可确定性推进」这条约定。
+ * 放弃是破坏性操作，但二次点击（先点「放弃」再点「确认放弃？」）在专注遮罩里
+ * 既打断节奏又多一次点击。长按把「确认」合并进同一个手势：误触一下不会结算，
+ * 一直按着才会。
  */
-const ABANDON_CONFIRM_MS = 3000;
+const ABANDON_HOLD_MS = 5000;
+
+/**
+ * 长按进度的刷新间隔（约 20 帧/秒）。
+ *
+ * 只负责触发重渲染；进度本身由「按下时刻到现在的单调时钟差值」现算，
+ * 绝不累加 tick——和番茄钟剩余时间的做法一致，被后台节流也不会算错。
+ */
+const ABANDON_HOLD_REFRESH_MS = 50;
 
 const chipBase = 'rounded-full px-3 py-1.5 text-xs transition';
 const chipOn = 'bg-[var(--color-ink)] text-white';
 const chipOff = 'border border-black/10 bg-white/60 hover:bg-white';
 
-/** 遮罩里的按钮基类：等宽等高的 flex-1，确认态多出一个「取消」也不会把布局顶歪。 */
+/** 遮罩里的按钮基类：等宽等高的 flex-1，按钮文字长短不同也不会把布局顶歪。 */
 const overlayButtonBase = 'min-w-[8.5rem] flex-1 rounded-xl px-4 py-3 text-sm transition';
 const overlayGhost = `${overlayButtonBase} border border-black/10 bg-white/60 hover:bg-white`;
-const overlayQuiet = `${overlayButtonBase} opacity-40 hover:opacity-70`;
-const overlayPrimary = `${overlayButtonBase} bg-[var(--color-ink)] text-white hover:opacity-90`;
 
 /**
  * 番茄钟界面。
@@ -192,6 +198,144 @@ function FocusSetup({ controller }: { controller: PomodoroController }) {
 }
 
 /**
+ * 「长按放弃」按钮：按住 5 秒才调用 `onAbandon`，中途松开/移出/失焦/切走都取消。
+ *
+ * 计时：按下时记一个单调时钟起点，之后每 `ABANDON_HOLD_REFRESH_MS` 用
+ * 「现在 − 起点」现算已过毫秒并据此渲染进度；到点判定也用同一个差值。
+ * 定时器只触发重渲染，不参与累加——后台节流最多让进度条少刷新几帧，
+ * 不会让 5 秒提前或延后生效（页面隐藏时本来就直接取消了）。
+ *
+ * 进度条：按钮内部一个绝对定位的填充层，`transform: scaleX()` 从左往右铺开。
+ * 它不占布局空间，填充多少都不会改变按钮尺寸、换行或相邻按钮的位置；
+ * 文字单独一层压在上面，颜色是低透明度红，任何进度下都保持可读。
+ */
+function HoldAbandonButton({ onAbandon }: { onAbandon: () => void }) {
+  /** 本轮长按已过的毫秒数；null 表示当前没在长按（进度条为 0）。 */
+  const [heldMs, setHeldMs] = useState<number | null>(null);
+  /** 本轮长按的单调时钟起点；null 表示不在长按中。 */
+  const holdStartedAtRef = useRef<number | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
+  /** 到点后置 true：此后任何 tick / 松开事件都不允许再触发一次 abandon。 */
+  const firedRef = useRef(false);
+
+  const stopRefresh = useCallback(() => {
+    if (refreshTimerRef.current === null) return;
+    window.clearInterval(refreshTimerRef.current);
+    refreshTimerRef.current = null;
+  }, []);
+
+  /** 取消本轮长按并复位进度；已经到点触发的则原样保留（结算交给 controller）。 */
+  const cancelHold = useCallback(() => {
+    if (firedRef.current) return;
+    stopRefresh();
+    holdStartedAtRef.current = null;
+    setHeldMs(null);
+  }, [stopRefresh]);
+
+  const startHold = useCallback(() => {
+    // 已经在长按（重复的 pointerdown、键盘事件层的 repeat 都已挡住）就不再重开一轮。
+    if (holdStartedAtRef.current !== null) return;
+    firedRef.current = false;
+    holdStartedAtRef.current = appClock.monotonic();
+    setHeldMs(0);
+    stopRefresh();
+    refreshTimerRef.current = window.setInterval(() => {
+      const startedAt = holdStartedAtRef.current;
+      if (startedAt === null) return;
+      const elapsed = appClock.monotonic() - startedAt;
+      if (elapsed < ABANDON_HOLD_MS) {
+        setHeldMs(elapsed);
+        return;
+      }
+      // 先停表、清起点、置到点标记，再触发：到点后重复的 tick 或随后的
+      // pointerup / keyup 都不可能再调用第二次 abandon。
+      stopRefresh();
+      holdStartedAtRef.current = null;
+      firedRef.current = true;
+      setHeldMs(ABANDON_HOLD_MS);
+      onAbandon();
+    }, ABANDON_HOLD_REFRESH_MS);
+  }, [onAbandon, stopRefresh]);
+
+  // 窗口失焦、切走标签页、锁屏都算「中途松手」：回来时绝不能已经按满 5 秒。
+  // 监听器只挂一次；判定只依赖 ref，不依赖任何渲染期状态。
+  useEffect(() => {
+    const onWindowBlur = () => cancelHold();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') cancelHold();
+    };
+    window.addEventListener('blur', onWindowBlur);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('blur', onWindowBlur);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      // 组件卸载（放弃结算完回到设置页）时不能留下悬挂的刷新定时器。
+      stopRefresh();
+    };
+  }, [cancelHold, stopRefresh]);
+
+  const holding = heldMs !== null;
+  // 进度按已过毫秒现算；只用于显示，是否到点由上面 interval 的同一个差值判定。
+  const fillRatio = heldMs === null ? 0 : Math.min(1, heldMs / ABANDON_HOLD_MS);
+
+  return (
+    <button
+      type="button"
+      aria-label="长按 5 秒放弃本次专注"
+      onPointerDown={(event) => {
+        // 只认主键：鼠标左键、触摸、笔尖的 button 都是 0，右键菜单不启动长按。
+        if (event.button !== 0) return;
+        startHold();
+      }}
+      onPointerUp={cancelHold}
+      onPointerCancel={cancelHold}
+      onPointerLeave={cancelHold}
+      onPointerMove={(event) => {
+        // 触摸时浏览器会在 pointerdown 后隐式捕获指针，手指滑出按钮不保证再发
+        // pointerleave，所以按住期间用坐标兜一层「移出即取消」。
+        if (holdStartedAtRef.current === null) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        const outside =
+          event.clientX < rect.left ||
+          event.clientX > rect.right ||
+          event.clientY < rect.top ||
+          event.clientY > rect.bottom;
+        if (outside) cancelHold();
+      }}
+      onKeyDown={(event) => {
+        // 按住不放时浏览器会持续发 repeat 的 keydown，不能把它当成重新开始。
+        if (event.repeat) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        // 阻止 Space 滚动页面，也阻止按钮原生的 Enter/Space 点击。
+        event.preventDefault();
+        startHold();
+      }}
+      onKeyUp={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        cancelHold();
+      }}
+      // 按钮自己失焦（Tab 走开、点了别处）同样算中途松手。
+      onBlur={cancelHold}
+      // 长按触发系统右键菜单/文字选择会打断手势，统一按掉；文案不被选中。
+      onContextMenu={(event) => event.preventDefault()}
+      className={`${overlayButtonBase} relative touch-none select-none overflow-hidden border border-black/10 bg-white/60 ${
+        holding ? 'opacity-100' : 'opacity-40 hover:opacity-70'
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 origin-left"
+        style={{
+          transform: `scaleX(${fillRatio})`,
+          backgroundColor: 'color-mix(in srgb, #dc2626 22%, transparent)',
+        }}
+      />
+      <span className="relative">长按放弃</span>
+    </button>
+  );
+}
+
+/**
  * 运行态：占满视口的专注遮罩。
  *
  * 为什么不用浏览器 Fullscreen API：它在 PWA / iOS / Android WebView 里行为不一致，
@@ -203,18 +347,6 @@ function FocusSetup({ controller }: { controller: PomodoroController }) {
 function FocusSession({ controller }: { controller: PomodoroController }) {
   const run = controller.run;
 
-  // 放弃是破坏性操作：第一次点击只把按钮切成确认态，第二次才真正结算。
-  // 不用 window.confirm：部分 WebView / 独立 PWA 会直接吞掉它，用户点了没反应。
-  const [confirmingAbandon, setConfirmingAbandon] = useState(false);
-
-  useEffect(() => {
-    if (!confirmingAbandon) return;
-    // 3 秒后自动收回，避免确认态一直挂着——那样它就等于没有二次确认。
-    // cleanup 保证：再次点击、组件卸载（结算后回到设置页）都不会留下悬挂定时器。
-    const timer = window.setTimeout(() => setConfirmingAbandon(false), ABANDON_CONFIRM_MS);
-    return () => window.clearTimeout(timer);
-  }, [confirmingAbandon]);
-
   if (!run) return null;
 
   const paused = run.status === 'paused';
@@ -223,12 +355,6 @@ function FocusSession({ controller }: { controller: PomodoroController }) {
   const plannedMinutes = Math.round(run.plannedMs / 60_000);
   const subject = controller.subjects.find((item) => item.id === run.subjectId);
   const task = controller.tasks.find((item) => item.id === run.taskId);
-
-  const startAbandonConfirm = () => setConfirmingAbandon(true);
-  const confirmAbandon = () => {
-    setConfirmingAbandon(false);
-    controller.abandon();
-  };
 
   return (
     <div
@@ -308,24 +434,8 @@ function FocusSession({ controller }: { controller: PomodoroController }) {
           <button type="button" onClick={controller.finish} className={overlayGhost}>
             完成
           </button>
-          {confirmingAbandon ? (
-            <>
-              <button type="button" onClick={confirmAbandon} className={overlayPrimary}>
-                确认放弃？
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmingAbandon(false)}
-                className={overlayGhost}
-              >
-                取消
-              </button>
-            </>
-          ) : (
-            <button type="button" onClick={startAbandonConfirm} className={overlayQuiet}>
-              放弃
-            </button>
-          )}
+          {/* 放弃必须按住 5 秒才生效，进度显示在按钮背景里。 */}
+          <HoldAbandonButton onAbandon={controller.abandon} />
         </div>
       </div>
     </div>

@@ -21,9 +21,25 @@ export const periodSchema = z
  */
 export const focusUnitSchema = z.union([z.literal('period'), z.number().int().min(1).max(240)]);
 
+/**
+ * 默认打印模板的 id。
+ *
+ * 与 `packages/core/src/print/templates.ts` 的 `BUILTIN_TEMPLATES[0]`（`'day'`）一致。
+ * 放在这里同时作为 schema 缺省值：**旧版本配置里没有 `print.template` 时，
+ * zod 用它补齐而不是让整份配置校验失败**——否则升级后用户的课表、纸张、
+ * 扫描阈值会全部退回出厂默认（与 backupSchema 是同一类坑）。
+ */
+export const DEFAULT_PRINT_TEMPLATE = 'day';
+
 export const printSchema = z.object({
   // 与 packages/core/src/print/paper.ts 共用同一份常量，避免两处枚举漂移
   paper: z.enum(PAPER_IDS),
+  /**
+   * 打印预设：用哪个模板。内置 id（`day`/`week`/…）或用户模板的 id。
+   * 打印页、模板编辑器、`PrintLayer` 与二维码都从这里取，
+   * 保证「预览 / 打印 / 坐标清单」描述的是同一张纸。
+   */
+  template: z.string().min(1).default(DEFAULT_PRINT_TEMPLATE),
   focusGrid: z.object({
     enabled: z.boolean(),
     /** 每行在「当天该科目节数」之外多留几格，给加练/自习用。 */

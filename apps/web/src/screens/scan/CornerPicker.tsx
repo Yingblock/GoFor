@@ -1,3 +1,4 @@
+import { Button, cn, focusRing } from '@gofor/ui';
 import type { Quad } from '@gofor/vision';
 import { type PointerEvent as ReactPointerEvent, useCallback, useRef, useState } from 'react';
 
@@ -89,13 +90,13 @@ export function CornerPicker({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs leading-relaxed opacity-60">
+      <p className="text-small leading-relaxed opacity-60">
         把四个角拖到纸的四个角上。纸要尽量摊平、别卷边——矫正之后按坐标读数。
       </p>
 
       <div
         ref={containerRef}
-        className="relative w-full touch-none select-none overflow-hidden rounded-xl border border-black/[0.08] bg-black/[0.03]"
+        className="relative w-full touch-none select-none overflow-hidden rounded-lg border border-line bg-ink/[0.03]"
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
@@ -111,8 +112,7 @@ export function CornerPicker({
         >
           <polygon
             points={quad.map((point) => `${point.x},${point.y}`).join(' ')}
-            fill="rgba(34,48,74,0.08)"
-            stroke="rgba(34,48,74,0.7)"
+            className="fill-ink/[0.08] stroke-ink/70"
             strokeWidth={Math.max(2, naturalWidth / 400)}
           />
         </svg>
@@ -127,33 +127,24 @@ export function CornerPicker({
               left: `${(point.x / naturalWidth) * 100}%`,
               top: `${(point.y / naturalHeight) * 100}%`,
             }}
-            className="absolute size-9 -translate-x-1/2 -translate-y-1/2 touch-none rounded-full border-2 border-white bg-[var(--color-ink)] shadow-md"
+            className={cn(
+              'absolute size-9 -translate-x-1/2 -translate-y-1/2 touch-none rounded-full border-2 border-white bg-ink shadow-card',
+              focusRing,
+            )}
           />
         ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onConfirm(quad)}
-          className="rounded-lg bg-[var(--color-ink)] px-4 py-2 text-xs text-white"
-        >
+        <Button variant="primary" size="md" onClick={() => onConfirm(quad)}>
           用这四个角矫正
-        </button>
-        <button
-          type="button"
-          onClick={() => setQuad(insetQuad(naturalWidth, naturalHeight))}
-          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs"
-        >
+        </Button>
+        <Button variant="secondary" onClick={() => setQuad(insetQuad(naturalWidth, naturalHeight))}>
           重置四角
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs"
-        >
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
           换一张
-        </button>
+        </Button>
       </div>
     </div>
   );

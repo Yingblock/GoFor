@@ -18,6 +18,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '../clock.ts';
 import { PrintPreview } from '../print/PrintSheet.tsx';
+import {
+  CUSTOM_TEMPLATE_PREFIX,
+  customIdFromSelection,
+  editorSelectionId,
+  parseStoredTemplate,
+} from '../print/template.ts';
 
 // 直接复用 core 的纸张清单：再手写一份数组就会在新增尺寸时悄悄过期。
 const PAPER_OPTIONS: readonly PaperId[] = PAPER_IDS;
@@ -75,22 +81,6 @@ function todayLabel(date: string): string {
   return `${year} 年 ${Number(month)} 月 ${Number(day)} 日`;
 }
 
-/** 解析 `StoredTemplate.json`，坏数据返回 null 而不是崩页。 */
-function parseTemplate(json: string): PrintTemplate | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(json);
-  } catch {
-    return null;
-  }
-  if (typeof raw !== 'object' || raw === null) return null;
-  const candidate = raw as Partial<PrintTemplate>;
-  if (typeof candidate.id !== 'string' || typeof candidate.name !== 'string') return null;
-  if (typeof candidate.paper !== 'string') return null;
-  if (!Array.isArray(candidate.blocks)) return null;
-  return candidate as PrintTemplate;
-}
-
 /** 数字输入框：解析失败就丢弃这次输入，草稿里永远不会出现 NaN 或负值。 */
 function NumberField({
   label,
@@ -118,7 +108,7 @@ function NumberField({
           if (!Number.isFinite(parsed)) return;
           onChange(Math.min(max, Math.max(min, parsed)));
         }}
-        className="w-14 rounded border border-black/10 bg-white/70 px-1.5 py-0.5"
+        className="w-14 rounded border border-line bg-white/70 px-1.5 py-0.5"
       />
     </label>
   );
@@ -143,7 +133,7 @@ function TextField({
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={`rounded border border-black/10 bg-white/70 px-1.5 py-0.5 ${className}`}
+        className={`rounded border border-line bg-white/70 px-1.5 py-0.5 ${className}`}
       />
     </label>
   );
@@ -189,7 +179,7 @@ function SlotsLabelsField({
         onKeyDown={(event) => {
           if (event.key === 'Enter') commit();
         }}
-        className="w-48 rounded border border-black/10 bg-white/70 px-1.5 py-0.5"
+        className="w-48 rounded border border-line bg-white/70 px-1.5 py-0.5"
       />
     </label>
   );
@@ -274,7 +264,7 @@ function BlockFields({ block, onChange }: { block: Block; onChange: (next: Block
                   onChange({ ...block, dayPart: value });
                 }
               }}
-              className="rounded border border-black/10 bg-white/70 px-1 py-0.5"
+              className="rounded border border-line bg-white/70 px-1 py-0.5"
             >
               {DAY_PARTS.map((part) => (
                 <option key={part} value={part}>
@@ -377,20 +367,35 @@ function BlockFields({ block, onChange }: { block: Block; onChange: (next: Block
 export interface TemplateEditorScreenProps {
   /** 当日课表，已排序；没有课就是空数组。编辑器只做预览，不负责算课表。 */
   schedule: { time: string; label: string }[];
+  /** 配置里当前的模板 id：进页面就选中它，避免「看到的不是要打印的那张」。 */
+  initialTemplateId: string;
+  /** 配置里当前的纸张。 */
+  initialPaper: PaperId;
+  /**
+   * 打印前把「当前模板 id + 当前纸张」写进配置，并等打印层完成重排。
+   * 返回 false 表示写库失败，调用方不要继续 `window.print()`（否则打的是旧模板）。
+   */
+  onPrint: (templateId: string, paper: PaperId) => Promise<boolean>;
 }
 
 /** 离线·M3 模板与校准页：选模板、改区块、换纸张、预览、打印。 */
-export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
+export function TemplateEditorScreen({
+  schedule,
+  initialTemplateId,
+  initialPaper,
+  onPrint,
+}: TemplateEditorScreenProps) {
   const today = dateKey(appClock);
-  const [selectedId, setSelectedId] = useState<string>(BUILTIN_TEMPLATES[0]?.id ?? 'day');
-  const [paper, setPaper] = useState<PaperId>('A4');
+  const [selectedId, setSelectedId] = useState<string>(() => editorSelectionId(initialTemplateId));
+  const [paper, setPaper] = useState<PaperId>(initialPaper);
   const [draft, setDraft] = useState<PrintTemplate | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
 
   const customs = useLiveQuery(() => listTemplates(db), [], undefined);
 
-  const isCustom = selectedId.startsWith('custom:');
-  const customId = isCustom ? selectedId.slice('custom:'.length) : null;
+  const customId = customIdFromSelection(selectedId);
+  const isCustom = customId !== null;
   const stored = customs?.find((item) => item.id === customId);
 
   // 选中自定义模板时把它载入草稿；切走即丢弃未保存修改
@@ -403,7 +408,7 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
       setDraft(null);
       return;
     }
-    const parsed = parseTemplate(stored.json);
+    const parsed = parseStoredTemplate(stored.json);
     if (!parsed) {
       setNotice('这个模板的数据损坏，无法编辑');
       setDraft(null);
@@ -415,11 +420,17 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
 
   const currentTemplate = useMemo<PrintTemplate>(() => {
     if (isCustom) {
-      return draft ?? { id: customId ?? 'custom', name: '我的模板', paper, blocks: [] };
+      // 纸张是全局打印设置：草稿里的 paper 字段跟随当前选择，预览与打印才不会分叉。
+      return draft
+        ? { ...draft, paper }
+        : { id: customId ?? 'custom', name: '我的模板', paper, blocks: [] };
     }
-    if (selectedId === CALIBRATION_TEMPLATE.id) return CALIBRATION_TEMPLATE;
+    if (selectedId === CALIBRATION_TEMPLATE.id) {
+      // 校准页也必须跟随纸张选择，否则一直是 A4。
+      return paperFor(CALIBRATION_TEMPLATE.id, paper);
+    }
     const builtin = BUILTIN_TEMPLATES.find((item) => item.id === selectedId);
-    if (!builtin) return BUILTIN_TEMPLATES[0] ?? CALIBRATION_TEMPLATE;
+    if (!builtin) return paperFor(BUILTIN_TEMPLATES[0]?.id ?? 'day', paper);
     return paperFor(builtin.id, paper);
   }, [customId, draft, isCustom, paper, selectedId]);
 
@@ -451,7 +462,8 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
     // 列表显示 `StoredTemplate.name`、打印用 `json.name`：两处写同一个值，
     // 否则改名后左侧列表会还显示旧名字，和模板内容对不上。
     const name = draft.name.trim() === '' ? '我的模板' : draft.name.trim();
-    const saved: PrintTemplate = { ...draft, name };
+    // 纸张是当前预览用的那张：一起存进去，重新打开模板时不会跳回旧纸。
+    const saved: PrintTemplate = { ...draft, name, paper };
     await putTemplate(db, {
       id: customId,
       name,
@@ -459,8 +471,9 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
       createdAt: stored?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
     });
+    setDraft(saved);
     setNotice('已保存');
-  }, [customId, draft, stored]);
+  }, [customId, draft, paper, stored]);
 
   const duplicate = useCallback(async () => {
     const copy: PrintTemplate = {
@@ -476,9 +489,45 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
-    setSelectedId(`custom:${copy.id}`);
+    setSelectedId(`${CUSTOM_TEMPLATE_PREFIX}${copy.id}`);
     setNotice('已复制，可以直接改');
   }, [currentTemplate]);
+
+  /**
+   * 打印当前模板。
+   *
+   * 顺序不能换：**先把「当前模板 + 当前纸张」写进配置，再 `window.print()`**。
+   * `PrintLayer` 只读配置，先打印再写配置的话，纸上还是上一张模板/上一张纸——
+   * 这正是用户报的「模板与校准页打印的不是当前模板」。
+   */
+  const printCurrent = useCallback(async () => {
+    if (printing) return;
+    setPrinting(true);
+    try {
+      // 自定义模板：打印的是「所见」，未保存的修改先落库，否则打印层会读到旧 JSON。
+      if (isCustom && draft && customId) await save();
+      const ok = await onPrint(currentTemplate.id, currentTemplate.paper);
+      if (!ok) {
+        setNotice('打印设置没写进配置，已取消打印（请重试）');
+        return;
+      }
+      window.print();
+    } catch (error) {
+      console.warn('打印失败', error);
+      setNotice('打印失败，请重试');
+    } finally {
+      setPrinting(false);
+    }
+  }, [
+    currentTemplate.id,
+    currentTemplate.paper,
+    customId,
+    draft,
+    isCustom,
+    onPrint,
+    printing,
+    save,
+  ]);
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[180px_minmax(0,1fr)_360px]">
@@ -518,18 +567,18 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
 
         <h2 className="pt-2 text-xs font-medium opacity-50">我的模板</h2>
         {customs === undefined ? (
-          <p className="text-[11px] opacity-40">加载中…</p>
+          <p className="text-caption opacity-40">加载中…</p>
         ) : customs.length === 0 ? (
-          <p className="text-[11px] opacity-40">还没有。选一个内置模板后点「复制」。</p>
+          <p className="text-caption opacity-40">还没有。选一个内置模板后点「复制」。</p>
         ) : (
           <ul className="space-y-0.5">
             {customs.map((item) => (
               <li key={item.id}>
                 <button
                   type="button"
-                  onClick={() => setSelectedId(`custom:${item.id}`)}
+                  onClick={() => setSelectedId(`${CUSTOM_TEMPLATE_PREFIX}${item.id}`)}
                   className={`w-full rounded px-2 py-1 text-left text-[13px] ${
-                    selectedId === `custom:${item.id}`
+                    selectedId === `${CUSTOM_TEMPLATE_PREFIX}${item.id}`
                       ? 'bg-black/[0.06] font-medium'
                       : 'hover:bg-black/[0.03]'
                   }`}
@@ -556,7 +605,7 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
                 onChange={(event) =>
                   updateDraft((current) => ({ ...current, name: event.target.value }))
                 }
-                className="w-48 rounded border border-black/10 bg-white/70 px-2 py-0.5 text-sm font-medium"
+                className="w-48 rounded border border-line bg-white/70 px-2 py-0.5 text-sm font-medium"
               />
             </label>
           ) : (
@@ -573,7 +622,7 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
               className={`rounded border px-2 py-0.5 text-xs ${
                 currentTemplate.paper === option
                   ? 'border-[var(--color-ink)] font-medium'
-                  : 'border-black/10 opacity-60'
+                  : 'border-line opacity-60'
               }`}
             >
               {PAPER_SIZES[option].name}
@@ -590,7 +639,7 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
           <button
             type="button"
             onClick={() => void duplicate()}
-            className="rounded-lg border border-black/10 px-3 py-1.5 text-xs"
+            className="rounded-lg border border-line px-3 py-1.5 text-xs"
           >
             复制为我的模板
           </button>
@@ -599,7 +648,7 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
               <button
                 type="button"
                 onClick={() => void save()}
-                className="rounded-lg bg-[var(--color-ink)] px-3 py-1.5 text-xs text-white"
+                className="rounded-lg bg-ink px-3 py-1.5 text-xs text-white"
               >
                 保存
               </button>
@@ -619,10 +668,12 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
           ) : null}
           <button
             type="button"
-            onClick={() => window.print()}
-            className="rounded-lg border border-black/10 px-3 py-1.5 text-xs"
+            onClick={() => void printCurrent()}
+            disabled={printing}
+            title="先把当前模板与纸张设为打印预设，再打开系统打印框"
+            className="rounded-lg bg-ink px-3 py-1.5 text-xs text-white disabled:opacity-60"
           >
-            打印
+            {printing ? '准备打印…' : '打印这个模板'}
           </button>
         </div>
 
@@ -630,7 +681,7 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
           {(draft?.blocks ?? currentTemplate.blocks).map((block, index) => (
             <li key={block.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
               <span className="w-8 tabular-nums opacity-35">{index + 1}</span>
-              <span className="w-28 font-mono text-[11px]">{block.kind}</span>
+              <span className="w-28 font-mono text-caption">{block.kind}</span>
               {draft ? <BlockFields block={block} onChange={replaceBlock} /> : null}
               <span className="flex-1" />
               {draft ? (
@@ -684,14 +735,14 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
                   if (!preset) return;
                   updateDraft((current) => ({ ...current, blocks: [...current.blocks, preset()] }));
                 }}
-                className="rounded border border-black/10 px-2 py-1 opacity-70"
+                className="rounded border border-line px-2 py-1 opacity-70"
               >
                 {kind}
               </button>
             ))}
           </div>
         ) : (
-          <p className="text-[11px] opacity-40">
+          <p className="text-caption opacity-40">
             内置模板不可编辑。点「复制为我的模板」后可以增删区块、改内容与模板名、换纸张。
           </p>
         )}
@@ -714,7 +765,7 @@ export function TemplateEditorScreen({ schedule }: TemplateEditorScreenProps) {
           }}
         />
         {selectedId === CALIBRATION_TEMPLATE.id ? (
-          <p className="text-[11px] leading-relaxed opacity-45">
+          <p className="text-caption leading-relaxed opacity-45">
             每台打印机第一次使用前打一张：确认有没有被整体缩放、四角有没有被裁掉。
             目前是近似刻度（用行高模拟），精确毫米刻度需要后续新增 ruler 区块。
           </p>

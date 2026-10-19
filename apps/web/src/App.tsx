@@ -1,6 +1,6 @@
-import { type AppConfig, mergeConfig } from '@gofor/core/config';
-import { dateKey, type Subject, type Task } from '@gofor/core/domain';
-import { type Block, materialize, type PaperId, paperFor } from '@gofor/core/print';
+import { type AppConfig, DEFAULT_PRINT_TEMPLATE, mergeConfig } from '@gofor/core/config';
+import { dateKey, type StoredTemplate, type Subject, type Task } from '@gofor/core/domain';
+import { materialize, type PaperId } from '@gofor/core/print';
 import { occurrencesOn, parseTimetable } from '@gofor/core/timetable';
 import {
   currentConfigOrDefault,
@@ -10,6 +10,7 @@ import {
   importAll,
   listSubjects,
   listTasks,
+  listTemplates,
   loadTimetable,
   saveConfig,
 } from '@gofor/store';
@@ -22,7 +23,8 @@ import { type Command, CommandPalette } from './components/CommandPalette.tsx';
 import { ScreenBoundary } from './components/ErrorBoundary.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { groupOf, type ScreenId, titleOf } from './nav.ts';
-import { PrintLayer } from './print/PrintSheet.tsx';
+import { PrintLayer, type SheetData } from './print/PrintSheet.tsx';
+import { printTemplateChoices, resolvePrintTemplate } from './print/template.ts';
 import { CheckinScreen } from './screens/Checkin.tsx';
 import { ChecklistScreen } from './screens/Checklist.tsx';
 import { ComingSoon } from './screens/ComingSoon.tsx';
@@ -88,8 +90,15 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /**
+   * 打印设置的「最新值」。`changePaper` / `changeTemplate` 可能在同一个事件循环里连点，
+   * 只靠 `config` state 会读到旧值、后一次覆盖前一次；用 ref 保证每次都基于最新配置合并。
+   */
+  const configRef = useRef<AppConfig | null>(null);
 
   const tasks = useLiveQuery(() => listTasks(db), [], [] as Task[]);
+  /** 用户模板：配置里的 template 可能指向它们，打印层 / 打印页下拉都从这里取。 */
+  const customTemplates = useLiveQuery(() => listTemplates(db), [], [] as StoredTemplate[]);
 
   // 课表存在 Dexie 里是 `unknown`（导入可能带进坏数据），用上面的守卫收窄。
   const timetable = useLiveQuery(() => loadTimetable(db, TIMETABLE_ID), [], undefined);
@@ -128,7 +137,10 @@ export function App() {
   }, [subjects, timetable, today]);
 
   useEffect(() => {
-    void currentConfigOrDefault(db).then((result) => setConfig(result.config));
+    void currentConfigOrDefault(db).then((result) => {
+      configRef.current = result.config;
+      setConfig(result.config);
+    });
     // 科目是全局共享的（课表 / 番茄钟 / 作业都用它）。
     // 在启动时统一播种，避免"先打开哪个页面决定有没有科目"的不一致。
     void ensureSubjects(db);
@@ -166,27 +178,96 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const blocks = useMemo(() => {
-    if (!config) return [] as Block[];
-    const template = paperFor('day', config.print.paper);
-    return materialize(template, { date: today, dateLabel: todayLabel(today) });
-  }, [config, today]);
-
+  /**
+   * 当前打印模板：**唯一来源是 `config.print.template`**。
+   *
+   * 以前这里是 `paperFor('day', …)` 写死的，导致打印页换模板/换纸只改了 UI，
+   * 真正进纸的 `PrintLayer` 还是默认模板 A4。现在 App 解析一次，打印页、
+   * 模板编辑器、`PrintLayer` 与二维码都复用同一份结果。
+   */
   const paper: PaperId = config?.print.paper ?? 'A4';
+  const templateId = config?.print.template ?? DEFAULT_PRINT_TEMPLATE;
+
+  const printTemplate = useMemo(
+    () => resolvePrintTemplate(templateId, paper, customTemplates),
+    [customTemplates, paper, templateId],
+  );
+
+  const blocks = useMemo(
+    () => materialize(printTemplate, { date: today, dateLabel: todayLabel(today) }),
+    [printTemplate, today],
+  );
+
+  const templateChoices = useMemo(() => printTemplateChoices(customTemplates), [customTemplates]);
+
+  /**
+   * 预览与打印共用这一份数据（同一个对象），避免"预览是 A5、打印是 A4"这类分叉。
+   * 二维码写的是**解析后**的模板 id：模板损坏回退时，纸上的身份也得跟着回退。
+   */
+  const sheetData = useMemo<SheetData>(
+    () => ({
+      tasks,
+      schedule,
+      qr: { templateId: printTemplate.id, date: today, paper },
+    }),
+    [paper, printTemplate.id, schedule, tasks, today],
+  );
 
   const navigate = useCallback((next: ScreenId) => {
     setScreen(next);
     setNotice(null);
   }, []);
 
-  const changePaper = useCallback(
-    async (next: PaperId) => {
-      if (!config) return;
-      const nextConfig = mergeConfig(config, { print: { paper: next } });
-      await saveConfig(db, nextConfig);
+  /** 把打印预设写进配置并立刻更新 UI；返回是否写成功。 */
+  const applyPrintConfig = useCallback(
+    async (patch: { template?: string; paper?: PaperId }): Promise<boolean> => {
+      const base = configRef.current;
+      if (!base) return false;
+      const nextConfig = mergeConfig(base, { print: patch });
+      // 先更新 ref：连点两个纸张按钮时，第二次必须基于第一次的结果合并。
+      configRef.current = nextConfig;
+      try {
+        await saveConfig(db, nextConfig);
+      } catch (error) {
+        // 写库失败不阻塞打印：这次仍按新设置预览/打印，只是刷新后会回到旧值。
+        console.warn('打印设置没存下来', error);
+      }
       setConfig(nextConfig);
+      return true;
     },
-    [config],
+    [],
+  );
+
+  const changePaper = useCallback(
+    (next: PaperId) => {
+      void applyPrintConfig({ paper: next });
+    },
+    [applyPrintConfig],
+  );
+
+  const changeTemplate = useCallback(
+    (next: string) => {
+      void applyPrintConfig({ template: next });
+    },
+    [applyPrintConfig],
+  );
+
+  /**
+   * 模板编辑器的「打印这个模板」：先把当前模板 + 当前纸张写进配置，
+   * 再等两帧让 `PrintLayer` 用新配置重排，最后才由调用方 `window.print()`。
+   *
+   * 不等这两帧的话，打印层还是上一张纸——用户看到的就是"打印出来的不是当前模板"。
+   */
+  const printTemplateSelection = useCallback(
+    async (nextTemplateId: string, nextPaper: PaperId): Promise<boolean> => {
+      const ok = await applyPrintConfig({ template: nextTemplateId, paper: nextPaper });
+      if (!ok) return false;
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+      return true;
+    },
+    [applyPrintConfig],
   );
 
   const exportJson = useCallback(async () => {
@@ -236,7 +317,14 @@ export function App() {
       case 'timetable':
         return <TimetableScreen />;
       case 'templates':
-        return <TemplateEditorScreen schedule={schedule} />;
+        return (
+          <TemplateEditorScreen
+            schedule={schedule}
+            initialTemplateId={printTemplate.id}
+            initialPaper={paper}
+            onPrint={printTemplateSelection}
+          />
+        );
       case 'pomodoro':
         return <Pomodoro />;
       case 'print':
@@ -245,10 +333,13 @@ export function App() {
             blocks={blocks}
             paper={paper}
             tasks={tasks}
-            schedule={schedule}
-            templateId="day"
+            data={sheetData}
+            templateId={printTemplate.id}
+            templateName={printTemplate.name}
+            templates={templateChoices}
             date={today}
-            onChangePaper={(next) => void changePaper(next)}
+            onChangePaper={changePaper}
+            onChangeTemplate={changeTemplate}
           />
         );
       case 'capture':
@@ -356,12 +447,7 @@ export function App() {
       </div>
 
       {/* 打印层必须在 .screen-only 之外，否则打印时被一起隐藏成白纸 */}
-      <PrintLayer
-        blocks={blocks}
-        paper={paper}
-        data={{ tasks, schedule, qr: { templateId: 'day', date: today, paper } }}
-      />
-
+      <PrintLayer blocks={blocks} paper={paper} data={sheetData} />
       <input
         ref={fileInputRef}
         type="file"

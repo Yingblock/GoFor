@@ -1,3 +1,4 @@
+import { IconButton } from '@gofor/ui';
 import { useEffect, useState } from 'react';
 import { groupOf, NAV, type ScreenId } from '../nav.ts';
 import { DebugPanel } from './DebugPanel.tsx';
@@ -53,7 +54,7 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
 
       <aside
         id="app-sidebar"
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-black/[0.08] bg-[var(--color-paper)] transition-transform md:static md:z-auto md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-line bg-paper transition-transform duration-base ease-standard md:static md:z-auto md:translate-x-0 ${
           collapsed ? 'md:w-14' : 'md:w-60'
         } ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
@@ -68,7 +69,7 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
             aria-label="GoFor"
             aria-current={screen === 'home' ? 'page' : undefined}
             title="GoFor · 首页"
-            className="text-left text-lg font-semibold tracking-tight"
+            className="text-left text-title font-semibold tracking-tight"
           >
             <span className={collapsed ? 'md:hidden' : ''}>GoFor</span>
             {/* 折叠态：品牌名让位给「首页」图标，否则 56px 一列放不下文字 */}
@@ -76,14 +77,9 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
               🏠
             </span>
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-xs opacity-50 md:hidden"
-            aria-label="关闭菜单"
-          >
+          <IconButton aria-label="关闭菜单" size="sm" onClick={onClose} className="md:hidden">
             ✕
-          </button>
+          </IconButton>
         </div>
 
         <nav className="flex-1 overflow-y-auto pb-6">
@@ -92,20 +88,20 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
             {NAV.map((group) => {
               const isOpen = expanded === group.code;
               return (
-                <div key={group.code} className="border-t border-black/[0.06]">
+                <div key={group.code} className="border-t border-line">
                   <button
                     type="button"
                     onClick={() => setExpanded(isOpen ? null : group.code)}
-                    className="flex w-full items-center justify-between px-4 py-2.5 text-left"
+                    className="flex w-full items-center justify-between px-4 py-2.5 text-left transition-colors duration-fast hover:bg-ink/[0.03]"
                     aria-expanded={isOpen}
                   >
                     <span className="flex items-baseline gap-2">
-                      <span className="font-mono text-[10px] tracking-tight opacity-40">
+                      <span className="font-mono text-micro tracking-tight opacity-40">
                         {group.code}
                       </span>
-                      <span className="text-sm">{group.title}</span>
+                      <span className="text-body">{group.title}</span>
                     </span>
-                    <span className="text-[10px] opacity-30">{isOpen ? '▾' : '▸'}</span>
+                    <span className="text-micro opacity-30">{isOpen ? '▾' : '▸'}</span>
                   </button>
 
                   {isOpen ? (
@@ -118,12 +114,12 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
                               type="button"
                               onClick={() => go(item.id)}
                               aria-current={isActive ? 'page' : undefined}
-                              className={`flex w-full items-center gap-2 py-1.5 pr-4 pl-8 text-left text-[13px] ${
+                              className={`flex w-full items-center gap-2 py-1.5 pr-4 pl-8 text-left text-body transition-colors duration-fast ${
                                 isActive
-                                  ? 'bg-black/[0.06] font-medium'
+                                  ? 'bg-ink/[0.06] font-medium'
                                   : item.ready
-                                    ? 'hover:bg-black/[0.03]'
-                                    : 'opacity-40 hover:bg-black/[0.03]'
+                                    ? 'hover:bg-ink/[0.03]'
+                                    : 'opacity-40 hover:bg-ink/[0.03]'
                               }`}
                             >
                               {item.title}
@@ -141,7 +137,7 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
           {/* 折叠态（仅桌面）：所有条目平铺成图标列，分组之间用分隔线分组。 */}
           <div className={collapsed ? 'hidden md:block' : 'hidden'}>
             {NAV.map((group) => (
-              <div key={group.code} className="border-t border-black/[0.06] py-1 first:border-t-0">
+              <div key={group.code} className="border-t border-line py-1 first:border-t-0">
                 {group.items.map((item) => {
                   const isActive = item.id === screen;
                   return (
@@ -152,12 +148,12 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
                       aria-label={item.title}
                       aria-current={isActive ? 'page' : undefined}
                       title={`${item.title} · ${group.code}`}
-                      className={`flex h-9 w-full items-center justify-center text-base ${
+                      className={`flex h-9 w-full items-center justify-center text-base transition-colors duration-fast ${
                         isActive
-                          ? 'bg-black/[0.06]'
+                          ? 'bg-ink/[0.06]'
                           : item.ready
-                            ? 'hover:bg-black/[0.04]'
-                            : 'opacity-40 hover:bg-black/[0.03]'
+                            ? 'hover:bg-ink/[0.04]'
+                            : 'opacity-40 hover:bg-ink/[0.03]'
                       }`}
                     >
                       <span aria-hidden>{item.icon ?? '•'}</span>
@@ -171,7 +167,7 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
 
         {/* 折叠后 56px 放不下这些文字；它们不是导航功能，桌面折叠时收起来。 */}
         <div
-          className={`border-t border-black/[0.08] px-4 py-3 text-[10px] leading-relaxed opacity-35 ${
+          className={`border-t border-line px-4 py-3 text-micro leading-relaxed opacity-35 ${
             collapsed ? 'md:hidden' : ''
           }`}
         >
@@ -179,9 +175,7 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
         </div>
 
         {/* TODO(debug-clock): 上线前删除（调试时钟入口）。 */}
-        <div
-          className={`border-t border-black/[0.08] px-3 pt-2 pb-3 ${collapsed ? 'md:hidden' : ''}`}
-        >
+        <div className={`border-t border-line px-3 pt-2 pb-3 ${collapsed ? 'md:hidden' : ''}`}>
           <DebugPanel />
         </div>
       </aside>

@@ -1,3 +1,4 @@
+import { Card, Input } from '@gofor/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export interface Command {
@@ -59,9 +60,15 @@ export function CommandPalette({ open, commands, onClose }: CommandPaletteProps)
         onClick={onClose}
         className="absolute inset-0 cursor-default bg-black/30"
       />
-      <div className="relative w-full max-w-lg overflow-hidden rounded-xl border border-black/10 bg-white shadow-2xl">
-        <input
+      <Card
+        tone="solid"
+        elevation="pop"
+        padding="none"
+        className="relative w-full max-w-lg overflow-hidden animate-pop-in"
+      >
+        <Input
           ref={inputRef}
+          variant="flush"
           value={query}
           onChange={(event) => updateQuery(event.target.value)}
           onKeyDown={(event) => {
@@ -80,11 +87,10 @@ export function CommandPalette({ open, commands, onClose }: CommandPaletteProps)
             }
           }}
           placeholder="输入命令…"
-          className="w-full border-b border-black/10 px-4 py-3 text-base outline-none"
         />
         <ul className="max-h-72 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <li className="px-4 py-3 text-sm opacity-50">没有匹配的命令</li>
+            <li className="px-4 py-3 text-body opacity-50">没有匹配的命令</li>
           ) : (
             filtered.map((command, index) => (
               <li key={command.id}>
@@ -92,18 +98,20 @@ export function CommandPalette({ open, commands, onClose }: CommandPaletteProps)
                   type="button"
                   onMouseEnter={() => setActive(index)}
                   onClick={() => run(command)}
-                  className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm ${
-                    index === active ? 'bg-black/[0.06]' : ''
+                  className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-body transition-colors duration-fast ${
+                    index === active ? 'bg-ink/[0.06]' : ''
                   }`}
                 >
                   <span>{command.title}</span>
-                  {command.hint ? <span className="opacity-40">{command.hint}</span> : null}
+                  {command.hint ? (
+                    <span className="text-small opacity-40">{command.hint}</span>
+                  ) : null}
                 </button>
               </li>
             ))
           )}
         </ul>
-      </div>
+      </Card>
     </div>
   );
 }

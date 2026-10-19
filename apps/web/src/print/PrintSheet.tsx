@@ -12,7 +12,7 @@ import {
   type TimeLogBlock,
 } from '@gofor/core/print';
 import { buildFillLink, encodeQrSvgPath } from '@gofor/core/scan';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，恢复 `new Date()`）。
 import { appClock } from '../clock.ts';
 
@@ -486,7 +486,8 @@ export function PrintPreview({ blocks, paper, margin, data }: PrintSheetProps) {
       <div
         style={{
           width: mm(size.widthMm * scale),
-          height: mm(size.heightMm * scale),
+          // 多页时外层必须按「页数 × 页高」占位；只写一页会把第 2 页起全裁掉。
+          height: mm(size.heightMm * scale * result.pages.length),
           overflow: 'hidden',
           filter: 'drop-shadow(0 2px 12px rgba(0,0,0,0.12))',
         }}
@@ -501,6 +502,164 @@ export function PrintPreview({ blocks, paper, margin, data }: PrintSheetProps) {
           {result.pages.map((page) => (
             <PageView key={page.index} page={page} data={data} />
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export interface PrintPreviewDialogProps extends PrintSheetProps {
+  /** 显示在标题栏的模板名，让人确认「打的是这张模板」。 */
+  templateName: string;
+  onClose: () => void;
+}
+
+/**
+ * 应用内打印预览（模态）。
+ *
+ * 为什么不是另画一份 HTML：**必须与真实打印是同一套 blocks / paper / data**。
+ * 这里直接复用 `PageView`（`PrintLayer` 用的同一个渲染器）与同一个 `layout()`，
+ * 只是按容器缩放、一次显示一页；真正的打印仍然由 `PrintLayer` 完成。
+ * 以前出过「预览好好的、打出来错位」，任何"预览另写一套"的方案都会重蹈覆辙。
+ */
+export function PrintPreviewDialog({
+  blocks,
+  paper,
+  margin,
+  data,
+  templateName,
+  onClose,
+}: PrintPreviewDialogProps) {
+  const result = layout(blocks, margin ? { paper, margin } : { paper });
+  const size = PAPER_SIZES[paper];
+  const pageCount = result.pages.length;
+  const [pageIndex, setPageIndex] = useState(0);
+  const [hostWidth, setHostWidth] = useState<number | null>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+
+  // 换模板 / 换纸张可能让页数变少：把页码夹在有效范围内，别停在空白页。
+  useEffect(() => {
+    setPageIndex((current) => Math.min(current, Math.max(0, pageCount - 1)));
+  }, [pageCount]);
+
+  // Esc 关闭：模态层的基本预期，也避免困住键盘用户。
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (host === null) return;
+    const measure = () => setHostWidth(host.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, []);
+
+  const naturalWidthPx = size.widthMm * PX_PER_MM;
+  // 预览最多 1:1，再大没有意义；两侧留 24px 给滚动条与阴影。
+  const scale =
+    hostWidth !== null && hostWidth > 0
+      ? Math.min(1, Math.max(0, hostWidth - 24) / naturalWidthPx)
+      : 1;
+
+  const page = result.pages[pageIndex];
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="打印预览"
+      className="fixed inset-0 z-50 flex flex-col bg-black/30 p-2 sm:p-6 animate-fade-in"
+    >
+      <div className="mx-auto flex h-full w-full min-w-0 max-w-3xl flex-col overflow-hidden rounded-2xl bg-paper shadow-pop animate-pop-in">
+        <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+          <h2 className="text-sm font-medium">打印预览</h2>
+          <span className="text-xs opacity-50">
+            {templateName} · {size.name}（{size.widthMm}×{size.heightMm}mm） · {pageCount} 页
+          </span>
+          <span className="flex-1" />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="关闭打印预览"
+            className="rounded border border-line px-2 py-0.5 text-xs opacity-60"
+          >
+            ✕
+          </button>
+        </header>
+
+        <div ref={hostRef} className="min-h-0 flex-1 overflow-auto bg-black/[0.06] p-3">
+          <div
+            className="mx-auto"
+            style={{
+              width: mm(size.widthMm * scale),
+              height: mm(size.heightMm * scale),
+              filter: 'drop-shadow(0 2px 12px rgba(0,0,0,0.18))',
+            }}
+          >
+            <div
+              style={{
+                width: mm(size.widthMm),
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+              }}
+            >
+              {page ? <PageView page={page} data={data} /> : null}
+            </div>
+          </div>
+        </div>
+
+        {pageCount > 1 ? (
+          <div className="flex items-center justify-center gap-3 border-t border-line px-4 py-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
+              disabled={pageIndex === 0}
+              className="rounded border border-line px-2 py-0.5 disabled:opacity-30"
+            >
+              上一页
+            </button>
+            <span className="tabular-nums opacity-60">
+              {pageIndex + 1} / {pageCount}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPageIndex((current) => Math.min(pageCount - 1, current + 1))}
+              disabled={pageIndex >= pageCount - 1}
+              className="rounded border border-line px-2 py-0.5 disabled:opacity-30"
+            >
+              下一页
+            </button>
+          </div>
+        ) : null}
+
+        <div className="border-t border-line px-4 py-2 text-caption leading-relaxed opacity-55">
+          系统打印框里请把纸张选成 <strong>{size.name}</strong>（{size.widthMm}×{size.heightMm}
+          mm），缩放选 <strong>100%</strong>（不要「适合页面」），
+          关闭页眉页脚，并勾选「背景图形」。边距由纸面版式负责，不要再加打印机边距。
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-line px-3 py-1.5 text-xs"
+          >
+            返回
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-lg bg-ink px-3 py-1.5 text-xs text-white"
+          >
+            继续打印
+          </button>
         </div>
       </div>
     </div>

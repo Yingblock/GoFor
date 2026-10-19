@@ -10,6 +10,7 @@ import {
   saveChecklist,
   setChecklistLog,
 } from '@gofor/store';
+import { Button, Card, Checkbox, EmptyState, focusRing, Input, Section } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useState } from 'react';
 import { appClock } from '../clock.ts';
@@ -63,68 +64,64 @@ export function ChecklistScreen() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-medium opacity-50">环境隔离清单</h2>
-          <p className="mt-1 text-[11px] opacity-35">
-            开始学习前照着勾一遍；勾选状态按天保存，历史完成率会自己算出来
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setCreating((current) => !current);
-            setError(null);
-          }}
-          className="rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 text-xs opacity-70 transition hover:opacity-100"
-        >
-          {creating ? '取消' : '新建清单'}
-        </button>
-      </div>
+      <Section
+        title="环境隔离清单"
+        description="开始学习前照着勾一遍；勾选状态按天保存，历史完成率会自己算出来"
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setCreating((current) => !current);
+              setError(null);
+            }}
+          >
+            {creating ? '取消' : '新建清单'}
+          </Button>
+        }
+      />
 
       {error ? (
-        <p
-          className="rounded-lg bg-red-500/[0.06] px-3 py-2 text-[11px] text-red-700/70"
-          role="alert"
-        >
+        <Card tone="danger" padding="none" className="px-3 py-2 text-caption" role="alert">
           {error}
-        </p>
+        </Card>
       ) : null}
 
       {creating ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void createChecklist();
-          }}
-          className="flex flex-wrap items-center gap-2 rounded-xl border border-black/[0.08] bg-white/60 p-3"
-        >
-          <input
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            placeholder="清单名称，如：开始学习前"
-            aria-label="新清单名称"
-            className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm outline-none"
-          />
-          <button
-            type="submit"
-            disabled={newName.trim() === ''}
-            className="rounded-lg bg-[var(--color-ink)] px-3 py-2 text-xs text-white transition disabled:opacity-40"
+        <Card padding="none" className="p-3">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void createChecklist();
+            }}
+            className="flex flex-wrap items-center gap-2"
           >
-            创建
-          </button>
-        </form>
+            <Input
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder="清单名称，如：开始学习前"
+              aria-label="新清单名称"
+              className="min-w-0 flex-1"
+            />
+            <Button type="submit" variant="primary" size="sm" disabled={newName.trim() === ''}>
+              创建
+            </Button>
+          </form>
+        </Card>
       ) : null}
 
       {checklists.length === 0 ? (
-        <div className="rounded-xl border border-black/[0.08] bg-white/50 px-4 py-10 text-center">
-          <p className="text-sm opacity-60">还没有清单</p>
-          <p className="mt-2 text-[11px] leading-relaxed opacity-35">
-            可以从「手机放远」「桌面清空」「水杯装好」开始，
-            <br />
-            每一条都会变成今天可以勾的一行。
-          </p>
-        </div>
+        <EmptyState
+          size="md"
+          title="还没有清单"
+          description={
+            <>
+              可以从「手机放远」「桌面清空」「水杯装好」开始，
+              <br />
+              每一条都会变成今天可以勾的一行。
+            </>
+          }
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-[15rem_1fr]">
           <aside className="space-y-1.5">
@@ -134,14 +131,14 @@ export function ChecklistScreen() {
                 type="button"
                 onClick={() => setSelectedId(checklist.id)}
                 aria-current={checklist.id === selectedId ? 'true' : undefined}
-                className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
+                className={`w-full rounded-lg border px-3 py-2 text-left text-body transition-colors duration-fast ${focusRing} ${
                   checklist.id === selectedId
-                    ? 'border-black/[0.12] bg-white'
-                    : 'border-black/[0.06] bg-white/50 hover:bg-white/80'
+                    ? 'border-ink/15 bg-white'
+                    : 'border-line bg-white/50 hover:bg-white/80'
                 }`}
               >
                 <span className="block truncate">{checklist.name}</span>
-                <span className="mt-0.5 block text-[10px] opacity-35">
+                <span className="mt-0.5 block text-micro opacity-35">
                   {checklist.items.length} 条
                 </span>
               </button>
@@ -336,7 +333,7 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
     checklist.items.length === 0 ? 0 : Math.round((checkedCount / checklist.items.length) * 100);
 
   return (
-    <div className="space-y-5 rounded-xl border border-black/[0.08] bg-white/50 p-4">
+    <Card padding="none" className="space-y-5 p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         {renaming ? (
           <form
@@ -346,99 +343,75 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
             }}
             className="flex min-w-0 flex-1 items-center gap-2"
           >
-            <input
+            <Input
               value={nameDraft}
               onChange={(event) => setNameDraft(event.target.value)}
               aria-label="清单名称"
-              className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-2.5 py-1.5 text-sm outline-none"
+              className="min-w-0 flex-1"
             />
-            <button
-              type="submit"
-              className="rounded-lg bg-[var(--color-ink)] px-2.5 py-1.5 text-[11px] text-white"
-            >
+            <Button type="submit" variant="primary" size="sm">
               保存
-            </button>
+            </Button>
             <button
               type="button"
               onClick={() => {
                 setNameDraft(checklist.name);
                 setRenaming(false);
               }}
-              className="text-[11px] opacity-40 hover:opacity-70"
+              className={`text-caption opacity-40 transition-opacity duration-fast hover:opacity-70 ${focusRing}`}
             >
               取消
             </button>
           </form>
         ) : (
           <div className="min-w-0">
-            <h3 className="truncate text-base font-medium">{checklist.name}</h3>
-            <p className="mt-0.5 text-[11px] opacity-35">
+            <h3 className="truncate text-title font-medium">{checklist.name}</h3>
+            <p className="mt-0.5 text-caption opacity-35">
               今天 {checkedCount} / {checklist.items.length} 已勾 · {percent}%
             </p>
           </div>
         )}
 
-        <div className="flex items-center gap-2 text-[11px]">
+        <div className="flex items-center gap-2">
           {renaming ? null : (
-            <button
-              type="button"
-              onClick={() => setRenaming(true)}
-              className="opacity-40 transition hover:opacity-70"
-            >
+            <Button variant="ghost" size="sm" onClick={() => setRenaming(true)}>
               改名
-            </button>
+            </Button>
           )}
           {confirmingDelete ? (
             <>
-              <button
-                type="button"
-                onClick={() => void removeChecklist()}
-                className="rounded-lg bg-red-600/80 px-2.5 py-1.5 text-white"
-              >
+              <Button variant="danger" size="sm" onClick={() => void removeChecklist()}>
                 确认删除？
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmingDelete(false)}
-                className="opacity-40 transition hover:opacity-70"
-              >
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(false)}>
                 取消
-              </button>
+              </Button>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmingDelete(true)}
-              className="opacity-40 transition hover:opacity-70"
-            >
+            <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(true)}>
               删除清单
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       {error ? (
-        <p
-          className="rounded-lg bg-red-500/[0.06] px-3 py-2 text-[11px] text-red-700/70"
-          role="alert"
-        >
+        <Card tone="danger" padding="none" className="px-3 py-2 text-caption" role="alert">
           {error}
-        </p>
+        </Card>
       ) : null}
 
       {checklist.items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-black/10 px-3 py-4 text-center text-[11px] opacity-35">
-          还没有条目。在下面加一条，比如「手机放到另一个房间」。
-        </p>
+        <EmptyState size="sm">还没有条目。在下面加一条，比如「手机放到另一个房间」。</EmptyState>
       ) : (
         <ul className="space-y-1.5">
           {checklist.items.map((item, index) => (
             <li
               key={item}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-black/[0.02]"
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-ink/[0.02]"
             >
               {editingIndex === index ? (
-                <input
+                <Input
                   value={itemDraft}
                   onChange={(event) => setItemDraft(event.target.value)}
                   onKeyDown={(event) => {
@@ -449,16 +422,18 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
                     if (event.key === 'Escape') setEditingIndex(null);
                   }}
                   aria-label="条目文字"
-                  className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-2.5 py-1.5 text-sm outline-none"
+                  className="min-w-0 flex-1"
                 />
               ) : (
-                <label className="flex min-w-0 flex-1 items-center gap-2.5 text-sm">
-                  <input
-                    type="checkbox"
+                <label
+                  htmlFor={`checklist-item-${index}`}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-body"
+                >
+                  <Checkbox
+                    id={`checklist-item-${index}`}
                     checked={checked.has(item)}
                     disabled={pending}
                     onChange={(event) => void toggleItem(item, event.target.checked)}
-                    className="h-4 w-4 accent-[var(--color-ink)]"
                   />
                   <span className="min-w-0 break-words">{item}</span>
                 </label>
@@ -466,40 +441,28 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
 
               {editingIndex === index ? (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => void renameItem(index)}
-                    className="text-[11px] opacity-50 transition hover:opacity-80"
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => void renameItem(index)}>
                     保存
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingIndex(null)}
-                    className="text-[11px] opacity-35 transition hover:opacity-60"
-                  >
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setEditingIndex(null)}>
                     取消
-                  </button>
+                  </Button>
                 </>
               ) : (
                 <>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => {
                       setEditingIndex(index);
                       setItemDraft(item);
                     }}
-                    className="text-[11px] opacity-35 transition hover:opacity-60"
                   >
                     改
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void removeItem(index)}
-                    className="text-[11px] opacity-35 transition hover:opacity-60"
-                  >
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => void removeItem(index)}>
                     删
-                  </button>
+                  </Button>
                 </>
               )}
             </li>
@@ -514,23 +477,19 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
         }}
         className="flex items-center gap-2"
       >
-        <input
+        <Input
           value={newItem}
           onChange={(event) => setNewItem(event.target.value)}
           placeholder="加一条，如：手机放到另一个房间"
           aria-label="新条目"
-          className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 text-sm outline-none"
+          className="min-w-0 flex-1"
         />
-        <button
-          type="submit"
-          disabled={newItem.trim() === ''}
-          className="rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 text-[11px] opacity-70 transition disabled:opacity-30"
-        >
+        <Button type="submit" variant="secondary" size="sm" disabled={newItem.trim() === ''}>
           添加
-        </button>
+        </Button>
       </form>
 
-      <div className="border-t border-black/[0.06] pt-3 text-[11px] opacity-40">
+      <div className="border-t border-line pt-3 text-caption opacity-40">
         {historyStats === null ? (
           <span>今天之前还没有记录，先勾今天这一遍。</span>
         ) : (
@@ -540,6 +499,6 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
           </span>
         )}
       </div>
-    </div>
+    </Card>
   );
 }

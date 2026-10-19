@@ -11,7 +11,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
 任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
 
-验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 71 项浏览器 e2e）：
+验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 111 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
 - ✅ TypeScript 7.0.2 strict
@@ -29,7 +29,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 产物 | 状态 | 说明 |
 |---|---|---|
 | `release/GoFor-win-x64.zip` | ✅ 已重建校验 | 99.9 MB（104,752,083 B）/ CRC 通过；Electron v33，双击 `GoFor.exe`；**固定端口 47821** |
-| `release/GoFor-debug.apk` | ✅ 已重建校验 | 4.6 MB（4,622,941 B），`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
+| `release/GoFor-debug.apk` | ⏸ 暂时停打（用户要求：先只做 Windows，Android 后期适配） | 4.6 MB（4,622,941 B），`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
 | `release/README.md` | ✅ | 安装说明与已知限制 |
 
 两者都只是"看一眼"，不是发布形态。正式渠道仍是 PWA。
@@ -57,7 +57,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续学习） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
-测试：core 285 + store 41 + vision 38 = **364 单测**；e2e **71 项**。
+测试：core 317 + store 41 + vision 38 = **396 单测**；e2e **111 项**。
 
 ### 第三批反馈修复（2026-xx）
 
@@ -95,6 +95,36 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 模板要能放当日课表 | 新增 `schedule` 区块，内置「我的一天」已含该区块 |
 | 要更多纸张尺寸 | 9 种（含 B5 JIS 182×257 与 B5 ISO 176×250 单列） |
 | 首页复选框不可选 | 换成真 checkbox，勾掉即从列表消失 |
+
+### 使用反馈第二批（2026-xx）：可用性修复 + 设计系统
+
+| 反馈 | 处理 |
+|---|---|
+| 课节只能排在最后、没有顺序校验 | `core/timetable/edit` 新增 `insertPeriodAt` / `movePeriod` / `validatePeriods` / `validateRules`（+26 测试）；作息表每行 ↑/↓/「在下方插入」，非法时红字且**不落库** |
+| 规则太多把周视图淹掉 | 外壳顺序改为 学期作息表 → **周视图** → 课程与规则；规则列表加「科目 / 星期 / 每周·单周」三个筛选（只过滤显示，不改数据） |
+| 课表每次都要点保存 | 改动后 **600ms 防抖自动保存**；写库前校验，状态显示 正在保存/已自动保存 HH:mm/有错误未保存/失败；离页 flush；保留「立即保存」兜底 |
+| 番茄钟放弃要点两次 | 改为**长按 5 秒**：按钮内进度填充（`scaleX`，不参与布局），松开/移出/失焦/切页即取消；Enter/Space 长按同效 |
+| 打印页不能换模板、模板页打的不是当前模板 | `config.print.template` 成为**唯一来源**（旧配置由 zod 补默认 `day`）；打印页下拉（内置+校准+我的模板）与纸张都写配置；模板页「打印这个模板」先写配置再等两帧打印 |
+| 系统打印框之前没有预览 | 应用内 `PrintPreviewDialog`：与真实打印**同一份** blocks/paper/data，多页翻页，底部提示选纸/100%/关页眉页脚/背景图形 |
+| 改纸张只改了 UI，实际仍按 A4 打 | 根因不是 `@page`（内联 `@page` 实测会变），而是**选择只活在本地 state、没进 config**；修好后 PDF 实测：A4 594.96×841.92pt、A5 420×594.96pt、A6 298.08×420pt |
+| 拍照识别是否真能读出内容 | e2e 新增断言：解析出的**日期**等于纸面日期；识别出**作业行内容**（按打印时固化的 label）与**三格自评区块**；A5 纸张同样按坐标采样 |
+| 需要统一的样式体系 | Tailwind v4 **CSS-first** `@theme` token（颜色/圆角/阴影/字号/间距/动效 + `prefers-reduced-motion`）+ 新建 `packages/ui` 18 个组件；共享组件与屏幕逐步迁移；规则写进 AGENTS 第 11 条 |
+
+### 设计系统（2026-xx）
+
+- `apps/web/src/styles.css` 的 `@theme`：颜色（ink/paper/accent/muted/line/danger/ok/warn）、
+  圆角（sm/md/lg/xl/2xl/full）、阴影（card/pop）、字号（title/section/body/small/caption/micro/metric）、
+  间距语义、动效（duration-fast/base/slow + ease-standard/enter/exit + fade-in/pop-in），
+  并有 `prefers-reduced-motion` 归零。
+- `packages/ui`：18 个组件（Button/IconButton/Card/Section/Field/Input/Select/Textarea/Checkbox/
+  Badge/Chip/StatCard/Modal/ProgressBar/EmptyState/Divider + cn/focusRing），零第三方依赖。
+- 已迁移：Sidebar / BackupBanner / ErrorBoundary / CommandPalette / Home / Tasks / Checkin /
+  Checklist / DataScreen / Scan / scan 三个组件 / ComingSoon / DebugPanel；Pomodoro/Timetable/
+  PrintScreen/TemplateEditor 自身用 token 类名。
+- **未迁（下一批）**：Diary / Mood / Report / Toolbox（这四屏仍用旧的自定义 Tailwind 类）。
+- 规则写进 `AGENTS.md` 第 11 条与 `docs/DESIGN-SYSTEM.md`：新代码一律 `@gofor/ui` + token 类名，
+  禁止 `text-[Npx]` / `border-black/[0.0x]` / `shadow-2xl` / 裸色值；Tailwind v4 是 CSS-first，
+  **没有也不该有 `tailwind.config.js`**。
 
 ### P2 交付：纸的回流 + 行为层（2026-xx）
 
@@ -160,6 +190,8 @@ P1 的 15 项已全部落地，收尾质量问题也修完了（见上）。下�
 | 往已发布的 Dexie 版本里加表 | 老库不会补建，运行时「表不存在」 | 必须新开 `version(N+1)`；已补 v2→v3 迁移测试 |
 | 主 session 里跑 build/e2e/下载 | 用户白等 10–40 分钟，上下文被日志淹没 | **长任务一律子代理或后台作业**，见 AGENTS.md §0 |
 | 打印时不固化坐标、扫描时现算 | 中间改过作业顺序，勾选会被记到别人头上（静默错数据） | 进入打印页就存 `sheetManifests` 快照；按「模板@日期@纸张」键覆盖 |
+| 打印选择只活在组件 state | 模板/纸张「改了但打出来还是旧的」：打印层只读 config，本地 state 永远到不了纸面 | 打印相关的选择一律写 `config`（`print.template` / `print.paper`），页面只做展示 |
+| e2e 用 `page.pdf` 量纸张不带 `preferCSSPageSize` | Chromium 一律给 Letter（612×792pt），会误判"纸张没生效" | `page.pdf({ preferCSSPageSize: true })`，再解析 `/MediaBox` 断言尺寸 |
 | Windows 壳用 `listen(0)` 随机端口 | 每次启动 origin 变化 → IndexedDB 按 origin 隔离 → 用户看到「关掉窗口数据全丢」 | 固定端口 47821 + 单实例锁；任何壳/本地服务**都不能用随机端口承载应用** |
 | 备份/导入只藏在 ⌘K 里 | 用户找不到恢复入口，丢数据时以为没救 | 新增「数据与备份」页（导出/导入/存储承诺/上次备份）+ 备份横幅上直接给「从备份导入」 |
 | 二维码印 12mm | 预览截图里只有 29px，jsQR 解不出来；纸上手机也可能扫不出 | 加到 16mm；e2e 用 4 倍像素密度截图当"照片" |

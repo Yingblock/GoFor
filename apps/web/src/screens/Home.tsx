@@ -15,6 +15,7 @@ import {
   setHabitLog,
   setTaskDone,
 } from '@gofor/store';
+import { Card, Checkbox, EmptyState, Section, StatCard } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo } from 'react';
 import { appClock } from '../clock.ts';
@@ -38,23 +39,8 @@ export interface HomeProps {
 
 const STREAK_WINDOW_DAYS = 60;
 
-function StatCard({
-  label,
-  value,
-  note,
-}: {
-  label: string;
-  value: string;
-  note?: string | undefined;
-}) {
-  return (
-    <div className="rounded-xl border border-black/[0.08] bg-white/60 px-4 py-3">
-      <div className="text-[11px] opacity-45">{label}</div>
-      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
-      {note ? <div className="mt-0.5 text-[10px] opacity-35">{note}</div> : null}
-    </div>
-  );
-}
+/** 首页右上角那种「去某某页 →」文字动作：不加按钮壳，视觉上仍是链接。 */
+const LINK_ACTION = 'text-small opacity-40 transition-opacity duration-fast hover:opacity-70';
 
 /** 'YYYY-MM-DD' 往前推 n 天。 */
 function shiftDate(date: string, days: number): string {
@@ -120,114 +106,103 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
         <button
           type="button"
           onClick={() => onNavigate('capture')}
-          className="flex items-center gap-3 rounded-xl border border-black/[0.08] bg-white/60 px-4 py-4 text-left transition hover:bg-white"
+          className="flex items-center gap-3 rounded-lg border border-line bg-white/60 px-4 py-4 text-left shadow-card transition duration-base ease-standard hover:bg-white"
         >
           <span className="text-2xl">📷</span>
           <span>
-            <span className="block text-sm font-medium">拍照录入</span>
-            <span className="block text-[11px] opacity-45">把纸上勾的扫回来 · 二维码定位</span>
+            <span className="block text-body font-medium">拍照录入</span>
+            <span className="block text-caption opacity-45">把纸上勾的扫回来 · 二维码定位</span>
           </span>
         </button>
 
         <button
           type="button"
           onClick={() => onNavigate('print')}
-          className="flex items-center gap-3 rounded-xl border border-black/[0.08] bg-white/60 px-4 py-4 text-left transition hover:bg-white"
+          className="flex items-center gap-3 rounded-lg border border-line bg-white/60 px-4 py-4 text-left shadow-card transition duration-base ease-standard hover:bg-white"
         >
           <span className="text-2xl">🖨</span>
           <span>
-            <span className="block text-sm font-medium">打印 checklist</span>
-            <span className="block text-[11px] opacity-45">今日一张纸，带去学校</span>
+            <span className="block text-body font-medium">打印 checklist</span>
+            <span className="block text-caption opacity-45">今日一张纸，带去学校</span>
           </span>
         </button>
       </div>
 
       {/* 今日课表：课表页排好就直接出现在这里，不用再点进去看今天上什么课 */}
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-sm font-medium opacity-50">今日课表</h2>
-          <button
-            type="button"
-            onClick={() => onNavigate('timetable')}
-            className="text-xs opacity-40 hover:opacity-70"
-          >
+      <Section
+        title="今日课表"
+        actions={
+          <button type="button" onClick={() => onNavigate('timetable')} className={LINK_ACTION}>
             去排课表 →
           </button>
-        </div>
-
+        }
+      >
         {schedule.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-black/[0.12] px-4 py-4 text-center text-xs opacity-40">
-            今天没有课
-          </p>
+          <EmptyState>今天没有课</EmptyState>
         ) : (
-          <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
-            {schedule.map((entry) => (
-              <li
-                key={`${entry.time}-${entry.label}`}
-                className="flex items-center gap-3 px-4 py-2 text-sm"
-              >
-                <span className="w-11 shrink-0 tabular-nums opacity-45">{entry.time}</span>
-                <span className="min-w-0 flex-1 break-words">{entry.label}</span>
-                <span className="text-[11px] tabular-nums opacity-30">– {entry.end}</span>
-              </li>
-            ))}
-          </ul>
+          <Card padding="none" className="overflow-hidden">
+            <ul className="divide-y divide-line">
+              {schedule.map((entry) => (
+                <li
+                  key={`${entry.time}-${entry.label}`}
+                  className="flex items-center gap-3 px-4 py-2 text-body"
+                >
+                  <span className="w-11 shrink-0 tabular-nums opacity-45">{entry.time}</span>
+                  <span className="min-w-0 flex-1 break-words">{entry.label}</span>
+                  <span className="text-caption tabular-nums opacity-30">– {entry.end}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
         )}
-      </section>
+      </Section>
 
       {/* 打卡提示：与番茄钟无关，数据只来自 habitLogs（见 DESIGN §4.2.1） */}
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-sm font-medium opacity-50">打卡提示</h2>
-          <span className="flex items-baseline gap-3">
+      <Section
+        title="打卡提示"
+        actions={
+          <>
             {activeHabits.length > 0 ? (
-              <span className="text-[11px] tabular-nums opacity-35">
+              <span className="text-caption tabular-nums opacity-35">
                 {habitsDoneCount}/{activeHabits.length}
               </span>
             ) : null}
-            <button
-              type="button"
-              onClick={() => onNavigate('checkin')}
-              className="text-xs opacity-40 hover:opacity-70"
-            >
+            <button type="button" onClick={() => onNavigate('checkin')} className={LINK_ACTION}>
               去打卡页 →
             </button>
-          </span>
-        </div>
-
+          </>
+        }
+      >
         {activeHabits.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-black/[0.12] px-4 py-4 text-center text-xs opacity-40">
+          <EmptyState>
             {habits.length === 0 ? '还没有打卡项，去打卡页新建一个' : '今天没有安排打卡'}
-          </p>
+          </EmptyState>
         ) : pendingHabits.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-black/[0.12] px-4 py-4 text-center text-xs opacity-40">
-            今天的打卡都完成了
-          </p>
+          <EmptyState>今天的打卡都完成了</EmptyState>
         ) : (
-          <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
-            {pendingHabits.map((habit) => (
-              <li key={habit.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                {/*
-                  首页只列「今天还没打」的项，所以勾选后直接写 done=true；
-                  habitLogs 的 liveQuery 会刷新，这条自动消失，无需本地状态。
-                */}
-                <input
-                  type="checkbox"
-                  aria-label={`打卡 ${habit.name}`}
-                  checked={false}
-                  onChange={() => void setHabitLog(db, habit.id, today, true, appClock.now())}
-                  className="size-4 shrink-0"
-                />
-                <span className="min-w-0 flex-1 break-words">{habit.name}</span>
-                <span className="text-[10px] opacity-30">待打卡</span>
-              </li>
-            ))}
-          </ul>
+          <Card padding="none" className="overflow-hidden">
+            <ul className="divide-y divide-line">
+              {pendingHabits.map((habit) => (
+                <li key={habit.id} className="flex items-center gap-3 px-4 py-2.5 text-body">
+                  {/*
+                    首页只列「今天还没打」的项，所以勾选后直接写 done=true；
+                    habitLogs 的 liveQuery 会刷新，这条自动消失，无需本地状态。
+                  */}
+                  <Checkbox
+                    aria-label={`打卡 ${habit.name}`}
+                    checked={false}
+                    onChange={() => void setHabitLog(db, habit.id, today, true, appClock.now())}
+                  />
+                  <span className="min-w-0 flex-1 break-words">{habit.name}</span>
+                  <span className="text-micro opacity-30">待打卡</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
         )}
-      </section>
+      </Section>
 
-      <section>
-        <h2 className="mb-3 text-sm font-medium opacity-50">统计</h2>
+      <Section title="统计">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard label="今日作业" value={`${done}/${tasks.length}`} />
           <StatCard label="待办" value={String(pending)} />
@@ -248,77 +223,72 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
             note={streak === 0 ? '今天还没有学习记录' : '按番茄钟/纸面记录计算'}
           />
         </div>
-      </section>
+      </Section>
 
       {todaySessions.length > 0 ? (
-        <section>
-          <h2 className="mb-3 text-sm font-medium opacity-50">今日记录</h2>
-          <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
-            {todaySessions.map((session) => (
-              <li key={session.id} className="flex items-center gap-3 px-4 py-2 text-sm">
-                <span className="tabular-nums opacity-45">
-                  {String(Math.floor((session.start % 1440) / 60)).padStart(2, '0')}:
-                  {String(session.start % 60).padStart(2, '0')}
-                </span>
-                <span className="min-w-0 flex-1 break-words">{subjectName(session.subjectId)}</span>
-                <span className="tabular-nums opacity-45">{minutesOf(session)} 分</span>
-                <span className="text-[10px] opacity-30">
-                  {session.source === 'appTimer' ? '番茄钟' : '纸面'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <Section title="今日记录">
+          <Card padding="none" className="overflow-hidden">
+            <ul className="divide-y divide-line">
+              {todaySessions.map((session) => (
+                <li key={session.id} className="flex items-center gap-3 px-4 py-2 text-body">
+                  <span className="tabular-nums opacity-45">
+                    {String(Math.floor((session.start % 1440) / 60)).padStart(2, '0')}:
+                    {String(session.start % 60).padStart(2, '0')}
+                  </span>
+                  <span className="min-w-0 flex-1 break-words">
+                    {subjectName(session.subjectId)}
+                  </span>
+                  <span className="tabular-nums opacity-45">{minutesOf(session)} 分</span>
+                  <span className="text-micro opacity-30">
+                    {session.source === 'appTimer' ? '番茄钟' : '纸面'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </Section>
       ) : null}
 
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-sm font-medium opacity-50">任务提示</h2>
-          <span className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => onNavigate('pomodoro')}
-              className="text-xs opacity-40 hover:opacity-70"
-            >
+      <Section
+        title="任务提示"
+        actions={
+          <>
+            <button type="button" onClick={() => onNavigate('pomodoro')} className={LINK_ACTION}>
               开始专注 →
             </button>
-            <button
-              type="button"
-              onClick={() => onNavigate('tasks')}
-              className="text-xs opacity-40 hover:opacity-70"
-            >
+            <button type="button" onClick={() => onNavigate('tasks')} className={LINK_ACTION}>
               去作业清单 →
             </button>
-          </span>
-        </div>
-
+          </>
+        }
+      >
         {unfinished.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-black/[0.12] px-4 py-6 text-center text-xs opacity-40">
+          <EmptyState size="md">
             {tasks.length === 0 ? '还没有作业，先加一条' : '今天的作业都完成了'}
-          </p>
+          </EmptyState>
         ) : (
-          <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
-            {unfinished.map((task) => (
-              <li key={task.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                {/*
-                  这里只列未完成任务，所以勾选后直接写 done=true；
-                  写完 tasks 的 liveQuery 会刷新，这一条自动从列表里消失，
-                  因此不需要维护本地 checked 状态。
-                */}
-                <input
-                  type="checkbox"
-                  aria-label={`完成 ${task.title}`}
-                  checked={false}
-                  onChange={() => void setTaskDone(db, task.id, true, Date.now())}
-                  className="size-4 shrink-0"
-                />
-                <span className="min-w-0 flex-1 break-words">{task.title}</span>
-                {task.due ? <span className="text-[11px] opacity-40">{task.due}</span> : null}
-              </li>
-            ))}
-          </ul>
+          <Card padding="none" className="overflow-hidden">
+            <ul className="divide-y divide-line">
+              {unfinished.map((task) => (
+                <li key={task.id} className="flex items-center gap-3 px-4 py-2.5 text-body">
+                  {/*
+                    这里只列未完成任务，所以勾选后直接写 done=true；
+                    写完 tasks 的 liveQuery 会刷新，这一条自动从列表里消失，
+                    因此不需要维护本地 checked 状态。
+                  */}
+                  <Checkbox
+                    aria-label={`完成 ${task.title}`}
+                    checked={false}
+                    onChange={() => void setTaskDone(db, task.id, true, Date.now())}
+                  />
+                  <span className="min-w-0 flex-1 break-words">{task.title}</span>
+                  {task.due ? <span className="text-caption opacity-40">{task.due}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </Card>
         )}
-      </section>
+      </Section>
     </div>
   );
 }

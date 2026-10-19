@@ -8,6 +8,7 @@ import {
   saveScanBatch,
   updateScanBatchStatus,
 } from '@gofor/store';
+import { Badge, Button, Card, EmptyState, Section } from '@gofor/ui';
 import { binarize, detectPageQuad, type Quad, toGray } from '@gofor/vision';
 import { useCallback, useEffect, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
@@ -136,52 +137,53 @@ export function ScanScreen() {
 
   return (
     <div className="space-y-8">
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium opacity-50">拍一张纸</h2>
-        <p className="text-[11px] leading-relaxed opacity-40">
-          纸上的二维码里写着模板与日期，所以同一张纸扫两次也能对上同一天。
-          识别只是猜测，进「待确认」后由你决定写不写。
-        </p>
-
-        {stage === 'pick' ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setError(null);
-                setCameraOpen(true);
-              }}
-              className="rounded-lg bg-[var(--color-ink)] px-4 py-2 text-xs text-white"
-            >
-              用相机拍
-            </button>
-            <label className="cursor-pointer rounded-lg border border-black/10 bg-white/60 px-4 py-2 text-xs">
-              选一张照片
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                aria-label="选择纸的照片"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void onFile(file);
-                  event.target.value = '';
-                }}
-              />
-            </label>
-            <span className="text-[11px] opacity-35">
-              也可以直接把照片拖进这个页面（拖拽在桌面端更快）
-            </span>
-          </div>
-        ) : null}
-
-        {busy ? <p className="text-xs opacity-50">正在处理照片…</p> : null}
-        {error ? (
-          <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
-            {error}
+      <Section title="拍一张纸">
+        <div className="space-y-3">
+          <p className="text-caption leading-relaxed opacity-40">
+            纸上的二维码里写着模板与日期，所以同一张纸扫两次也能对上同一天。
+            识别只是猜测，进「待确认」后由你决定写不写。
           </p>
-        ) : null}
-      </section>
+
+          {stage === 'pick' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  setError(null);
+                  setCameraOpen(true);
+                }}
+              >
+                用相机拍
+              </Button>
+              <label className="cursor-pointer rounded-md border border-line bg-white/70 px-4 py-2 text-small transition duration-fast ease-standard hover:bg-white">
+                选一张照片
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  aria-label="选择纸的照片"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void onFile(file);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+              <span className="text-caption opacity-35">
+                也可以直接把照片拖进这个页面（拖拽在桌面端更快）
+              </span>
+            </div>
+          ) : null}
+
+          {busy ? <p className="text-small opacity-50">正在处理照片…</p> : null}
+          {error ? (
+            <Card tone="danger" padding="sm" elevation="none" className="text-small text-danger">
+              {error}
+            </Card>
+          ) : null}
+        </div>
+      </Section>
 
       {photo !== null && stage === 'corner' ? (
         <section className="space-y-3">
@@ -197,92 +199,95 @@ export function ScanScreen() {
       ) : null}
 
       {batch !== null && stage === 'review' ? (
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-sm font-medium opacity-50">待确认</h2>
-            <span className="text-[11px] opacity-35">
-              {batch.templateId} · {batch.paper}
-            </span>
-            <button
-              type="button"
-              onClick={reset}
-              className="ml-auto rounded-lg border border-black/10 px-3 py-1.5 text-xs"
-            >
-              扫下一张
-            </button>
-          </div>
+        <Section
+          title="待确认"
+          actions={
+            <>
+              <span className="text-caption opacity-35">
+                {batch.templateId} · {batch.paper}
+              </span>
+              <Button variant="secondary" onClick={reset}>
+                扫下一张
+              </Button>
+            </>
+          }
+        >
           <ScanReview
             batch={batch}
             onSettled={() => {
               void refreshRecent();
             }}
           />
-        </section>
+        </Section>
       ) : null}
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium opacity-50">最近的扫描</h2>
-        {recent.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-black/[0.12] px-4 py-6 text-center text-xs opacity-40">
-            还没有扫描记录
-          </p>
-        ) : (
-          <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
-            {recent.map((item) => {
-              const selected = item.results.filter((result) => result.selected).length;
-              return (
-                <li key={item.id} className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
-                  <span className="tabular-nums opacity-45">{item.date}</span>
-                  <span className="opacity-50">{item.templateId}</span>
-                  <span className="opacity-35">
-                    {item.paper} · {selected} 项已识别
-                  </span>
-                  <span className="ml-auto flex items-center gap-2">
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] ${
-                        item.status === 'pending'
-                          ? 'bg-amber-100 text-amber-800'
-                          : item.status === 'applied'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-black/[0.06] opacity-60'
-                      }`}
+      <Section title="最近的扫描">
+        <div className="space-y-2">
+          {recent.length === 0 ? (
+            <EmptyState size="md">还没有扫描记录</EmptyState>
+          ) : (
+            <Card padding="none" className="overflow-hidden">
+              <ul className="divide-y divide-line">
+                {recent.map((item) => {
+                  const selected = item.results.filter((result) => result.selected).length;
+                  return (
+                    <li
+                      key={item.id}
+                      className="flex flex-wrap items-center gap-2 px-4 py-2 text-small"
                     >
-                      {item.status === 'pending'
-                        ? '待确认'
-                        : item.status === 'applied'
-                          ? '已回填'
-                          : '已丢弃'}
-                    </span>
-                    {item.status === 'pending' ? (
-                      <button
-                        type="button"
-                        onClick={() => void resume(item)}
-                        className="text-[11px] opacity-50 hover:opacity-80"
-                      >
-                        继续确认
-                      </button>
-                    ) : null}
-                    {item.status === 'discarded' ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void updateScanBatchStatus(db, item.id, 'pending', appClock.now())
-                        }
-                        className="text-[11px] opacity-40 hover:opacity-70"
-                      >
-                        重新打开
-                      </button>
-                    ) : null}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <p className="text-[11px] opacity-35">
-          今天：{dateKey(appClock)}。回填只写这张纸上的日期，不改其它天。
-        </p>
-      </section>
+                      <span className="tabular-nums opacity-45">{item.date}</span>
+                      <span className="opacity-50">{item.templateId}</span>
+                      <span className="opacity-35">
+                        {item.paper} · {selected} 项已识别
+                      </span>
+                      <span className="ml-auto flex items-center gap-2">
+                        <Badge
+                          tone={
+                            item.status === 'pending'
+                              ? 'warn'
+                              : item.status === 'applied'
+                                ? 'ok'
+                                : 'neutral'
+                          }
+                        >
+                          {item.status === 'pending'
+                            ? '待确认'
+                            : item.status === 'applied'
+                              ? '已回填'
+                              : '已丢弃'}
+                        </Badge>
+                        {item.status === 'pending' ? (
+                          <button
+                            type="button"
+                            onClick={() => void resume(item)}
+                            className="text-caption opacity-50 transition-opacity duration-fast hover:opacity-80"
+                          >
+                            继续确认
+                          </button>
+                        ) : null}
+                        {item.status === 'discarded' ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void updateScanBatchStatus(db, item.id, 'pending', appClock.now())
+                            }
+                            className="text-caption opacity-40 transition-opacity duration-fast hover:opacity-70"
+                          >
+                            重新打开
+                          </button>
+                        ) : null}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          )}
+          <p className="text-caption opacity-35">
+            今天：{dateKey(appClock)}。回填只写这张纸上的日期，不改其它天。
+          </p>
+        </div>
+      </Section>
 
       {cameraOpen ? (
         <CameraCapture onCaptured={onCaptured} onCancel={() => setCameraOpen(false)} />

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cellsForMinutes,
   DEFAULT_APP_CONFIG,
+  DEFAULT_PRINT_TEMPLATE,
   derivePeriodMinutes,
   FALLBACK_PERIOD_MINUTES,
   mergeConfig,
@@ -171,5 +172,62 @@ describe('配置：备份提醒', () => {
   it('提醒间隔超出合理范围被拒', () => {
     expect(() => mergeConfig(DEFAULT_APP_CONFIG, { backup: { reminderDays: 0 } })).toThrow();
     expect(() => mergeConfig(DEFAULT_APP_CONFIG, { backup: { reminderDays: 366 } })).toThrow();
+  });
+});
+
+describe('配置：打印模板预设', () => {
+  it('出厂默认是「我的一天」', () => {
+    expect(DEFAULT_PRINT_TEMPLATE).toBe('day');
+    expect(DEFAULT_APP_CONFIG.print.template).toBe('day');
+  });
+
+  it('指定模板被保留（内置 id 与用户模板 id 都行）', () => {
+    expect(mergeConfig(DEFAULT_APP_CONFIG, { print: { template: 'week' } }).print.template).toBe(
+      'week',
+    );
+    const custom = mergeConfig(DEFAULT_APP_CONFIG, { print: { template: 'cust-42' } });
+    expect(custom.print.template).toBe('cust-42');
+  });
+
+  it('深合并换纸张不会丢模板，换模板也不会丢纸张', () => {
+    const changedPaper = mergeConfig(DEFAULT_APP_CONFIG, { print: { paper: 'A5' } });
+    expect(changedPaper.print.paper).toBe('A5');
+    expect(changedPaper.print.template).toBe('day');
+
+    const changedTemplate = mergeConfig(DEFAULT_APP_CONFIG, { print: { template: 'checkin' } });
+    expect(changedTemplate.print.template).toBe('checkin');
+    expect(changedTemplate.print.paper).toBe('A4');
+  });
+
+  it('旧配置缺少 print.template 时补默认值，而不是整份回退', () => {
+    // 模拟「升级前的配置」：没有 template 字段，但用户改过纸张与提示行。
+    const oldConfig = JSON.parse(JSON.stringify(DEFAULT_APP_CONFIG)) as Record<string, unknown>;
+    const oldPrint = { ...(oldConfig.print as Record<string, unknown>) };
+    delete oldPrint.template;
+    oldPrint.paper = 'A5';
+    oldPrint.hintLine = '用铅笔也可以';
+    oldConfig.print = oldPrint;
+
+    const result = migrateConfig(oldConfig);
+    expect(result.fellBack).toBe(false);
+    expect(result.config.print.template).toBe(DEFAULT_PRINT_TEMPLATE);
+    expect(result.config.print.paper).toBe('A5');
+    expect(result.config.print.hintLine).toBe('用铅笔也可以');
+  });
+
+  it('print 内部缺字段时由 zod default 补出', () => {
+    const parsed = parseConfig({
+      ...DEFAULT_APP_CONFIG,
+      print: {
+        paper: 'A4',
+        focusGrid: { enabled: true, spareCells: 1 },
+        hintLine: '深色笔',
+      },
+    });
+    expect(parsed.print.template).toBe(DEFAULT_PRINT_TEMPLATE);
+  });
+
+  it('空模板 id 被拒（避免打印页没有一个可解析的模板）', () => {
+    expect(() => mergeConfig(DEFAULT_APP_CONFIG, { print: { template: '' } })).toThrow();
   });
 });

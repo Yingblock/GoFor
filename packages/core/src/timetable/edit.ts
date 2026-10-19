@@ -109,3 +109,144 @@ export function appendPeriod(data: TimetableData, period: Omit<Period, 'index'>)
     periods: [...data.periods, { index: data.periods.length + 1, ...period }],
   };
 }
+
+/**
+ * 在指定位置插入一节，并把所有节次重新编号（从 1 连续）。
+ *
+ * `position` 是在**插入前**数组里的下标：0 = 插到最前面，
+ * `data.periods.length` = 插到最后面（等价于 `appendPeriod`）。
+ * 越界时夹到两端而不是原样返回——UI 的"在下方插入"永远传合法值，
+ * 但夹一下能让"插到头部/尾部"这种调用不必各自做边界判断。
+ */
+export function insertPeriodAt(
+  data: TimetableData,
+  position: number,
+  period: Omit<Period, 'index'>,
+): TimetableData {
+  const at = Math.max(0, Math.min(Math.trunc(position) || 0, data.periods.length));
+  const periods = [...data.periods];
+  periods.splice(at, 0, { index: at + 1, ...period });
+  return {
+    ...data,
+    periods: periods.map((item, index) => ({ ...item, index: index + 1 })),
+  };
+}
+
+/**
+ * 把某一节从 `from` 挪到 `to`，移动后重新编号。
+ *
+ * 越界（或 from === to）原样返回**同一个引用**：调用方可以靠引用相等跳过无谓的重渲染。
+ */
+export function movePeriod(data: TimetableData, from: number, to: number): TimetableData {
+  const length = data.periods.length;
+  if (from === to || from < 0 || from >= length || to < 0 || to >= length) return data;
+  const periods = [...data.periods];
+  const [moved] = periods.splice(from, 1);
+  if (moved === undefined) return data;
+  periods.splice(to, 0, moved);
+  return {
+    ...data,
+    periods: periods.map((period, index) => ({ ...period, index: index + 1 })),
+  };
+}
+
+/** 24 小时制的 `HH:mm`；`8:00` / `24:00` / `08:60` 都不算合法。 */
+const HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * 校验作息表，返回中文错误信息（空数组 = 合法）。
+ *
+ * 为什么校验放在 core 而不是组件里：它是自动保存的闸门——错误数据一旦落库，
+ * 下次启动周视图的行数/时间就全乱了，而"改坏了还能刷新走人"的前提是没写进去。
+ *
+ * 检查项（顺序固定，便于测试与用户阅读）：非空 → 编号不重复 → 编号 1..n 连续
+ * → 时间是 `HH:mm` → `start < end`。
+ */
+export function validatePeriods(periods: readonly Period[]): string[] {
+  if (periods.length === 0) return ['作息表至少要有一节。'];
+
+  const errors: string[] = [];
+  const counts = new Map<number, number>();
+  for (const period of periods) counts.set(period.index, (counts.get(period.index) ?? 0) + 1);
+
+  const duplicates = [...counts.keys()]
+    .filter((index) => (counts.get(index) ?? 0) > 1)
+    .sort((a, b) => a - b);
+  for (const index of duplicates) {
+    errors.push(`节次编号重复：第 ${index} 节出现了 ${counts.get(index) ?? 0} 次。`);
+  }
+
+  const expected = new Set(Array.from({ length: periods.length }, (_, index) => index + 1));
+  const missing = [...expected].filter((index) => !counts.has(index));
+  if (missing.length > 0) {
+    errors.push(`节次编号必须从 1 连续：缺少第 ${missing.join('、')} 节。`);
+  }
+  const extra = [...counts.keys()].filter((index) => !expected.has(index)).sort((a, b) => a - b);
+  if (extra.length > 0) {
+    errors.push(`节次编号越界：第 ${extra.join('、')} 节不在 1–${periods.length} 的范围内。`);
+  }
+
+  for (const period of periods) {
+    const startOk = HH_MM.test(period.start);
+    const endOk = HH_MM.test(period.end);
+    if (!startOk) {
+      errors.push(`第 ${period.index} 节的开始时间「${period.start}」不是 HH:mm（24 小时制）。`);
+    }
+    if (!endOk) {
+      errors.push(`第 ${period.index} 节的结束时间「${period.end}」不是 HH:mm（24 小时制）。`);
+    }
+    // 格式都不对时比较字符串没有意义，会报一条误导性的"顺序错"。
+    if (startOk && endOk && period.start >= period.end) {
+      errors.push(
+        `第 ${period.index} 节的开始时间必须早于结束时间（当前 ${period.start}–${period.end}）。`,
+      );
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * 校验排课规则，返回中文错误信息（空数组 = 合法）。
+ *
+ * 只校验"规则能不能落到作息表上"：星期 1–7、开始节次 ≥ 1、
+ * `startPeriod + span - 1` 不超过作息表节数、单双周只有 1/2。
+ * 规则之间抢同一格不在这里挡——那是编辑模式用 `occupiedCellKeys` 处理的交互冲突，
+ * 不是坏数据，不该拦住自动保存。
+ */
+export function validateRules(data: TimetableData): string[] {
+  const errors: string[] = [];
+  const periodCount = data.periods.length;
+
+  data.rules.forEach((rule, index) => {
+    const label = `第 ${index + 1} 条规则`;
+    if (rule.byDay.length === 0) {
+      errors.push(`${label}没有选择星期。`);
+    }
+    for (const day of rule.byDay) {
+      if (!Number.isInteger(day) || day < 1 || day > 7) {
+        errors.push(`${label}的星期 ${day} 不合法（必须是 1–7）。`);
+      }
+    }
+
+    const span = rule.span ?? 1;
+    if (!Number.isInteger(rule.startPeriod) || rule.startPeriod < 1) {
+      errors.push(`${label}的开始节次必须 ≥ 1（当前 ${rule.startPeriod}）。`);
+    }
+    if (!Number.isInteger(span) || span < 1) {
+      errors.push(`${label}的连堂节数必须 ≥ 1（当前 ${span}）。`);
+    }
+    if (rule.startPeriod >= 1 && span >= 1) {
+      const endPeriod = rule.startPeriod + span - 1;
+      if (endPeriod > periodCount) {
+        errors.push(`${label}排到第 ${endPeriod} 节，超出了作息表的 ${periodCount} 节。`);
+      }
+    }
+
+    if (rule.intervalWeeks !== 1 && rule.intervalWeeks !== 2) {
+      errors.push(`${label}的单双周只能是「每周」或「单周」。`);
+    }
+  });
+
+  return errors;
+}

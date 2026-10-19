@@ -1,5 +1,6 @@
 import { dateKey, type ScanBatch, type ScanResult } from '@gofor/core/domain';
 import { applyScanResults, db, updateScanBatchStatus } from '@gofor/store';
+import { Button, Card, Checkbox, EmptyState } from '@gofor/ui';
 import { useMemo, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '../../clock.ts';
@@ -87,78 +88,68 @@ export function ScanReview({ batch, onSettled }: ScanReviewProps) {
 
   if (selected.length === 0) {
     return (
-      <div className="space-y-2 rounded-xl border border-black/[0.08] bg-white/50 px-4 py-4 text-xs">
-        <p className="opacity-60">这张纸没有识别到已填的格子。</p>
-        <p className="opacity-40">
-          可能是：纸没摆正、光太暗、或者这一页确实还没写。手动补记录也可以。
-        </p>
-        <button
-          type="button"
-          onClick={() => void discard()}
-          disabled={busy}
-          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs"
-        >
-          丢弃这次扫描
-        </button>
-      </div>
+      <EmptyState
+        title="这张纸没有识别到已填的格子。"
+        description="可能是：纸没摆正、光太暗、或者这一页确实还没写。手动补记录也可以。"
+        action={
+          <Button variant="secondary" onClick={() => void discard()} disabled={busy}>
+            丢弃这次扫描
+          </Button>
+        }
+      />
     );
   }
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+      <div className="rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-caption text-warn">
         识别只是猜测，确认过再应用。日期：{batch.date}（来自纸上的二维码）
       </div>
 
-      <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/[0.08] bg-white/50">
-        {selected.map((result) => {
-          const checked = !excluded.has(result.targetId);
-          return (
-            <li key={result.targetId} className="flex items-center gap-3 px-4 py-2 text-sm">
-              <input
-                type="checkbox"
-                aria-label={`回填 ${result.label}`}
-                checked={checked}
-                onChange={() => toggle(result.targetId)}
-                className="size-4 shrink-0"
-              />
-              <span className="flex-1">{result.label}</span>
-              <span className="text-[10px] opacity-35">
-                {KIND_LABEL[result.kind]}
-                {result.value !== undefined ? ` · ${result.value}` : ''}
-              </span>
-              <span className="w-12 text-right text-[10px] tabular-nums opacity-30">
-                {(result.ink * 100).toFixed(0)}%
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      <Card padding="none" className="overflow-hidden">
+        <ul className="divide-y divide-line">
+          {selected.map((result) => {
+            const checked = !excluded.has(result.targetId);
+            return (
+              <li key={result.targetId} className="flex items-center gap-3 px-4 py-2 text-body">
+                <Checkbox
+                  aria-label={`回填 ${result.label}`}
+                  checked={checked}
+                  onChange={() => toggle(result.targetId)}
+                />
+                <span className="flex-1">{result.label}</span>
+                <span className="text-micro opacity-35">
+                  {KIND_LABEL[result.kind]}
+                  {result.value !== undefined ? ` · ${result.value}` : ''}
+                </span>
+                <span className="w-12 text-right text-micro tabular-nums opacity-30">
+                  {(result.ink * 100).toFixed(0)}%
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="md"
           onClick={() => void apply()}
           disabled={busy || include.length === 0}
-          className="rounded-lg bg-[var(--color-ink)] px-4 py-2 text-xs text-white disabled:opacity-50"
         >
           {busy ? '正在回填…' : `应用这 ${include.length} 项`}
-        </button>
-        <button
-          type="button"
-          onClick={() => void discard()}
-          disabled={busy}
-          className="rounded-lg border border-black/10 px-3 py-1.5 text-xs"
-        >
+        </Button>
+        <Button variant="secondary" onClick={() => void discard()} disabled={busy}>
           整张丢弃
-        </button>
-        <span className="text-[11px] opacity-40">
+        </Button>
+        <span className="text-caption opacity-40">
           已完成 {dateKey(appClock)} 的记录不受影响，只写今天/这张纸上的日期
         </span>
       </div>
 
       {message === null ? null : (
-        <p className="rounded-lg bg-black/[0.05] px-3 py-2 text-xs opacity-70">{message}</p>
+        <p className="rounded-md bg-ink/[0.05] px-3 py-2 text-small opacity-70">{message}</p>
       )}
     </div>
   );

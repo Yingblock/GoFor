@@ -20,10 +20,14 @@ export {
   addRule,
   addRuleForCell,
   appendPeriod,
+  insertPeriodAt,
+  movePeriod,
   type NewRuleInput,
   removePeriodAt,
   removeRule,
   updatePeriodAt,
+  validatePeriods,
+  validateRules,
 } from './edit.ts';
 export { buildWeekGrid, cellKeyOf, occupiedCellKeys } from './grid.ts';
 export {

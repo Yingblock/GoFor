@@ -126,6 +126,11 @@ docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS
 10. **新增页面/独立区块必须包 `ScreenBoundary`**（`apps/web/src/components/ErrorBoundary.tsx`）。
     根边界只能保证"不白屏"，按页包一层才能做到"这一页崩了，导航和其他页还能用"。
     边界兜不住事件处理器和异步回调里的异常，所以 `liveQuery` 只读这条规则仍然必须遵守。
+11. **UI 一律走 `@gofor/ui` 与 `@theme` token。** 新代码优先用 `packages/ui` 的组件；
+    必须自定义样式时复用 token 生成的类名（`border-line`、`rounded-lg`、`shadow-card`、
+    `text-body`、`duration-fast` 等），不要手写颜色/圆角/阴影/时长的魔法值。
+    Tailwind v4 用 CSS-first 配置（`apps/web/src/styles.css` 的 `@theme`），**不要新建
+    `tailwind.config.js`**。详见 `docs/DESIGN-SYSTEM.md`。
 
 ## CI（GitHub Actions）
 
@@ -182,6 +187,14 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
   原因：番茄钟必须能在测试里被确定性地推进，且后台节流时不能漂移。
 - 番茄钟用「时间戳差值」而不是「tick 累加」，避免后台定时器被节流导致计时变慢。
 - ID 用 `newId()`，不要自己 `Math.random()`。
+
+## 打包策略
+
+- **只打 Windows 包**（`bash tools/package-windows/build.sh` → `release/GoFor-win-x64.zip`）。
+  Android（Capacitor + gradle）**暂时不打**，等后期适配；不要因为"顺手"又去 `cap sync` / `assembleDebug`。
+- 打包产物不进 git（`release/` 已 ignore）；**发布 GitHub Release 必须用户明确要求**，默认只本地构建。
+- 构建完按用户要求把最新版跑起来时，用 `pnpm build` + `pnpm preview`（固定 4173 端口），
+  地址给用户 `http://127.0.0.1:4173/`；不要用随机端口（IndexedDB 按 origin 隔离）。
 
 ## 常用命令
 

@@ -10,6 +10,7 @@ export {
 export {
   type AppConfig,
   appConfigSchema,
+  DEFAULT_PRINT_TEMPLATE,
   type FocusUnit,
   focusUnitSchema,
   type Period,

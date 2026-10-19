@@ -5,7 +5,9 @@
  * 数据只存在这台设备的 IndexedDB 里，所以这里必须把话说明白，但不能吓人：
  * 讲清风险 + 给一个一键动作（导出 JSON），而不是弹窗教育。
  */
+
 import { db, importAll } from '@gofor/store';
+import { Button, Card } from '@gofor/ui';
 import { useEffect, useRef, useState } from 'react';
 import {
   type BackupCounts,
@@ -72,12 +74,13 @@ export function BackupBanner({ reminderDays }: BackupBannerProps) {
 
   if (result !== null) {
     return (
-      <div
+      <Card
         data-testid="backup-banner"
-        className="mx-4 mt-3 rounded-xl border border-emerald-600/20 bg-emerald-50/70 px-4 py-3 text-xs text-emerald-900/80 md:mx-8"
+        tone="success"
+        className="mx-4 mt-3 text-small text-ok md:mx-8"
       >
         ✓ {result}，文件已下载。
-      </div>
+      </Card>
     );
   }
 
@@ -117,40 +120,27 @@ export function BackupBanner({ reminderDays }: BackupBannerProps) {
   };
 
   return (
-    <div
-      data-testid="backup-banner"
-      className="mx-4 mt-3 rounded-xl border border-black/[0.08] bg-white/60 px-4 py-3 md:mx-8"
-    >
+    <Card data-testid="backup-banner" className="mx-4 mt-3 md:mx-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium">数据只在这台设备上</p>
-          <p className="mt-0.5 text-xs leading-relaxed opacity-60">
+          <p className="text-body font-medium">数据只在这台设备上</p>
+          <p className="mt-0.5 text-small leading-relaxed opacity-60">
             {lastAt === null ? '还没有备份记录。' : `上次备份：${formatWhen(lastAt)}。`}
             浏览器在存储紧张时可能清掉本地数据，导出一份 JSON 最稳。
           </p>
           {storage !== null && storage !== 'granted' ? (
-            <p className="mt-1 text-[11px] opacity-40">浏览器还没有承诺永久保留这些数据。</p>
+            <p className="mt-1 text-micro opacity-40">浏览器还没有承诺永久保留这些数据。</p>
           ) : null}
-          {error ? <p className="mt-1 text-[11px] text-red-700/70">备份失败：{error}</p> : null}
+          {error ? <p className="mt-1 text-micro text-danger">备份失败：{error}</p> : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void backup()}
-            disabled={busy}
-            className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium transition hover:bg-black/[0.04] disabled:opacity-50"
-          >
+          <Button variant="secondary" onClick={() => void backup()} disabled={busy}>
             {busy ? '正在备份…' : '立即备份'}
-          </button>
-          <button
-            type="button"
-            onClick={() => importRef.current?.click()}
-            disabled={busy}
-            className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs transition hover:bg-black/[0.04] disabled:opacity-50"
-          >
+          </Button>
+          <Button variant="secondary" onClick={() => importRef.current?.click()} disabled={busy}>
             从备份导入
-          </button>
+          </Button>
           <input
             ref={importRef}
             type="file"
@@ -163,15 +153,11 @@ export function BackupBanner({ reminderDays }: BackupBannerProps) {
               event.target.value = '';
             }}
           />
-          <button
-            type="button"
-            onClick={dismiss}
-            className="rounded-lg px-2 py-1.5 text-xs opacity-50 transition hover:opacity-80"
-          >
+          <Button variant="ghost" onClick={dismiss} className="opacity-50 hover:opacity-80">
             今天不再提醒
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

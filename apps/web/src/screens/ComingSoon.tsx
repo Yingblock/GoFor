@@ -15,10 +15,10 @@ export interface ComingSoonProps {
 export function ComingSoon({ title, groupCode, part, note }: ComingSoonProps) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 py-24 text-center">
-      <div className="font-mono text-[11px] tracking-wide opacity-35">{groupCode}</div>
-      <h2 className="text-lg font-medium">{title}</h2>
-      <p className="max-w-sm text-sm leading-relaxed opacity-50">{note}</p>
-      <p className="text-[11px] opacity-30">
+      <div className="font-mono text-caption tracking-wide opacity-35">{groupCode}</div>
+      <h2 className="text-title font-medium">{title}</h2>
+      <p className="max-w-sm text-body leading-relaxed opacity-50">{note}</p>
+      <p className="text-caption opacity-30">
         此条目属于产品「{part === 'offline' ? '离线' : '在线'}」部分；开发阶段见 docs/ROADMAP.md
       </p>
     </div>

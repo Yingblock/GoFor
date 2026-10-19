@@ -1,3 +1,4 @@
+import { focusRing } from '@gofor/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { captureVideoFrame, type LoadedPhoto, openCamera } from './capture.ts';
 
@@ -131,28 +132,28 @@ export function CameraCapture({ onCaptured, onCancel }: CameraCaptureProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-black/90 p-4 text-white"
+      className="fixed inset-0 z-50 flex animate-fade-in flex-col bg-black/90 p-4 text-white"
       role="dialog"
       aria-modal="true"
       aria-label="用相机拍一张纸"
     >
       <div className="flex items-baseline justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm">用相机拍一张纸</p>
-          <p className="mt-0.5 text-[11px] leading-relaxed opacity-60">
+          <p className="text-body">用相机拍一张纸</p>
+          <p className="mt-0.5 text-caption leading-relaxed opacity-60">
             把纸放平，四个角都进画面。拍下后还能拖四角微调。
           </p>
         </div>
         <button
           type="button"
           onClick={cancel}
-          className="shrink-0 rounded-lg border border-white/25 px-3 py-1.5 text-xs"
+          className={`shrink-0 rounded-md border border-white/25 px-3 py-1.5 text-small transition duration-fast ease-standard ${focusRing}`}
         >
           取消
         </button>
       </div>
 
-      <div className="relative mt-3 min-h-0 flex-1 overflow-hidden rounded-xl bg-black">
+      <div className="relative mt-3 min-h-0 flex-1 overflow-hidden rounded-lg bg-black">
         <video
           ref={videoRef}
           autoPlay
@@ -163,20 +164,20 @@ export function CameraCapture({ onCaptured, onCancel }: CameraCaptureProps) {
         />
 
         {status === 'opening' ? (
-          <p className="absolute inset-0 flex items-center justify-center text-xs opacity-70">
+          <p className="absolute inset-0 flex items-center justify-center text-small opacity-70">
             正在打开摄像头…
           </p>
         ) : null}
 
         {status === 'error' ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-            <p className="text-sm leading-relaxed" role="alert">
+            <p className="text-body leading-relaxed" role="alert">
               {message ?? '打不开摄像头'}
             </p>
             <button
               type="button"
               onClick={cancel}
-              className="rounded-lg bg-white px-4 py-2 text-xs text-black"
+              className={`rounded-md bg-white px-4 py-2 text-small text-black ${focusRing}`}
             >
               返回，选一张照片
             </button>
@@ -186,7 +187,7 @@ export function CameraCapture({ onCaptured, onCancel }: CameraCaptureProps) {
 
       <div className="mt-3 flex flex-col items-center gap-2">
         {message !== null && status !== 'error' ? (
-          <p className="text-center text-[11px] text-amber-200" role="alert">
+          <p className="text-center text-caption text-warn" role="alert">
             {message}
           </p>
         ) : null}
@@ -194,7 +195,7 @@ export function CameraCapture({ onCaptured, onCancel }: CameraCaptureProps) {
           type="button"
           onClick={() => void onCapture()}
           disabled={status !== 'live' || capturing}
-          className="rounded-full bg-white px-10 py-2.5 text-sm text-black transition disabled:opacity-40"
+          className={`rounded-full bg-white px-10 py-2.5 text-body text-black transition duration-fast ease-standard disabled:opacity-40 ${focusRing}`}
         >
           {capturing ? '正在抓这一帧…' : '拍下'}
         </button>

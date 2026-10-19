@@ -12,7 +12,8 @@ import { readFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from 'playwright';
 
-const PORT = 4173;
+// e2e 用独立端口：4173 留给用户正在使用的应用实例（同一 origin 数据才不会丢）。
+const PORT = 4313;
 const BASE = `http://127.0.0.1:${PORT}`;
 const results = [];
 let failed = false;
@@ -198,10 +199,22 @@ try {
   await page.waitForSelector('text=已暂停', { timeout: 5000 });
   check('番茄钟可暂停', true);
 
-  await page.getByRole('button', { name: '放弃' }).first().click();
-  await page.getByRole('button', { name: '确认放弃？' }).first().click();
+  // 放弃改成「长按 5 秒」：先验证中途松开不生效，再按住满 5 秒。
+  const abandonButton = page.getByRole('button', { name: '长按 5 秒放弃本次专注' });
+  await abandonButton.hover();
+  const abandonBox = await abandonButton.boundingBox();
+  if (abandonBox === null) throw new Error('拿不到放弃按钮的位置');
+  await page.mouse.move(abandonBox.x + abandonBox.width / 2, abandonBox.y + abandonBox.height / 2);
+  await page.mouse.down();
+  await sleep(1500);
+  await page.mouse.up();
+  await sleep(400);
+  check('放弃：中途松开不生效', (await abandonButton.count()) > 0);
+  await page.mouse.down();
+  await sleep(5400);
+  await page.mouse.up();
   await page.waitForSelector('text=自定义', { timeout: 5000 });
-  check('放弃需要二次确认', true);
+  check('放弃：长按 5 秒生效', true);
 
   /* -------------------------------------------------------------- 每日打卡 */
 
@@ -289,9 +302,9 @@ try {
   check('编辑模式可删除这一节', removedByCell);
   await page.getByRole('button', { name: '退出编辑' }).click();
 
-  await page.getByRole('button', { name: '保存课表' }).click();
-  await page.waitForSelector('text=已保存', { timeout: 5000 });
-  check('课表可保存', true);
+  // P2 之后课表改成自动保存：改完停手 600ms 就会写库，不需要再点保存。
+  await page.waitForSelector('text=/已自动保存/', { timeout: 10000 });
+  check('课表自动保存', true);
 
   /* ------------------------------------------------------ 模板与校准页 */
 
@@ -451,7 +464,19 @@ try {
   await page.getByRole('button', { name: '用这四个角矫正' }).click();
   await page.getByRole('heading', { name: '待确认' }).waitFor({ timeout: 20000 });
   check('扫描：解码二维码并进入待确认', true);
+  const todayKey = new Date().toLocaleDateString('sv-SE');
   check('扫描：日期来自纸上的二维码', (await page.getByText(/来自纸上的二维码/).count()) > 0);
+  check(
+    '扫描：识别出的日期与纸面一致',
+    (await page.getByText(`日期：${todayKey}`).count()) > 0,
+    todayKey,
+  );
+
+  // 纸上的作业行内容必须能读回来（label 来自打印时的坐标清单）
+  const recognisedTasks = await page.getByText('数学卷子 3.1').count();
+  check('扫描：识别出作业行内容', recognisedTasks > 0, `命中 ${recognisedTasks} 条`);
+  const recognisedRatings = await page.getByText(/睡眠 5 分/).count();
+  check('扫描：识别出三格自评区块', recognisedRatings > 0, `命中 ${recognisedRatings} 条`);
 
   const applyButton = page.getByRole('button', { name: /应用这 \d+ 项/ });
   const recognised = (await applyButton.count()) > 0;
@@ -733,13 +758,56 @@ try {
   // 数据页也能直接导入：用刚导出的文件走一遍，验证"丢数据能自己救回来"。
   const dataPath = await dataFile.path();
   const dataText = dataPath ? await readFile(dataPath, 'utf8') : '{}';
-  await page.locator('input[aria-label="选择备份文件"]').last().setInputFiles({
-    name: 'gofor-backup.json',
-    mimeType: 'application/json',
-    buffer: Buffer.from(dataText),
-  });
+  await page
+    .locator('input[aria-label="选择备份文件"]')
+    .last()
+    .setInputFiles({
+      name: 'gofor-backup.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(dataText),
+    });
   await page.waitForSelector('text=/已导入 \\d+ 个任务/', { timeout: 10000 });
   check('数据页可导入备份', true);
+
+  /* ------------------------------------------- 打印：模板 / 预览 / 纸张 */
+
+  await openGroup(page, '导出');
+  await clickItem(page, '打印 checklist');
+  const templateSelect = page.getByLabel('打印模板');
+  check('打印页可切换模板', (await templateSelect.count()) > 0);
+  if ((await templateSelect.count()) > 0) {
+    const optionCount = await templateSelect.locator('option').count();
+    check('模板下拉包含多个预设', optionCount >= 3, `${optionCount} 个`);
+    await templateSelect.selectOption('week');
+    await page.waitForTimeout(400);
+    check('模板切换生效', (await templateSelect.inputValue()) === 'week');
+
+    // 应用内打印预览：模态里同样是真实版式
+    await page.getByRole('button', { name: '打印预览' }).click();
+    const previewDialog = page.getByRole('dialog');
+    await previewDialog.waitFor({ timeout: 8000 });
+    check('打印预览可打开', true);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+
+    // 纸张必须真的改变输出：A5 的 PDF 页尺寸应为 419.5×595.3pt
+    await page.getByRole('button', { name: 'A5', exact: true }).click();
+    await page.waitForTimeout(500);
+    const a5Bytes = await page.pdf({ preferCSSPageSize: true, printBackground: true });
+    const mediaBox = /\/MediaBox\s*\[0 0 ([\d.]+) ([\d.]+)\]/.exec(a5Bytes.toString('latin1'));
+    check(
+      '纸张尺寸作用于打印输出（A5）',
+      mediaBox !== null &&
+        Math.abs(Number(mediaBox[1]) - 419.5) < 2 &&
+        Math.abs(Number(mediaBox[2]) - 595.3) < 2,
+      mediaBox === null ? 'PDF 里没有 MediaBox' : `${mediaBox[1]}×${mediaBox[2]}pt`,
+    );
+
+    // 还原成默认（A4 + 我的一天），后面的 PDF 断言仍按 A4 走
+    await templateSelect.selectOption('day');
+    await page.getByRole('button', { name: 'A4', exact: true }).click();
+    await page.waitForTimeout(400);
+  }
 
   /* ------------------------------------------------------ 打印 PDF */
 

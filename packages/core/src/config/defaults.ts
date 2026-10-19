@@ -1,4 +1,4 @@
-import { type AppConfig, DEFAULT_BACKUP_REMINDER_DAYS } from './schema.ts';
+import { type AppConfig, DEFAULT_BACKUP_REMINDER_DAYS, DEFAULT_PRINT_TEMPLATE } from './schema.ts';
 
 /**
  * 作息表为空时的兜底课时长度。
@@ -25,6 +25,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     // 默认 A4：校内外打印机基本都是 A4；完整混合版（清单 + 专注格 + 三段时间登记）
     // 实测需要约 201mm 高，A5 的 194mm 可用高度装不下。A5 留给精简版与口袋卡。
     paper: 'A4',
+    // 默认「我的一天」：打印页第一次打开就应该有东西可打，不需要先选模板。
+    template: DEFAULT_PRINT_TEMPLATE,
     focusGrid: {
       enabled: true,
       spareCells: 1,

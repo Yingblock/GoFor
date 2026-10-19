@@ -1,11 +1,108 @@
 @import "tailwindcss";
 
+/*
+ * Tailwind v4 是 CSS-first 配置：这份 `@theme` 就是设计系统的唯一来源，
+ * 没有也不应该有 tailwind.config.js（v4 不读它）。
+ *
+ * 命名约定：
+ *   --color-*      颜色（ink/paper/accent/muted + 语义色）
+ *   --radius-*     圆角（只用 sm/md/lg/full，xl/2xl 留给弹层）
+ *   --shadow-*     阴影（card 极轻 / pop 浮层）
+ *   --duration-*   动效时长
+ *   --ease-*       动效曲线
+ *   --text-*       字号（语义名，不写裸 px）
+ *   --spacing-*    间距（语义名；普通布局仍用 4px 刻度）
+ *
+ * 组件全部在 `packages/ui`（`@gofor/ui`），类名由这里生成的工具类拼成。
+ */
 @theme {
+  /* ------------------------------------------------------------ 颜色 */
   --color-ink: oklch(0.26 0.03 260);
   --color-paper: oklch(0.975 0.006 90);
   --color-accent: oklch(0.55 0.13 255);
   --color-muted: oklch(0.62 0.02 260);
+  /* 统一描边：替代散落的 border-black/[0.08]、border-black/10 */
+  --color-line: oklch(0.26 0.03 260 / 0.1);
+  --color-danger: oklch(0.55 0.19 27);
+  --color-ok: oklch(0.58 0.13 155);
+  --color-warn: oklch(0.68 0.14 75);
+
+  /* ------------------------------------------------------------ 圆角 */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-full: 9999px;
+
+  /* ------------------------------------------------------------ 阴影 */
+  --shadow-none: 0 0 #0000;
+  --shadow-card: 0 1px 2px oklch(0.26 0.03 260 / 0.05);
+  --shadow-pop: 0 12px 32px oklch(0.26 0.03 260 / 0.14), 0 2px 8px oklch(0.26 0.03 260 / 0.06);
+
+  /* ------------------------------------------------------------ 动效 */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 260ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* duration-* 工具类读 --transition-duration-*，这里把语义 token 转接过去 */
+  --transition-duration-fast: var(--duration-fast);
+  --transition-duration-base: var(--duration-base);
+  --transition-duration-slow: var(--duration-slow);
+
+  /* 浮层/遮罩的进场动画；reduced-motion 下由下方媒体查询统一关掉 */
+  --animate-fade-in: fade-in var(--duration-base) var(--ease-enter);
+  --animate-pop-in: pop-in var(--duration-base) var(--ease-enter);
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* ------------------------------------------------------------ 字号 */
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.4;
+  --text-section: 0.875rem;
+  --text-section--line-height: 1.5;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.6;
+  --text-small: 0.75rem;
+  --text-small--line-height: 1.55;
+  --text-caption: 0.6875rem;
+  --text-caption--line-height: 1.5;
+  --text-micro: 0.625rem;
+  --text-micro--line-height: 1.4;
+  --text-metric: 1.25rem;
+  --text-metric--line-height: 1.3;
+
+  /* ------------------------------------------------------------ 间距（语义） */
+  --spacing-gutter: 1rem;
+  --spacing-section: 2rem;
+  --spacing-card-x: 1rem;
+  --spacing-card-y: 0.75rem;
 }
+
+/* @gofor/ui 在 node_modules 之外：v4 的自动扫描不会进 pnpm 的软链接包，
+ * 必须显式 @source，否则组件里的类名不会生成 CSS。 */
+@source "../../../packages/ui/src";
 
 html,
 body,
@@ -21,6 +118,31 @@ body {
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei",
     sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------- 动效降级 */
+
+/*
+ * 系统开启「减少动态效果」时：所有过渡/动画时长归零，滚动立即到位。
+ * 用 !important 而不是只改 token——工具类会把时长内联成 transition-duration，
+ * 只改 var 盖不住已经生成的值。
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ---------------------------------------------------------------- 打印 */

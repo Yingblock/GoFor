@@ -1,3 +1,4 @@
+import { Button, Card } from '@gofor/ui';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 export interface ErrorBoundaryProps {
@@ -54,29 +55,21 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (error === null) return this.props.children;
 
     return (
-      <div className="rounded-xl border border-black/[0.08] bg-white/60 px-4 py-6" role="alert">
-        <h2 className="text-lg font-medium">{this.props.title ?? '这块内容出错了'}</h2>
-        <p className="mt-1 text-sm leading-relaxed opacity-50">数据还在本机，刷新通常能恢复</p>
-        <p className="mt-3 break-words font-mono text-[11px] leading-relaxed opacity-40">
+      <Card padding="none" className="px-4 py-6" role="alert">
+        <h2 className="text-title font-medium">{this.props.title ?? '这块内容出错了'}</h2>
+        <p className="mt-1 text-body leading-relaxed opacity-50">数据还在本机，刷新通常能恢复</p>
+        <p className="mt-3 break-words font-mono text-caption leading-relaxed opacity-40">
           {error.message}
         </p>
         <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            onClick={this.retry}
-            className="rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 text-xs opacity-70 hover:opacity-100"
-          >
+          <Button variant="secondary" onClick={this.retry} className="opacity-70 hover:opacity-100">
             重试
-          </button>
-          <button
-            type="button"
-            onClick={this.reload}
-            className="rounded-lg border border-black/10 px-3 py-1.5 text-xs opacity-50 hover:opacity-80"
-          >
+          </Button>
+          <Button variant="ghost" onClick={this.reload} className="opacity-50 hover:opacity-80">
             重新加载页面
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     );
   }
 }
