@@ -211,7 +211,8 @@ P1 的 15 项已全部落地，收尾质量问题也修完了（见上）。下�
 ## 怎么跑起来
 
 ```bash
-# 4173 预览由 systemd 用户服务托管（常驻、崩了自动拉起、开机自启）：
+# 4173 预览由 systemd 用户服务托管（常驻、崩了自动拉起、开机自启）。
+# 注意 unit 里必须 --host 127.0.0.1：WSL2 绑 0.0.0.0 时 Windows 转发只在 [::1]。
 systemctl --user status gofor-preview
 systemctl --user restart gofor-preview
 journalctl --user -u gofor-preview -f

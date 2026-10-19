@@ -216,6 +216,9 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
 - **4173 由 systemd 用户服务托管，不要再用 `pnpm preview &` / `nohup` 临时起**：
   `~/.config/systemd/user/gofor-preview.service`（`Restart=always`、已 `enable`，
   用户 `Linger=yes`，所以关终端/WSL 会话结束都不影响）。
+  - **必须 `--host 127.0.0.1`**（unit 里已写）：WSL2 的 Windows 端口转发按绑定族镜像，
+    绑 `0.0.0.0` 时 Windows 侧只开 `[::1]:4173`，浏览器用 `127.0.0.1` 会连不上；
+    绑 IPv4 环回后 Windows 才是 `127.0.0.1:4173`（`localhost` 也可用）。
   - 重建 dist 后**不用重启服务**（`vite preview` 每次请求读磁盘）；
   - 换 node 版本后改 unit 里的绝对路径，再 `systemctl --user daemon-reload && systemctl --user restart gofor-preview`；
   - 看状态/日志：`systemctl --user status gofor-preview` / `journalctl --user -u gofor-preview -f`。
