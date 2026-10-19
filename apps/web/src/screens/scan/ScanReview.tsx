@@ -103,12 +103,14 @@ export function ScanReview({ batch, onSettled }: ScanReviewProps) {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-caption text-warn">
-        识别只是猜测，确认过再应用。日期：{batch.date}（来自纸上的二维码）
+        识别只是猜测，确认过再应用。日期：{batch.date}（来自纸上的
+        {batch.source === 'barcode' ? '页尾条码' : '二维码'}）
       </div>
 
       {batch.manifestSource === 'rebuilt' ? (
         <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-caption text-danger">
-          这份坐标是按<strong>当前模板</strong>重建的，不是打印时固化下来的。如果纸上行数或顺序和现在不同，
+          这份坐标是按<strong>当前模板</strong>
+          重建的，不是打印时固化下来的。如果纸上行数或顺序和现在不同，
           下面的勾选可能对到别的行——请逐条核对后再应用。
         </div>
       ) : null}

@@ -18,8 +18,10 @@ type CornerIndex = 0 | 1 | 2 | 3;
 const CORNER_LABELS = ['左上', '右上', '右下', '左下'] as const;
 
 function insetQuad(width: number, height: number): Quad {
-  const dx = width * 0.06;
-  const dy = height * 0.06;
+  // 2%：足够让手柄不贴边、又不至于把"整页"的内缩当成纸张边界。
+  // 曾经是 6%，等于把采样整体往内推了 6%，纸上的格子会系统性偏移。
+  const dx = width * 0.02;
+  const dy = height * 0.02;
   return [
     { x: dx, y: dy },
     { x: width - dx, y: dy },

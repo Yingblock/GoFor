@@ -425,34 +425,72 @@ try {
   await clickItem(photoPage, '打印 checklist');
   await photoPage.waitForSelector('.print-page', { timeout: 10000 });
   const sheetPng = await photoPage.locator('.print-page').first().screenshot();
+
+  // 再截一张"二维码被挡住"的同一页：验证页尾条码兜底（P2-2.12）。
+  // 只隐藏二维码 svg，条码与版式不动，等价于"码被裁出画面/反光"。
+  await photoPage.evaluate(() => {
+    for (const node of document.querySelectorAll('[aria-label="回填二维码"]')) {
+      node.style.display = 'none';
+    }
+  });
+  const barcodeOnlyPng = await photoPage.locator('.print-page').first().screenshot();
   await photoPage.close();
 
   // 用 canvas 在纸的下半部分涂黑，模拟"填了三格"。坐标清单采样的是归一化矩形，
   // 所以只需要保证墨迹落在那几行里，不用精确到格子。
   const canvasPage = await browser.newPage();
-  const inkedBase64 = await canvasPage.evaluate(async (b64) => {
-    const image = new Image();
-    image.src = `data:image/png;base64,${b64}`;
-    await image.decode();
-    const canvas = document.createElement('canvas');
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const context = canvas.getContext('2d');
-    context.drawImage(image, 0, 0);
-    context.fillStyle = '#000000';
-    context.fillRect(
-      0,
-      Math.floor(image.height * 0.78),
-      image.width,
-      Math.ceil(image.height * 0.16),
-    );
-    return canvas.toDataURL('image/png').split(',')[1];
-  }, sheetPng.toString('base64'));
+  const inkSheet = async (b64) =>
+    canvasPage.evaluate(async (data) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0);
+      context.fillStyle = '#000000';
+      context.fillRect(
+        0,
+        Math.floor(image.height * 0.78),
+        image.width,
+        Math.ceil(image.height * 0.16),
+      );
+      return canvas.toDataURL('image/png').split(',')[1];
+    }, b64);
+  const inkedBase64 = await inkSheet(sheetPng.toString('base64'));
+  const barcodeInkedBase64 = await inkSheet(barcodeOnlyPng.toString('base64'));
   await canvasPage.close();
+
+  const todayKey = new Date().toLocaleDateString('sv-SE');
 
   await openGroup(page, '记录');
   await clickItem(page, '扫描回填');
   await page.waitForSelector('text=拍一张纸', { timeout: 8000 });
+
+  /*
+   * 先扫"二维码被挡住"的那张：只靠页尾条码进待确认。
+   * 条码载荷短（日期 + 纸张 + 模板短码 + 页号），比二维码更耐大图，
+   * 是 P2-2.12 的验收标准之一。
+   */
+  await page.locator('input[aria-label="选择纸的照片"]').setInputFiles({
+    name: 'sheet-barcode-only.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(barcodeInkedBase64, 'base64'),
+  });
+  await page.getByRole('button', { name: '重置四角' }).click();
+  await page.getByRole('button', { name: '用这四个角矫正' }).click();
+  await page.getByRole('heading', { name: '待确认' }).waitFor({ timeout: 20000 });
+  check('扫描：二维码被挡住时条码兜底进待确认', true);
+  check(
+    '扫描：条码解析出的日期与纸面一致',
+    (await page.getByText(`日期：${todayKey}`).count()) > 0,
+    todayKey,
+  );
+  check('扫描：待确认页标明身份来自页尾条码', (await page.getByText(/页尾条码/).count()) > 0);
+  await page.getByRole('button', { name: '扫下一张' }).click();
+  await page.waitForSelector('text=拍一张纸', { timeout: 8000 });
+
   await page.locator('input[aria-label="选择纸的照片"]').setInputFiles({
     name: 'sheet.png',
     mimeType: 'image/png',
@@ -464,7 +502,6 @@ try {
   await page.getByRole('button', { name: '用这四个角矫正' }).click();
   await page.getByRole('heading', { name: '待确认' }).waitFor({ timeout: 20000 });
   check('扫描：解码二维码并进入待确认', true);
-  const todayKey = new Date().toLocaleDateString('sv-SE');
   check('扫描：日期来自纸上的二维码', (await page.getByText(/来自纸上的二维码/).count()) > 0);
   check(
     '扫描：识别出的日期与纸面一致',

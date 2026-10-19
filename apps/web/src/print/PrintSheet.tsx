@@ -11,7 +11,7 @@ import {
   type ScheduleBlock,
   type TimeLogBlock,
 } from '@gofor/core/print';
-import { buildFillLink, encodeQrSvgPath } from '@gofor/core/scan';
+import { buildFillLink, encodeCode128, encodeQrSvgPath, encodeSheetCode } from '@gofor/core/scan';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，恢复 `new Date()`）。
 import { appClock } from '../clock.ts';
@@ -399,6 +399,87 @@ function BlockView({ block, data }: { block: Block; data: SheetData }) {
   }
 }
 
+/**
+ * 页尾条码（P2-2.12）：二维码之外的第二个身份入口。
+ *
+ * 为什么是"全图解码之后兜底"而不是替代二维码：二维码带完整模板 id，
+ * 能直接定位坐标清单；条码只有短码（日期 + 纸张 + 模板短码 + 页号），
+ * 需要反查。条码更窄、更耐大图和轻微倾斜，二维码读不出时它顶上。
+ *
+ * 位置在**正文下方、页边距之内**（内容底部 + 1mm），不贴页边：
+ * 拍照/框选经常把最外圈页边距裁掉，贴边的码会被裁出画面。内容一直排到底、
+ * 下方塞不下 4.6mm 时宁可不印，也不能压到最后一格字上。
+ */
+function BarcodeStrip({ page, data }: { page: PageLayout; data: SheetData }) {
+  const qr = data.qr;
+  if (qr === undefined) return null;
+  const pageNumber = page.index + 1;
+  if (pageNumber > 9) return null;
+
+  let modules: boolean[] = [];
+  try {
+    modules = encodeCode128(
+      encodeSheetCode({
+        date: qr.date,
+        paper: qr.paper,
+        templateId: qr.templateId,
+        page: pageNumber,
+      }),
+    );
+  } catch {
+    // 纸张 id 不认识 / 日期不合法：不印条码也比整张纸渲染崩掉好。
+    return null;
+  }
+
+  const contentBottom = Math.max(
+    0,
+    ...page.placements.map((placement) => placement.yMm + placement.heightMm),
+  );
+  const heightMm = 4.6;
+  const topMm = contentBottom + 1;
+  if (topMm + heightMm > page.heightMm - 0.4) return null;
+
+  // 0.6mm 是"手机拍 2000px 还能稳解"的舒适区；纸太窄时按可用宽度缩，
+  // 但不低于 0.3mm（再小就只是装饰了）。
+  const moduleMm = Math.max(0.3, Math.min(0.6, (page.widthMm - 10) / modules.length));
+  const widthMm = modules.length * moduleMm;
+  const leftMm = (page.widthMm - widthMm) / 2;
+
+  const segments: string[] = [];
+  let col = 0;
+  while (col < modules.length) {
+    if (!modules[col]) {
+      col += 1;
+      continue;
+    }
+    let end = col + 1;
+    while (end < modules.length && modules[end]) end += 1;
+    const width = end - col;
+    segments.push(`M${col} 0h${width}v1h${-width}z`);
+    col = end;
+  }
+
+  return (
+    <svg
+      role="img"
+      aria-label="回填条码"
+      viewBox={`0 0 ${modules.length} 1`}
+      preserveAspectRatio="none"
+      style={{
+        position: 'absolute',
+        left: mm(leftMm),
+        top: mm(topMm),
+        width: mm(widthMm),
+        height: mm(heightMm),
+        display: 'block',
+      }}
+    >
+      <rect width={modules.length} height={1} fill="#ffffff" />
+      <path d={segments.join('')} fill="#111111" />
+    </svg>
+  );
+}
+
 function PageView({ page, data }: { page: PageLayout; data: SheetData }) {
   return (
     <div
@@ -425,6 +506,7 @@ function PageView({ page, data }: { page: PageLayout; data: SheetData }) {
           <BlockView block={placement.block} data={data} />
         </div>
       ))}
+      <BarcodeStrip page={page} data={data} />
     </div>
   );
 }

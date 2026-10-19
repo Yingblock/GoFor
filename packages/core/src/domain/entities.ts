@@ -253,6 +253,13 @@ export interface ScanBatch {
   status: 'pending' | 'applied' | 'discarded';
   appliedAt: number | null;
   /**
+   * 身份是从哪儿读出来的：二维码，或条码兜底。
+   *
+   * 旧批次（这个字段出现之前）没有它，读取时按 `qr` 处理——
+   * 那时纸上只有二维码，不存在其它来源。
+   */
+  source?: 'qr' | 'barcode';
+  /**
    * 坐标清单从哪来的：
    * - `stored`：打印时固化在库里的（默认，且旧批次没有这个字段也按它处理）；
    * - `rebuilt`：库里没有这张纸的清单（旧版本打印的），按当前模板临时重建。

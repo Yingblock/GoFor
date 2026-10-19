@@ -1,5 +1,12 @@
 import { PAPER_SIZES, type PaperId } from '@gofor/core/print';
-import { decodeQrLocated, type FillLink, parseFillLink } from '@gofor/core/scan';
+import {
+  decodeCode128Row,
+  decodeQrLocated,
+  type FillLink,
+  parseFillLink,
+  parseSheetCode,
+  type SheetCode,
+} from '@gofor/core/scan';
 import {
   binarize,
   type ImageDataLike,
@@ -12,15 +19,36 @@ import {
 /** 矫正后的目标宽度（像素）。1000 宽对 A4 来说每格约 40px，足够判"有没有墨"。 */
 const WARP_WIDTH = 1000;
 
+/**
+ * 条码矫正用的正方形边长（像素）。
+ *
+ * 条码解码不需要正确的纸张比例，只需要"条是横的"；用正方形把四边形拉平，
+ * 可以省掉"先知道纸张才能矫正"的循环依赖。照片在进算法前已缩到最长边 2000px，
+ * 正方形 2000 对 A4 来说约 6.7px/mm，0.6mm 的模块还有 4px，够解。
+ */
+const BARCODE_WARP = 2000;
+
 export type ReadSheetResult =
   | {
       ok: true;
+      /** 身份来自二维码（完整深链）。 */
+      source: 'qr';
       link: FillLink;
       /** 透视矫正后的整页（RGBA）。 */
       page: ImageDataLike;
       /** 整页的二值图（1 = 墨迹），与 `page` 同尺寸。 */
       binary: Uint8Array;
-      /** 0 起的页号。现在只认第 1 页（二维码只印在首页）。 */
+      /** 0 起的页号。二维码只印在第 1 页，所以是 0。 */
+      pageIndex: number;
+    }
+  | {
+      ok: true;
+      /** 身份来自条码（短码：日期 + 纸张 + 模板短码 + 页号）。 */
+      source: 'barcode';
+      code: SheetCode;
+      page: ImageDataLike;
+      binary: Uint8Array;
+      /** 条码里带页号，条码印在每一页的页尾。 */
       pageIndex: number;
     }
   | { ok: false; reason: string };
@@ -145,6 +173,34 @@ export function readLinkFromPhoto(image: ImageDataLike, quad?: Quad): FillLink |
   return parsed.ok ? parsed.value : null;
 }
 
+/**
+ * 条码兜底：把四角拉成正方形，逐行找 Code 128。
+ *
+ * 为什么逐行：条码是一维的，只要有一行完整穿过它就能解。照片可能有轻微旋转、
+ * 透视，按行扫描比"先定位条码区域再解"简单得多，也不依赖条码印在哪一页。
+ * 行距 2px：条码高度约 4.6mm，在 2000px 的照片里约 30px，不会漏。
+ *
+ * 这条路径天然受四角约束（只在框出的纸里找），不会像二维码那样从整张照片抓码。
+ */
+export function readBarcodeFromPhoto(image: ImageDataLike, quad: Quad): SheetCode | null {
+  const square = warpQuad(image, quad, BARCODE_WARP, BARCODE_WARP);
+  const binary = binarize(toGray(square));
+  const width = square.width;
+  const row = new Uint8Array(width);
+
+  for (let y = 0; y < square.height; y += 2) {
+    const base = y * width;
+    for (let x = 0; x < width; x += 1) {
+      row[x] = binary[base + x] === 1 ? 1 : 0;
+    }
+    const text = decodeCode128Row(row);
+    if (text === null) continue;
+    const code = parseSheetCode(text);
+    if (code !== null) return code;
+  }
+  return null;
+}
+
 /** 纸张比例（宽/高）。用于决定矫正后的画布尺寸。 */
 function paperAspect(paper: string): number {
   const size = PAPER_SIZES[paper as PaperId];
@@ -171,42 +227,58 @@ export function binaryOfPage(page: ImageDataLike): Uint8Array {
 }
 
 /**
- * 完整链路：原图 + 四角 → 二维码 → 矫正后的整页与二值图。
+ * 完整链路：原图 + 四角 → 二维码或条码 → 矫正后的整页与二值图。
+ *
+ * 顺序刻意是"先二维码，再条码"：
+ * - 二维码带完整模板 id，能直接定位坐标清单；
+ * - 条码载荷短，先解出来也能反查清单（短码 → 模板 + 日期 + 纸张 + 页）。
  *
  * `paper` 允许不传：调用方可能已经解出链接，也可能让用户手选了纸张。
  */
 export function readSheet(image: ImageDataLike, quad: Quad, paper: string): ReadSheetResult {
   const located = decodeQrMultiScale(image);
-  if (located === null) {
+  let qrOutsideFrame = false;
+
+  if (located !== null) {
+    if (isAroundQuad(located.center, quad)) {
+      const parsed = parseFillLink(located.text);
+      if (parsed.ok) {
+        const link = parsed.value;
+        const page = warpToPage(image, quad, paper === '' ? link.paper : paper);
+        return {
+          ok: true,
+          source: 'qr',
+          link,
+          page,
+          binary: binaryOfPage(page),
+          pageIndex: 0,
+        };
+      }
+    } else {
+      qrOutsideFrame = true;
+    }
+  }
+
+  const code = readBarcodeFromPhoto(image, quad);
+  if (code !== null) {
+    const page = warpToPage(image, quad, code.paper);
     return {
-      ok: false,
-      reason:
-        '照片里没找到这张纸的二维码。确认纸是程序打印的、二维码没被裁掉或反光；纸摆正一点再试。',
+      ok: true,
+      source: 'barcode',
+      code,
+      page,
+      binary: binaryOfPage(page),
+      pageIndex: code.page - 1,
     };
   }
 
-  if (!isAroundQuad(located.center, quad)) {
-    return {
-      ok: false,
-      reason:
-        '照片里的二维码在你框出的纸张范围之外，没有用它。' +
-        '如果框错了，把四个角拖到纸边再试；也可以重拍一张，让二维码留在框里。',
-    };
-  }
-
-  const parsed = parseFillLink(located.text);
-  if (!parsed.ok) {
-    return { ok: false, reason: `纸上的二维码读不懂：${parsed.reason}` };
-  }
-
-  const link = parsed.value;
-  const page = warpToPage(image, quad, paper === '' ? link.paper : paper);
   return {
-    ok: true,
-    link,
-    page,
-    binary: binaryOfPage(page),
-    pageIndex: 0,
+    ok: false,
+    reason: qrOutsideFrame
+      ? '照片里的二维码在你框出的纸张范围之外，没有用它；纸尾也没找到条码。' +
+        '把四个角拖到纸边再试，或者重拍一张。'
+      : '照片里没找到这张纸的二维码，也没找到页尾条码。' +
+        '确认纸是程序打印的、码没被裁掉或反光；纸摆正一点再试。',
   };
 }
 

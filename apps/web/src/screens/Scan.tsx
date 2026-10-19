@@ -11,6 +11,7 @@ import {
   classifyInk,
   type InkReading,
   type SheetManifest,
+  sheetCodeToken,
 } from '@gofor/core/scan';
 import {
   db,
@@ -31,6 +32,7 @@ import { appClock } from '../clock.ts';
 import { todayLabel } from '../format.ts';
 import {
   isBuiltinTemplateId,
+  PRINT_TEMPLATE_CONSTANTS,
   parseStoredTemplate,
   resolvePrintTemplate,
 } from '../print/template.ts';
@@ -53,8 +55,10 @@ interface MissingManifest {
   templateId: string;
   date: string;
   paper: string;
-  /** 0 起的页号；二维码只印在第 1 页，所以是 0。 */
+  /** 0 起的页号。 */
   pageIndex: number;
+  /** 身份来自二维码还是条码（待确认页会写明）。 */
+  source: 'qr' | 'barcode';
   page: ImageDataLike;
   binary: Uint8Array;
 }
@@ -123,6 +127,7 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
   const finishScan = async (input: {
     manifest: SheetManifest;
     manifestSource: 'stored' | 'rebuilt';
+    source: 'qr' | 'barcode';
     templateId: string;
     date: string;
     paper: string;
@@ -149,6 +154,7 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
       results,
       status: 'pending',
       appliedAt: null,
+      source: input.source,
       manifestSource: input.manifestSource,
     };
     await saveScanBatch(db, next);
@@ -170,22 +176,55 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
         return;
       }
 
-      const { link, page, binary, pageIndex } = sheet;
-      const record: SheetManifestRecord | undefined = await getSheetManifest(
-        db,
-        link.templateId,
-        link.date,
-        link.paper,
-      );
+      const { page, binary, pageIndex } = sheet;
+      let templateId: string;
+      let date: string;
+      let paper: string;
+      let record: SheetManifestRecord | undefined;
+
+      if (sheet.source === 'barcode') {
+        date = sheet.code.date;
+        paper = sheet.code.paper;
+        // 条码只带模板短码：在当天、同纸张的清单里按短码反查。
+        // 不按「模板 + 日期 + 纸张」直接取，是因为短码本来就是为了不让纸上写全 id。
+        const sameDay = await db.sheetManifests.where('date').equals(date).toArray();
+        const hits = sameDay.filter(
+          (item) => item.paper === paper && sheetCodeToken(item.templateId) === sheet.code.token,
+        );
+        if (hits.length > 1) {
+          setError('这张纸的条码对上了多条坐标记录，没法确定是哪一张。重新打印一次再扫。');
+          return;
+        }
+        record = hits[0];
+        if (record !== undefined) {
+          templateId = record.templateId;
+        } else {
+          // 清单丢了但模板还在（换了设备、清了库）：短码能反查出模板，后面可以重建。
+          templateId = (await findTemplateIdByToken(sheet.code.token)) ?? '';
+          if (templateId === '') {
+            setError(
+              '条码读出来了，但本机既没有这张纸的坐标记录，也找不到对应模板。' +
+                '可能是在另一台设备打印的，或者模板已删除。重新打印一次再扫。',
+            );
+            return;
+          }
+        }
+      } else {
+        templateId = sheet.link.templateId;
+        date = sheet.link.date;
+        paper = sheet.link.paper;
+        record = await getSheetManifest(db, templateId, date, paper);
+      }
 
       if (record === undefined) {
         // 关键：**不静默用当前数据重建**。旧纸上没有清单，重建的行数可能与纸上不同，
         // 直接把勾选记到别人头上是静默错数据；必须让用户明确点一次。
         setMissing({
-          templateId: link.templateId,
-          date: link.date,
-          paper: link.paper,
+          templateId,
+          date,
+          paper,
           pageIndex,
+          source: sheet.source,
           page,
           binary,
         });
@@ -197,9 +236,10 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
       await finishScan({
         manifest,
         manifestSource: 'stored',
-        templateId: link.templateId,
-        date: link.date,
-        paper: link.paper,
+        source: sheet.source,
+        templateId,
+        date,
+        paper,
         pageIndex,
         page,
         binary,
@@ -265,6 +305,7 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
       await finishScan({
         manifest,
         manifestSource: 'rebuilt',
+        source: missing.source,
         templateId: template.id,
         date: missing.date,
         paper,
@@ -366,7 +407,8 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
               但本机没有这张纸打印时固化的坐标清单。多半是旧版本打印的：那个版本还没开始记录坐标。
             </p>
             <p className="opacity-70">
-              可以按<strong>当前模板</strong>重建一份坐标继续扫。注意：重建用的是现在的作业列表，如果纸上
+              可以按<strong>当前模板</strong>
+              重建一份坐标继续扫。注意：重建用的是现在的作业列表，如果纸上
               行数或顺序和现在不同，勾选可能对到别的行——后面的「待确认」页会标出来，你可以
               逐条取消。最稳的做法还是用当前版本重新打印一次。
             </p>
@@ -488,4 +530,20 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
       ) : null}
     </div>
   );
+}
+
+/**
+ * 条码里的模板短码 → 模板 id。
+ *
+ * 短码有 30 位，正常不会撞；真撞了（同一短码对上两个模板）就返回 null，
+ * 让调用方提示重打，而不是猜一个。
+ */
+async function findTemplateIdByToken(token: string): Promise<string | null> {
+  const customs = await listTemplates(db);
+  const ids = new Set<string>([
+    ...PRINT_TEMPLATE_CONSTANTS.map((template) => template.id),
+    ...customs.map((template) => template.id),
+  ]);
+  const hits = [...ids].filter((id) => sheetCodeToken(id) === token);
+  return hits.length === 1 ? (hits[0] ?? null) : null;
 }
