@@ -26,7 +26,7 @@
  */
 
 import type { Block, TitleBlock } from './blocks.ts';
-import type { Margin, PaperId } from './paper.ts';
+import { type Margin, PAPER_SIZES, type PaperId } from './paper.ts';
 
 export interface PrintTemplate {
   id: string;
@@ -100,6 +100,8 @@ export const BUILTIN_TEMPLATES: PrintTemplate[] = [
         keys: ['sleep', 'mood', 'focus'],
         scale: 5,
       },
+      // 打卡行：一天有几个习惯就印几个勾选框；扫描按坐标回填到 habits。
+      { id: 'habits', kind: 'habitRow', span: 12 },
       hint(DEFAULT_HINT),
     ],
   },
@@ -233,7 +235,15 @@ function adaptBlock(block: Block, templateId: string, full: boolean): Block {
 
 function adaptBlocks(template: PrintTemplate, paper: PaperId): Block[] {
   const full = isFullDensity(paper);
-  return template.blocks.map((block) => cloneBlock(adaptBlock(block, template.id, full)));
+  return template.blocks
+    .map((block) => cloneBlock(adaptBlock(block, template.id, full)))
+    .filter((block) => {
+      // 「我的一天」在 A5 已经顶满 202mm 可用高度，再塞 7mm 打卡行会翻页；
+      // 高度 < 230mm 的小纸（A5/A6/索引卡）上不显示打卡行；A4/B5/Letter 保留。
+      const smallPaper = (PAPER_SIZES[paper]?.heightMm ?? 0) < 230;
+      if (template.id === 'day' && smallPaper && block.kind === 'habitRow') return false;
+      return true;
+    });
 }
 
 /**

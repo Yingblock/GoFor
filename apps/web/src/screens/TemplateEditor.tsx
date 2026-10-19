@@ -65,6 +65,8 @@ const BLOCK_PRESETS: Record<string, () => Block> = {
   timestamp: () => ({ id: newId(), kind: 'timestamp', span: 12, label: '打印于' }),
   // 回填二维码：内容由打印层按「模板 + 日期 + 纸张」现算，区块只存边长。
   qrcode: () => ({ id: newId(), kind: 'qrcode', span: 3, sizeMm: 12 }),
+  // 打卡行：一行并排当天该做的习惯，扫描按 habit id 回填（P2-2.13）。
+  habitRow: () => ({ id: newId(), kind: 'habitRow', span: 12 }),
   // 三格自评：印成 1–5 的勾选格，扫描能读回数值（手写数字读不了，见 DESIGN §16.3）。
   ratingGrid: () => ({
     id: newId(),
@@ -336,6 +338,9 @@ function BlockFields({ block, onChange }: { block: Block; onChange: (next: Block
           onChange={(sizeMm) => onChange({ ...block, sizeMm })}
         />
       );
+    case 'habitRow':
+      // 习惯列表来自数据，不在模板里配置；这里没有可编辑字段。
+      return null;
     case 'table':
       return (
         <NumberField

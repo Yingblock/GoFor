@@ -2,6 +2,7 @@ import type {
   Checkin,
   Checklist,
   ChecklistLog,
+  CourseNote,
   DiaryEntry,
   HabitLog,
   MoodLog,
@@ -53,6 +54,7 @@ export class GoForDb extends Dexie {
   checklistLogs!: Table<ChecklistLog, string>;
   scanBatches!: Table<ScanBatch, string>;
   sheetManifests!: Table<SheetManifestRecord, string>;
+  courseNotes!: Table<CourseNote, string>;
 
   constructor(name = 'gofor') {
     super(name);
@@ -190,6 +192,29 @@ export class GoForDb extends Dexie {
       checklistLogs: 'id, date, checklistId',
       scanBatches: 'id, status, createdAt',
       sheetManifests: 'id, date, templateId',
+    });
+
+    // v7：每日课程备注（P2-2.15）。键含日期与节次，备注只属于那一天。
+    this.version(7).stores({
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+      focusRuns: 'id, status, createdAt',
+      checkins: 'date',
+      timetables: 'id',
+      tagPools: 'id',
+      habits: 'id, order',
+      habitLogs: 'id, habitId, date',
+      moodLogs: 'date',
+      diaryEntries: 'id, date',
+      toolboxRuns: 'id, exercise, startedAt',
+      checklists: 'id',
+      checklistLogs: 'id, date, checklistId',
+      scanBatches: 'id, status, createdAt',
+      sheetManifests: 'id, date, templateId',
+      courseNotes: 'id, date',
     });
   }
 }

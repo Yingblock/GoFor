@@ -12,12 +12,13 @@ import {
   listHabitLogs,
   listHabits,
   listSubjects,
+  saveCourseNote,
   setHabitLog,
   setTaskDone,
 } from '@gofor/store';
 import { Card, Checkbox, EmptyState, Section, StatCard } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { appClock } from '../clock.ts';
 
 /** 首页要能跳到打卡页和课表页，所以这两个 id 也进联合类型。 */
@@ -28,6 +29,50 @@ export interface HomeScheduleEntry {
   time: string;
   end: string;
   label: string;
+  /** 课表里的课程 id 与开始分钟：备注按「日期 + 课程 + 节次」定位。 */
+  courseId: string;
+  startMinute: number;
+  /** 当天这一节的备注（P2-2.15），空串表示没写。 */
+  note: string;
+}
+
+/**
+ * 课表行的「备注」输入框。
+ *
+ * 保存时机是失焦/回车，不是每敲一个字就写库：备注是低频编辑，
+ * 逐字写会让 liveQuery 反复刷新整页，输入体验反而变差。
+ */
+function ScheduleNoteInput({ entry, date }: { entry: HomeScheduleEntry; date: string }) {
+  const [draft, setDraft] = useState(entry.note);
+  useEffect(() => setDraft(entry.note), [entry.note]);
+
+  const commit = () => {
+    if (draft.trim() === entry.note.trim()) return;
+    void saveCourseNote(
+      db,
+      {
+        date,
+        courseId: entry.courseId,
+        startMinute: entry.startMinute,
+        text: draft,
+      },
+      appClock.now(),
+    );
+  };
+
+  return (
+    <input
+      value={draft}
+      placeholder="备注"
+      aria-label={`${entry.label} 备注`}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+      }}
+      className="w-28 shrink-0 rounded border-b border-line bg-transparent px-1 py-0.5 text-caption outline-none transition-colors duration-fast placeholder:opacity-25 focus:border-accent"
+    />
+  );
 }
 
 export interface HomeProps {
@@ -149,6 +194,7 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
                 >
                   <span className="w-11 shrink-0 tabular-nums opacity-45">{entry.time}</span>
                   <span className="min-w-0 flex-1 break-words">{entry.label}</span>
+                  <ScheduleNoteInput entry={entry} date={today} />
                   <span className="text-caption tabular-nums opacity-30">– {entry.end}</span>
                 </li>
               ))}

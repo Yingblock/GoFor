@@ -4,7 +4,7 @@ GoFor 第三方组件与许可证
 GoFor 在运行时（浏览器 / PWA / Electron 壳）分发以下第三方组件。
 每个组件的完整许可证文本附在文件后半部分。
 
-1. @zxing/library 0.23.0 — Apache License 2.0
+1. @zxing/library 0.21.3 — Apache License 2.0
    用途：扫描回填时解码 Code 128 条码。
    Copyright (c) ZXing authors and contributors (https://github.com/zxing-js/library)
 

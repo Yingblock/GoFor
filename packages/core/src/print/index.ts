@@ -8,6 +8,8 @@ export {
   type CheckboxGridBlock,
   type CheckboxListBlock,
   type FooterBlock,
+  HABIT_ROW_MAX,
+  type HabitRowBlock,
   type HintLineBlock,
   type LinedBoxBlock,
   type PageBreakBlock,

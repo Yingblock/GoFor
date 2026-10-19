@@ -148,6 +148,15 @@ docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS
     `text-body`、`duration-fast` 等），不要手写颜色/圆角/阴影/时长的魔法值。
     Tailwind v4 用 CSS-first 配置（`apps/web/src/styles.css` 的 `@theme`），**不要新建
     `tailwind.config.js`**。详见 `docs/DESIGN-SYSTEM.md`。
+12. **实现新功能前先找现成稳定方案，避免重复造轮子。**
+    - 先查三处：平台内建 API（浏览器/Chromium/Node/系统）、仓库已有依赖、成熟开源库。
+    - 再评估五件事：**许可证**（必须能随包分发，见规则 4）、维护状态与版本、
+      包体积、离线可用性、目标平台覆盖（PWA / Electron / Android WebView），
+      以及 `engines` 与本地/CI 的 Node 版本是否匹配。
+    - 能复用就复用。确需自己写，必须在提交说明里写清"为什么现有方案不够"
+      （性能、体积、离线、许可不可用等），并补测试。
+    - **反例（别再犯）**：手写 Code 128 解码要求条码几乎水平、模块 ≥4px，
+      真实照片一斜就废，最后换回 ZXing。造轮子前先用**真实数据**跑一遍现成方案。
 
 ## CI（GitHub Actions）
 
@@ -197,6 +206,9 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
   页号），由 `PrintSheet` 统一画在页边距里——**不要**做成模板区块，否则用户模板会漏印。
   短码格式/纸张编码改动必须同时改 `core/scan/barcode.ts` 与 `PrintSheet` 的渲染，
   e2e 的"隐藏二维码只靠条码"用例会兜住。
+- **打卡行（habitRow）的采样窗只覆盖勾选框**：习惯名是印刷字，采样窗套住名字会把"没勾"读成有墨。
+  `manifest.ts` 的 `habitRowTargets` 与 `PrintSheet` 的 `HabitRowView` 必须同时改（窗宽 5mm/行高 7mm）。
+  A5 等高度 <230mm 的小纸会自动不印这一行，别为了"都能印"把整页顶成两页。
 - **手写内容不做识别**：时间登记、`slots` 手写格需要 OCR，P2 明确不做；
   要回填的数值请用 `ratingGrid`（印成勾选格）。
 

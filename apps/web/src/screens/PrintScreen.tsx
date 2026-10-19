@@ -62,8 +62,14 @@ export function PrintScreen({
       date,
       paper,
       blocks,
-      bindings: { 'tasks.today': tasks.map((task) => task.id) },
-      labels: { 'tasks.today': tasks.map((task) => task.title) },
+      bindings: {
+        'tasks.today': tasks.map((task) => task.id),
+        'habits.today': (data.habits ?? []).map((habit) => habit.id),
+      },
+      labels: {
+        'tasks.today': tasks.map((task) => task.title),
+        'habits.today': (data.habits ?? []).map((habit) => habit.name),
+      },
     });
     void saveSheetManifest(db, {
       id: sheetManifestId(templateId, date, paper),
@@ -75,7 +81,7 @@ export function PrintScreen({
     }).catch((error: unknown) => {
       console.warn('坐标清单没存下来，这次扫描将无法回填', error);
     });
-  }, [templateId, date, paper, blocks, tasks]);
+  }, [templateId, date, paper, blocks, tasks, data.habits]);
 
   // 下拉里必须能选中当前值：模板被删/坏数据回退时，至少还有「我的一天」兜底。
   const options = useMemo(() => {

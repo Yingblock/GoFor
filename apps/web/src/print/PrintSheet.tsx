@@ -2,6 +2,7 @@ import type { Task } from '@gofor/core/domain';
 import {
   type Block,
   type CheckboxListBlock,
+  HABIT_ROW_MAX,
   layout,
   type Margin,
   PAPER_SIZES,
@@ -25,7 +26,12 @@ export interface SheetData {
    * 时间与科目名在宿主里算好再传进来：打印层只认「一行两列」的扁平数据，
    * 这样模板以后换数据源（手填、导入）时不用跟着改渲染。
    */
-  schedule?: { time: string; label: string }[];
+  schedule?: { time: string; label: string; note?: string }[];
+  /**
+   * 当天的打卡项（已按「今天是否该做」筛过）。打卡行区块按它渲染并生成采样点；
+   * 不传就画一行「还没有打卡项」。
+   */
+  habits?: { id: string; name: string }[];
   /**
    * 打印这张纸时的身份：模板、日期、纸张。
    *
@@ -161,6 +167,21 @@ function ScheduleView({ block, data }: { block: ScheduleBlock; data: SheetData }
             >
               {entry?.label ?? ''}
             </span>
+            {entry?.note ? (
+              <span
+                style={{
+                  flex: 'none',
+                  maxWidth: mm(60),
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  fontSize: mm(2.8),
+                  color: '#6b7280',
+                }}
+              >
+                {entry.note}
+              </span>
+            ) : null}
             {overflow > 0 ? (
               <span style={{ flex: 'none', fontSize: mm(2.6), color: '#6b7280' }}>
                 {`+${overflow} 节课见 App`}
@@ -388,6 +409,8 @@ function BlockView({ block, data }: { block: Block; data: SheetData }) {
       );
     case 'qrcode':
       return <QrView sizeMm={block.sizeMm} data={data} />;
+    case 'habitRow':
+      return <HabitRowView data={data} />;
     case 'ratingGrid':
       return <RatingGridView block={block} />;
     case 'checkboxGrid':
@@ -480,6 +503,63 @@ function BarcodeStrip({ page, data }: { page: PageLayout; data: SheetData }) {
       <rect width={modules.length} height={1} fill="#ffffff" />
       <path d={segments.join('')} fill="#111111" />
     </svg>
+  );
+}
+
+/**
+ * 打卡行（P2-2.13）：一行并排若干「勾选框 + 习惯名」。
+ *
+ * 采样窗只覆盖勾选框（5mm），**不覆盖习惯名**——名字是印刷字，算进去会把
+ * "没勾"也读成有墨。渲染顺序必须和 `manifest.ts` 的 `habitRowTargets` 一致：
+ * 每格等宽、勾选框贴在格子左侧、行高 7mm 从块顶开始。
+ */
+function HabitRowView({ data }: { data: SheetData }) {
+  const habits = data.habits ?? [];
+  if (habits.length === 0) {
+    return <div style={{ fontSize: mm(2.8), color: '#9ca3af' }}>还没有打卡项</div>;
+  }
+  const shown = habits.slice(0, HABIT_ROW_MAX);
+  const hidden = habits.length - shown.length;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', height: mm(7) }}>
+      {shown.map((habit) => (
+        <div
+          key={habit.id}
+          style={{
+            flex: '1 1 0',
+            minWidth: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: mm(1.2),
+          }}
+        >
+          <div
+            style={{
+              width: mm(4),
+              height: mm(4),
+              border: `${mm(0.25)} solid #4b5563`,
+              borderRadius: mm(0.8),
+              flex: 'none',
+            }}
+          />
+          <span
+            style={{
+              fontSize: mm(2.4),
+              color: '#374151',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {habit.name}
+          </span>
+        </div>
+      ))}
+      {hidden > 0 ? (
+        <span style={{ fontSize: mm(2.4), color: '#9ca3af', flex: 'none' }}>+{hidden}</span>
+      ) : null}
+    </div>
   );
 }
 

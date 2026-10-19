@@ -26,6 +26,7 @@ import {
   listCheckins,
   listChecklistLogs,
   listChecklists,
+  listCourseNotesByDate,
   listDiaryEntries,
   listHabitLogs,
   listMoodLogs,
@@ -36,6 +37,7 @@ import {
   loadFocusRun,
   saveChecklist,
   saveConfig,
+  saveCourseNote,
   saveDiaryEntry,
   saveFocusRun,
   saveHabit,
@@ -226,6 +228,11 @@ describe('存储：导入导出', () => {
       completedAt: 9,
       seconds: 60,
     });
+    await saveCourseNote(
+      source,
+      { date: '2026-03-05', courseId: 'c1', startMinute: 480, text: '带错题本' },
+      10,
+    );
     await saveScanBatch(source, {
       id: 's1',
       createdAt: 10,
@@ -249,6 +256,7 @@ describe('存储：导入导出', () => {
     expect(bundle.checklists).toHaveLength(1);
     expect(bundle.checklistLogs).toHaveLength(1);
     expect(bundle.scanBatches).toHaveLength(1);
+    expect(bundle.courseNotes).toHaveLength(1);
 
     const target = freshDb('export-all-tables-dst');
     const result = await importAll(target, bundle);
@@ -264,10 +272,12 @@ describe('存储：导入导出', () => {
       checklists: 1,
       checklistLogs: 1,
       scanBatches: 1,
+      courseNotes: 1,
     });
     // 真的落库了才算数：只断言计数的话，importAll 里漏写一张表也能过。
     expect((await target.habits.get('h1'))?.name).toBe('背单词');
     expect(await target.habitLogs.count()).toBe(1);
+    expect((await listCourseNotesByDate(target, '2026-03-05'))[0]?.text).toBe('带错题本');
     expect(await target.timetables.count()).toBe(1);
     expect(await target.tagPools.count()).toBe(1);
     expect(await target.focusRuns.count()).toBe(1);
@@ -1113,6 +1123,36 @@ describe('存储：扫描结果回填', () => {
     );
     expect(summary.skipped).toBe(2);
     expect(summary.tasksDone).toBe(0);
+    await db.close();
+  });
+});
+
+describe('课程备注（v7）', () => {
+  it('同一天同一门课按节次分开存，空文本等价删除', async () => {
+    const db = freshDb('course-notes');
+    await saveCourseNote(
+      db,
+      { date: '2026-10-20', courseId: 'c1', startMinute: 480, text: '甲' },
+      1,
+    );
+    await saveCourseNote(
+      db,
+      { date: '2026-10-20', courseId: 'c1', startMinute: 525, text: '乙' },
+      2,
+    );
+    expect((await listCourseNotesByDate(db, '2026-10-20')).map((note) => note.text)).toEqual([
+      '甲',
+      '乙',
+    ]);
+
+    await saveCourseNote(
+      db,
+      { date: '2026-10-20', courseId: 'c1', startMinute: 480, text: '   ' },
+      3,
+    );
+    const left = await listCourseNotesByDate(db, '2026-10-20');
+    expect(left).toHaveLength(1);
+    expect(left[0]?.text).toBe('乙');
     await db.close();
   });
 });

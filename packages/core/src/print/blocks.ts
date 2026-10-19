@@ -24,6 +24,7 @@ export const BLOCK_KINDS = [
   'linedBox',
   'hintLine',
   'qrcode',
+  'habitRow',
   'progressDots',
   'footer',
   'pageBreak',
@@ -157,6 +158,14 @@ export interface QrCodeBlock extends BlockBase {
   sizeMm: number;
 }
 
+/** 打卡行：一行内并排若干个「勾选框 + 习惯名」，扫描时逐格判断有没有墨。 */
+export interface HabitRowBlock extends BlockBase {
+  kind: 'habitRow';
+}
+
+/** 打卡行最多显示几个；再多就截断（纸面一行放不下，硬塞会看不清）。 */
+export const HABIT_ROW_MAX = 6;
+
 export interface ProgressDotsBlock extends BlockBase {
   kind: 'progressDots';
   total: number;
@@ -185,6 +194,7 @@ export type Block =
   | LinedBoxBlock
   | HintLineBlock
   | QrCodeBlock
+  | HabitRowBlock
   | ProgressDotsBlock
   | FooterBlock
   | PageBreakBlock;
@@ -205,6 +215,9 @@ export function blockHeightMm(block: Block): number {
       return 14;
     case 'qrcode':
       return block.sizeMm;
+    case 'habitRow':
+      // 一行 7mm：与 checkboxList 的行高一致，勾选框有足够书写空间。
+      return ROW_HEIGHT_MM;
     case 'checkboxList':
       return BLOCK_PADDING_MM + block.rows * ROW_HEIGHT_MM;
     case 'timeLog':

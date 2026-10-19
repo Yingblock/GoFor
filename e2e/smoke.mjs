@@ -259,6 +259,13 @@ try {
   await page.getByText('地理', { exact: true }).first().waitFor({ timeout: 5000 });
   check('课表可新增全局科目', true);
 
+  // 默认规则只排周一；e2e 的「课程备注」用例要求今天有课，否则备注输入框不渲染。
+  // 先把规则改到今天（周日按钮显示「日」），再做其余断言。
+  const weekdayChar = ['一', '二', '三', '四', '五', '六', '日'][(new Date().getDay() + 6) % 7];
+  if (weekdayChar !== '一') {
+    await page.locator('button[aria-pressed]').filter({ hasText: weekdayChar }).first().click();
+  }
+
   await page.getByRole('button', { name: '加规则' }).click();
   await page
     .locator('[data-testid="week-grid"]')
@@ -349,6 +356,17 @@ try {
   check('首页有今日课表区块', (await page.getByText('今日课表').count()) > 0);
   check('首页有打卡提示区块', (await page.getByText('打卡提示').count()) > 0);
 
+  // 课程备注（P2-2.15）：首页课表行可以直接写备注，打印页应印在科目名后面。
+  let noteWritten = false;
+  const noteInputs = page.locator('input[aria-label$="备注"]');
+  if ((await noteInputs.count()) > 0) {
+    await noteInputs.first().fill('带错题本');
+    await noteInputs.first().press('Enter');
+    await sleep(400);
+    noteWritten = true;
+  }
+  check('首页课表行可写备注', noteWritten, noteWritten ? '' : '今天没有课，跳过');
+
   /* ------------------------------------------------------------ 打印 */
 
   await openGroup(page, '导出');
@@ -361,6 +379,15 @@ try {
     (await page.getByText('今日课表').count()) > 0,
     '（今天可能无课，但区块必须存在）',
   );
+
+  // 打卡行（P2-2.13）：e2e 前面已经建了「背单词」，默认 A4 模板要把它印出来。
+  const printedHabit = await page.locator('.print-page').first().getByText('背单词').count();
+  check('纸面包含打卡行', printedHabit > 0);
+
+  if (noteWritten) {
+    const printedNote = await page.locator('.print-page').first().getByText('带错题本').count();
+    check('课程备注印在纸面上', printedNote > 0);
+  }
 
   /* ------------------------------------------------------ 命令面板与 PDF */
 

@@ -1,5 +1,12 @@
 import { type AppConfig, DEFAULT_PRINT_TEMPLATE, mergeConfig } from '@gofor/core/config';
-import { dateKey, type StoredTemplate, type Subject, type Task } from '@gofor/core/domain';
+import {
+  type CourseNote,
+  dateKey,
+  type StoredTemplate,
+  type Subject,
+  type Task,
+} from '@gofor/core/domain';
+import { type Habit, isHabitActiveOn } from '@gofor/core/habits';
 import { materialize, type PaperId } from '@gofor/core/print';
 import { occurrencesOn, parseTimetable } from '@gofor/core/timetable';
 import {
@@ -8,6 +15,8 @@ import {
   ensureSubjects,
   exportAll,
   importAll,
+  listCourseNotesByDate,
+  listHabits,
   listSubjects,
   listTasks,
   listTemplates,
@@ -63,11 +72,16 @@ function isDesktopLayout(): boolean {
   return window.matchMedia('(min-width: 768px)').matches;
 }
 
-/** 当日课表的一行：时间 + 科目名。纸面只用 `time`，首页显示 `time–end` 区间。 */
+/** 当日课表的一行：时间 + 科目名 + 当天备注（P2-2.15）。 */
 interface ScheduleEntry {
   time: string;
   end: string;
   label: string;
+  /** 课程 id 与开始分钟：备注按「日期 + 课程 + 节次」定位。 */
+  courseId: string;
+  startMinute: number;
+  /** 当天这一节的备注，空串表示没写；纸面印在科目名后面。 */
+  note: string;
 }
 
 /** 当日第几分钟 → 'HH:mm'。纸面只认字符串，格式化留在宿主层做。 */
@@ -95,9 +109,24 @@ export function App() {
   const tasks = useLiveQuery(() => listTasks(db), [], [] as Task[]);
   /** 用户模板：配置里的 template 可能指向它们，打印层 / 打印页下拉都从这里取。 */
   const customTemplates = useLiveQuery(() => listTemplates(db), [], [] as StoredTemplate[]);
+  /** 今天该做的打卡项：打印到纸上的「打卡行」，扫描后按 habit id 回填。 */
+  const habits = useLiveQuery(() => listHabits(db), [], [] as Habit[]);
+  const activeHabits = useMemo(
+    () =>
+      habits
+        .filter((habit) => isHabitActiveOn(habit, today))
+        .map((habit) => ({ id: habit.id, name: habit.name })),
+    [habits, today],
+  );
 
   // 课表存在 Dexie 里是 `unknown`（导入可能带进坏数据），用上面的守卫收窄。
   const timetable = useLiveQuery(() => loadTimetable(db, TIMETABLE_ID), [], undefined);
+  /** 今天的课程备注：打印到课表行后面；扫码回填手写备注要 OCR，属 P4。 */
+  const courseNotes = useLiveQuery(
+    () => listCourseNotesByDate(db, today),
+    [today],
+    [] as CourseNote[],
+  );
   const subjects = useLiveQuery(() => listSubjects(db), [], [] as Subject[]);
 
   /**
@@ -115,9 +144,15 @@ export function App() {
 
     try {
       const occurrences = occurrencesOn(today, data).sort((a, b) => a.startMinute - b.startMinute);
+      const noteByCourse = new Map(
+        courseNotes.map((note) => [`${note.courseId}@${note.startMinute}`, note.text]),
+      );
       return occurrences.map((occurrence) => ({
         time: clockLabel(occurrence.startMinute),
         end: clockLabel(occurrence.endMinute),
+        courseId: occurrence.courseId,
+        startMinute: occurrence.startMinute,
+        note: noteByCourse.get(`${occurrence.courseId}@${occurrence.startMinute}`) ?? '',
         // 优先按 id 对到科目表；课表里的 Course 是本地快照，对不上时退回它自己的名字，
         // 免得纸上印出一串 id。
         label:
@@ -130,7 +165,7 @@ export function App() {
       // 宁可纸面上没有课表，也不能让整个 App 白屏。
       return [];
     }
-  }, [subjects, timetable, today]);
+  }, [courseNotes, subjects, timetable, today]);
 
   useEffect(() => {
     void currentConfigOrDefault(db).then((result) => {
@@ -205,8 +240,9 @@ export function App() {
       tasks,
       schedule,
       qr: { templateId: printTemplate.id, date: today, paper },
+      habits: activeHabits,
     }),
-    [paper, printTemplate.id, schedule, tasks, today],
+    [activeHabits, paper, printTemplate.id, schedule, tasks, today],
   );
 
   const navigate = useCallback((next: ScreenId) => {

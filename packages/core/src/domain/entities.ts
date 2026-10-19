@@ -117,6 +117,22 @@ export interface HabitLog {
 }
 
 /**
+ * 某一天某节课的备注（P2-2.15）。
+ *
+ * 主键 `${date}@${courseId}@${startMinute}`：同一天同一门课上两次也能分开写；
+ * 备注只属于这一天，不写回课表规则本身（否则"昨天的备注"会跟着课程走）。
+ */
+export interface CourseNote {
+  id: string;
+  date: string;
+  courseId: string;
+  /** 当天该节课的开始分钟数（0 起，用于区分同一天同一门课的不同节次）。 */
+  startMinute: number;
+  text: string;
+  updatedAt: number;
+}
+
+/**
  * 持久化的课表。
  *
  * 整份 `TimetableData` 存成一个 JSON，而不是拆成 courses/rules/overrides 三张表：

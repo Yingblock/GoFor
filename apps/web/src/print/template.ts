@@ -107,6 +107,8 @@ function isBlockLike(value: unknown): boolean {
       return isString(value.label) && isInteger(value.lines);
     case 'qrcode':
       return typeof value.sizeMm === 'number' && Number.isFinite(value.sizeMm) && value.sizeMm > 0;
+    case 'habitRow':
+      return true;
     case 'progressDots':
       return isInteger(value.total, 1);
     case 'pageBreak':

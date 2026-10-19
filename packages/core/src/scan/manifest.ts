@@ -15,6 +15,8 @@ import {
   blockHeightMm,
   type CheckboxGridBlock,
   type CheckboxListBlock,
+  HABIT_ROW_MAX,
+  type HabitRowBlock,
   type RatingGridBlock,
   ROW_HEIGHT_MM,
 } from '../print/blocks.ts';
@@ -111,6 +113,8 @@ function buildTargets(placement: Placement, page: PageLayout, input: ManifestInp
       return checkboxGridTargets(block, rect);
     case 'ratingGrid':
       return ratingGridTargets(block, rect);
+    case 'habitRow':
+      return habitRowTargets(block, placement, page, input);
     /*
      * 其余 kind 故意不产生 target：
      * - `timeLog`：格子里是手写的时间区间（如「19:30–20:10」），
@@ -200,6 +204,46 @@ function ratingGridTargets(
         value,
       });
     }
+  }
+  return targets;
+}
+
+/**
+ * 打卡行：一行并排若干「勾选框 + 习惯名」，每个习惯产生一个 checkbox target。
+ *
+ * 采样窗只覆盖**勾选框那一小块**（5mm 宽），不覆盖习惯名：名字是印刷字，
+ * 把它算进采样窗会让"没勾"的格子也带上墨迹。渲染端也按这个约定画
+ * （见 `PrintSheet` 的 `HabitRowView`），两边必须同时改。
+ */
+function habitRowTargets(
+  block: HabitRowBlock,
+  placement: Placement,
+  page: PageLayout,
+  input: ManifestInput,
+): ScanTarget[] {
+  const boundIds = input.bindings?.['habits.today'] ?? [];
+  const labels = input.labels?.['habits.today'] ?? [];
+  const shown = Math.min(boundIds.length, HABIT_ROW_MAX);
+  if (shown <= 0) return [];
+
+  const cellWidthMm = placement.widthMm / shown;
+  const targets: ScanTarget[] = [];
+  for (let index = 0; index < shown; index += 1) {
+    const rawId = boundIds[index];
+    if (rawId === undefined) continue;
+    targets.push({
+      targetId: `${block.id}/h${index + 1}`,
+      kind: 'checkbox',
+      label: labels[index] ?? `打卡 ${index + 1}`,
+      rect: {
+        x: (placement.xMm + index * cellWidthMm) / page.widthMm,
+        y: placement.yMm / page.heightMm,
+        w: Math.min(5, cellWidthMm) / page.widthMm,
+        h: ROW_HEIGHT_MM / page.heightMm,
+      },
+      payload: rawId,
+      applyPayload: applyPayloadFor('habits.today', rawId),
+    });
   }
   return targets;
 }

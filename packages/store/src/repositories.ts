@@ -3,6 +3,7 @@ import {
   type Checkin,
   type Checklist,
   type ChecklistLog,
+  type CourseNote,
   DEFAULT_SUBJECT_NAMES,
   type DiaryEntry,
   type HabitLog,
@@ -368,6 +369,7 @@ export interface ExportBundle {
   checklistLogs?: ChecklistLog[];
   scanBatches?: ScanBatch[];
   sheetManifests?: SheetManifestRecord[];
+  courseNotes?: CourseNote[];
 }
 
 export async function exportAll(database: GoForDb): Promise<ExportBundle> {
@@ -389,6 +391,7 @@ export async function exportAll(database: GoForDb): Promise<ExportBundle> {
     checklistLogs,
     scanBatches,
     sheetManifests,
+    courseNotes,
   ] = await Promise.all([
     listSubjects(database),
     listTasks(database),
@@ -406,6 +409,7 @@ export async function exportAll(database: GoForDb): Promise<ExportBundle> {
     database.checklistLogs.toArray(),
     database.scanBatches.toArray(),
     database.sheetManifests.toArray(),
+    database.courseNotes.toArray(),
   ]);
   return {
     format: 'gofor-export',
@@ -428,6 +432,7 @@ export async function exportAll(database: GoForDb): Promise<ExportBundle> {
     checklistLogs,
     scanBatches,
     sheetManifests,
+    courseNotes,
   };
 }
 
@@ -449,6 +454,7 @@ export interface ImportResult {
     checklistLogs: number;
     scanBatches: number;
     sheetManifests: number;
+    courseNotes: number;
   };
   warnings: string[];
 }
@@ -489,6 +495,7 @@ export async function importAll(database: GoForDb, bundle: ExportBundle): Promis
       database.checklistLogs,
       database.scanBatches,
       database.sheetManifests,
+      database.courseNotes,
     ],
     async () => {
       if (bundle.config) await saveConfig(database, bundle.config);
@@ -509,6 +516,7 @@ export async function importAll(database: GoForDb, bundle: ExportBundle): Promis
       await database.checklistLogs.bulkPut(bundle.checklistLogs ?? []);
       await database.scanBatches.bulkPut(bundle.scanBatches ?? []);
       await database.sheetManifests.bulkPut(bundle.sheetManifests ?? []);
+      await database.courseNotes.bulkPut(bundle.courseNotes ?? []);
     },
   );
 
@@ -530,6 +538,7 @@ export async function importAll(database: GoForDb, bundle: ExportBundle): Promis
       checklistLogs: bundle.checklistLogs?.length ?? 0,
       scanBatches: bundle.scanBatches?.length ?? 0,
       sheetManifests: bundle.sheetManifests?.length ?? 0,
+      courseNotes: bundle.courseNotes?.length ?? 0,
     },
     warnings,
   };
@@ -695,6 +704,43 @@ export async function updateScanBatchStatus(
 
 export async function deleteScanBatch(database: GoForDb, id: string): Promise<void> {
   await database.scanBatches.delete(id);
+}
+
+/* ------------------------------------------------- P2-2.15：每日课程备注 */
+
+/** 备注主键：同一天、同一门课、同一节次才共用一条。 */
+export function courseNoteId(date: string, courseId: string, startMinute: number): string {
+  return `${date}@${courseId}@${startMinute}`;
+}
+
+/**
+ * 写一条课程备注；空白文本等价于删除。
+ *
+ * 为什么空文本要删：留着空记录会让"这一天有没有备注"的判断变复杂，
+ * 而且导出文件里会多出一堆没用的行。
+ */
+export async function saveCourseNote(
+  database: GoForDb,
+  note: Omit<CourseNote, 'id' | 'updatedAt'>,
+  now: number,
+): Promise<void> {
+  const id = courseNoteId(note.date, note.courseId, note.startMinute);
+  if (note.text.trim() === '') {
+    await database.courseNotes.delete(id);
+    return;
+  }
+  await database.courseNotes.put({ ...note, id, text: note.text.trim(), updatedAt: now });
+}
+
+/** 某一天的全部备注，按课程 id 与节次排好。 */
+export async function listCourseNotesByDate(
+  database: GoForDb,
+  date: string,
+): Promise<CourseNote[]> {
+  const notes = await database.courseNotes.where('date').equals(date).toArray();
+  return notes.sort(
+    (a, b) => a.startMinute - b.startMinute || a.courseId.localeCompare(b.courseId),
+  );
 }
 
 /* ------------------------------------------- P2：打印坐标清单（回填用） */
