@@ -380,6 +380,10 @@ try {
     '（今天可能无课，但区块必须存在）',
   );
 
+  // P2-2.17：每页四角印 3mm 定位块，扫描端据此自动框选。
+  const fiducials = await page.locator('.print-page').first().locator('[data-fiducial]').count();
+  check('纸面四角有定位块', fiducials === 4, `${fiducials} 个`);
+
   // 打卡行（P2-2.13）：e2e 前面已经建了「背单词」，默认 A4 模板要把它印出来。
   const printedHabit = await page.locator('.print-page').first().getByText('背单词').count();
   check('纸面包含打卡行', printedHabit > 0);
@@ -552,6 +556,8 @@ try {
     mimeType: 'image/png',
     buffer: Buffer.from(inkedBase64, 'base64'),
   });
+  await page.waitForTimeout(600);
+  check('扫描：自动识别四角定位点', (await page.getByText('已自动识别四角定位点').count()) > 0);
 
   // 自动找角会把底部那条墨迹带当成背景边界，所以先点「重置四角」用确定性内缩矩形。
   await page.getByRole('button', { name: '重置四角' }).click();

@@ -11,7 +11,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
 任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
 
-验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 90 项浏览器 e2e）：
+验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 97 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
 - ✅ TypeScript 7.0.2 strict
@@ -57,7 +57,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续学习） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
-测试：core 348 + store 42 + vision 38 = **428 单测**；e2e **90 项**（含条码兜底、打卡行、课程备注）。
+测试：core 348 + store 42 + vision 41 = **431 单测**；e2e **97 项**（含条码兜底、打卡行、课程备注、定位块）。
 
 ### 第三批反馈修复（2026-xx）
 
@@ -212,7 +212,7 @@ P1 / P2 已完成（含 P2-2.12 条码、2.13 打卡行、2.15 课程备注、2.
 ## 什么坏了 / 什么没做完
 
 - 无已知崩溃。`apps/web` 还没接路由与 shadcn/ui 组件库（当前是手写 Tailwind）。
-- 首屏 bundle **约 1.18 MB（gzip 361 KB）**，单包、无分包；ZXing 是主要增量。PWA 首次加载后走 Service Worker，但手机上首次打开明显变慢。计划：扫描页动态 `import()` ZXing（见 LATER）。
+- 首屏 bundle **约 1.19 MB（gzip 362 KB）**，单包、无分包；ZXing 是主要增量。PWA 首次加载后走 Service Worker，但手机上首次打开明显变慢。计划：扫描页动态 `import()` ZXing（见 LATER）。
 - A4 纸面底部约 1/4 留白（留给手写），不是 bug。
 
 ## 怎么跑起来
@@ -242,6 +242,17 @@ pnpm verify      # typecheck + test + build + e2e
 - 墨迹阈值：0.12；`scan.autoApply = false`（识别结果进待确认列表）。
 
 ## 最近一次更新
+
+2026-10-20 **GitHub Release `v0.2.6-p2` 已发布**（commit `740e3b9`，Windows zip，
+sha256 `14cdc2ee…1779`，release notes 含已知问题）：深色主题 / 打卡上纸 / 课程备注 / ZXing 条码。
+
+同日 **P2-2.17 v1**：四角定位块 + 自动找纸 + 勾选框窄采样（详见下一条）。
+
+
+2026-10-20 **P2-2.17 v1**：每页四角印 3mm 定位块（`FIDUCIAL_*` 常量在 core，打印/扫描共用），
+扫描端用 `findFiducialQuad`（vision 连通域）自动找纸，并把定位块中心四角按纸张尺寸外扩到真实纸角；
+`checkboxList` 的采样窗从整行缩到勾选框 5mm，减少印刷标题造成的误判。区块条码/块内局部坐标尚未实现。
+
 
 2026-10-20 **规划（仅文档，未写代码）**：按用户确认，把「文件柜 / 单词库 / 转换插件 / QQ 连接器」
 排进后续阶段——P3-3.7/3.8（内容模块与转换器/连接器契约）、P4-4.15/4.16（最小资产层、单词库 v1）、

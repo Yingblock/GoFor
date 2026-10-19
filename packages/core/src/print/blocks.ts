@@ -32,6 +32,12 @@ export const BLOCK_KINDS = [
 
 export type BlockKind = (typeof BLOCK_KINDS)[number];
 
+/** 四角定位块（P2-2.17）：边长与离页边距离（毫米）。 */
+export const FIDUCIAL_SIZE_MM = 3;
+export const FIDUCIAL_OFFSET_MM = 4;
+/** 定位块中心离页边的距离：扫描端把中心四角外扩到真实纸角时用。 */
+export const FIDUCIAL_INSET_MM = FIDUCIAL_OFFSET_MM + FIDUCIAL_SIZE_MM / 2;
+
 /** 书写行高（毫米）。约等于正常手写一行的高度。 */
 export const ROW_HEIGHT_MM = 7;
 /** 时间登记行需要更多空间（要写"做了什么"+两组时间）。 */

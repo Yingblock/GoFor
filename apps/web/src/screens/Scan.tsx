@@ -40,7 +40,7 @@ import {
 import { CameraCapture } from './scan/CameraCapture.tsx';
 import { CornerPicker } from './scan/CornerPicker.tsx';
 import { type LoadedPhoto, loadPhotoFile } from './scan/capture.ts';
-import { readSheet, sampleTargets } from './scan/pipeline.ts';
+import { readFiducialQuad, readSheet, sampleTargets } from './scan/pipeline.ts';
 import { ScanReview } from './scan/ScanReview.tsx';
 
 type Stage = 'pick' | 'corner' | 'rebuild' | 'review';
@@ -80,6 +80,8 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState<MissingManifest | null>(null);
+  /** 定位块自动给出的四角；用户确认时若没动过，矫正时要外扩到真实纸角。 */
+  const [fiducialQuad, setFiducialQuad] = useState<Quad | null>(null);
 
   const refreshRecent = useCallback(async () => {
     setRecent(await listScanBatches(db, 8));
@@ -91,10 +93,14 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
 
   /** 拿到照片后的公共入口：选文件和相机拍都走这一条，后面流程完全一致。 */
   const enterCorner = (loaded: LoadedPhoto) => {
-    // 自动找纸只用来给一个初始猜测；找错了用户拖一下就行，找不到就内缩矩形。
-    const guess = detectPageQuad(binarize(toGray(loaded.image)), loaded.width, loaded.height);
+    // 先找四角定位块（P2-2.17）：它们不依赖背景/阴影，比自动找纸稳。
+    // 找不到再退回页面连通域猜测；两个都没有就内缩矩形。
+    const fiducial = readFiducialQuad(loaded.image);
+    const guess =
+      fiducial ?? detectPageQuad(binarize(toGray(loaded.image)), loaded.width, loaded.height);
     setPhoto(loaded);
     setInitialQuad(guess ?? undefined);
+    setFiducialQuad(fiducial);
     setMissing(null);
     setStage('corner');
   };
@@ -170,7 +176,15 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
     setError(null);
     setMissing(null);
     try {
-      const sheet = readSheet(photo.image, quad, '');
+      // 只有"确认时四角仍是定位块给的"才按定位块外扩；用户拖过角就按纸角处理。
+      const untouched =
+        fiducialQuad !== null &&
+        quad.every(
+          (point, index) =>
+            Math.abs(point.x - (fiducialQuad[index]?.x ?? Number.NaN)) < 1.5 &&
+            Math.abs(point.y - (fiducialQuad[index]?.y ?? Number.NaN)) < 1.5,
+        );
+      const sheet = readSheet(photo.image, quad, '', { fiducialQuad: untouched });
       if (!sheet.ok) {
         setError(sheet.reason);
         return;
@@ -324,6 +338,7 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
     setStage('pick');
     setPhoto(null);
     setInitialQuad(undefined);
+    setFiducialQuad(null);
     setBatch(null);
     setCameraOpen(false);
     setError(null);
@@ -388,6 +403,11 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
 
       {photo !== null && stage === 'corner' ? (
         <section className="space-y-3">
+          {fiducialQuad !== null ? (
+            <p className="text-caption text-ok">
+              已自动识别四角定位点；可以直接确认，也可以拖角微调。
+            </p>
+          ) : null}
           <CornerPicker
             imageUrl={photo.url}
             naturalWidth={photo.width}

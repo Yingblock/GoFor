@@ -2,6 +2,8 @@ import type { Task } from '@gofor/core/domain';
 import {
   type Block,
   type CheckboxListBlock,
+  FIDUCIAL_OFFSET_MM,
+  FIDUCIAL_SIZE_MM,
   HABIT_ROW_MAX,
   layout,
   type Margin,
@@ -563,6 +565,36 @@ function HabitRowView({ data }: { data: SheetData }) {
   );
 }
 
+/** 四角定位块（P2-2.17）：实心黑方块，尺寸/位置来自 core 常量，扫描端据此自动找纸。 */
+function PageFiducials({ page }: { page: PageLayout }) {
+  const size = FIDUCIAL_SIZE_MM;
+  const offset = FIDUCIAL_OFFSET_MM;
+  const positions = [
+    { key: 'tl', left: offset, top: offset },
+    { key: 'tr', left: page.widthMm - offset - size, top: offset },
+    { key: 'br', left: page.widthMm - offset - size, top: page.heightMm - offset - size },
+    { key: 'bl', left: offset, top: page.heightMm - offset - size },
+  ];
+  return (
+    <>
+      {positions.map((position) => (
+        <div
+          key={position.key}
+          data-fiducial={position.key}
+          style={{
+            position: 'absolute',
+            left: mm(position.left),
+            top: mm(position.top),
+            width: mm(size),
+            height: mm(size),
+            background: '#111111',
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
 function PageView({ page, data }: { page: PageLayout; data: SheetData }) {
   return (
     <div
@@ -589,6 +621,7 @@ function PageView({ page, data }: { page: PageLayout; data: SheetData }) {
           <BlockView block={placement.block} data={data} />
         </div>
       ))}
+      <PageFiducials page={page} />
       <BarcodeStrip page={page} data={data} />
     </div>
   );

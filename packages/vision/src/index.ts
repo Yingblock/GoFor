@@ -4,7 +4,9 @@
  * 硬约束：零 DOM、零平台 API、零副作用（没有 Date.now / Math.random），
  * 因此可以在 Node 里被确定性测试。摄像头、Canvas、二维码解码都在宿主层。
  */
+
 export { binarize } from './binarize.ts';
+export { type FiducialOptions, findFiducialQuad } from './fiducial.ts';
 export { toGray } from './gray.ts';
 export { inkCount, inkRatio } from './ink.ts';
 export { otsuThreshold } from './otsu.ts';

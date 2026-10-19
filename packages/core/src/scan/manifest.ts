@@ -108,7 +108,7 @@ function buildTargets(placement: Placement, page: PageLayout, input: ManifestInp
 
   switch (block.kind) {
     case 'checkboxList':
-      return checkboxListTargets(block, rect, input);
+      return checkboxListTargets(block, rect, page, input);
     case 'checkboxGrid':
       return checkboxGridTargets(block, rect);
     case 'ratingGrid':
@@ -135,6 +135,7 @@ function buildTargets(placement: Placement, page: PageLayout, input: ManifestInp
 function checkboxListTargets(
   block: CheckboxListBlock,
   rect: { x: number; y: number; w: number; h: number },
+  page: PageLayout,
   input: ManifestInput,
 ): ScanTarget[] {
   if (block.rows <= 0) return [];
@@ -149,7 +150,9 @@ function checkboxListTargets(
       targetId: `${block.id}/r${index + 1}`,
       kind: 'checkbox',
       label: rowLabels?.[index] ?? `第 ${index + 1} 行`,
-      rect: cell,
+      // 只采勾选框那一小块（5mm），不把整行的印刷标题算进墨迹——
+      // 印刷字会抬高空白行的 ink，导致"没勾"被读成"勾了"。
+      rect: { ...cell, w: Math.min(cell.w, 5 / page.widthMm) },
       payload: rawId,
       applyPayload: rawId === null ? null : applyPayloadFor(block.bind, rawId),
     });

@@ -1,4 +1,4 @@
-import { PAPER_SIZES, type PaperId } from '@gofor/core/print';
+import { FIDUCIAL_INSET_MM, PAPER_SIZES, type PaperId } from '@gofor/core/print';
 import {
   decodeCode128Row,
   decodeQrLocated,
@@ -9,6 +9,7 @@ import {
 } from '@gofor/core/scan';
 import {
   binarize,
+  findFiducialQuad,
   type ImageDataLike,
   type Quad,
   toGray,
@@ -162,6 +163,27 @@ function isAroundQuad(point: { x: number; y: number }, quad: Quad): boolean {
     point.y >= minY - padY &&
     point.y <= maxY + padY
   );
+}
+
+/**
+ * 定位块中心四角 → 真实纸角。
+ *
+ * 定位块印在离页边 4mm 处（中心 5.5mm），所以找到的四角比真实纸角小一圈；
+ * 直接拿它矫正会让整页坐标向里缩约 5mm。这里按纸张尺寸把四角绕中心外扩：
+ * 横向乘 W/(W-11)、纵向乘 H/(H-11)。近似（不是严格补投影），但误差远小于
+ * 手动框选；真实使用中还会再经过一次四角确认。
+ */
+function expandFiducialQuad(quad: Quad, paper: string): Quad {
+  const size = PAPER_SIZES[paper as PaperId] ?? PAPER_SIZES.A4;
+  const inset = FIDUCIAL_INSET_MM;
+  const scaleX = size.widthMm / Math.max(1, size.widthMm - inset * 2);
+  const scaleY = size.heightMm / Math.max(1, size.heightMm - inset * 2);
+  const centerX = quad.reduce((sum, point) => sum + point.x, 0) / quad.length;
+  const centerY = quad.reduce((sum, point) => sum + point.y, 0) / quad.length;
+  return quad.map((point) => ({
+    x: centerX + (point.x - centerX) * scaleX,
+    y: centerY + (point.y - centerY) * scaleY,
+  })) as unknown as Quad;
 }
 
 /**
@@ -333,6 +355,16 @@ function decodeBarcodeFromPhoto(image: ImageDataLike): BarcodeHit | null {
   return null;
 }
 
+/**
+ * 从照片里找四角定位块（P2-2.17）。
+ *
+ * 返回的是**原图像素坐标**；找不到返回 null，由调用方回退手动四角。
+ * 这一步不依赖纸张尺寸/二维码，所以能在矫正之前跑。
+ */
+export function readFiducialQuad(image: ImageDataLike): Quad | null {
+  return findFiducialQuad(binarize(toGray(image)), image.width, image.height);
+}
+
 /** 纸张比例（宽/高）。用于决定矫正后的画布尺寸。 */
 function paperAspect(paper: string): number {
   const size = PAPER_SIZES[paper as PaperId];
@@ -367,7 +399,12 @@ export function binaryOfPage(page: ImageDataLike): Uint8Array {
  *
  * `paper` 允许不传：调用方可能已经解出链接，也可能让用户手选了纸张。
  */
-export function readSheet(image: ImageDataLike, quad: Quad, paper: string): ReadSheetResult {
+export function readSheet(
+  image: ImageDataLike,
+  quad: Quad,
+  paper: string,
+  options: { fiducialQuad?: boolean } = {},
+): ReadSheetResult {
   const located = decodeQrMultiScale(image);
   let qrOutsideFrame = false;
 
@@ -376,7 +413,10 @@ export function readSheet(image: ImageDataLike, quad: Quad, paper: string): Read
       const parsed = parseFillLink(located.text);
       if (parsed.ok) {
         const link = parsed.value;
-        const page = warpToPage(image, quad, paper === '' ? link.paper : paper);
+        const effectivePaper = paper === '' ? link.paper : paper;
+        const effectiveQuad =
+          options.fiducialQuad === true ? expandFiducialQuad(quad, effectivePaper) : quad;
+        const page = warpToPage(image, effectiveQuad, effectivePaper);
         return {
           ok: true,
           source: 'qr',
@@ -396,7 +436,9 @@ export function readSheet(image: ImageDataLike, quad: Quad, paper: string): Read
   if (zxingHit !== null) {
     const code = parseSheetCode(zxingHit.text);
     if (code !== null && (zxingHit.center === undefined || isAroundQuad(zxingHit.center, quad))) {
-      const page = warpToPage(image, quad, code.paper);
+      const effectiveQuad =
+        options.fiducialQuad === true ? expandFiducialQuad(quad, code.paper) : quad;
+      const page = warpToPage(image, effectiveQuad, code.paper);
       return {
         ok: true,
         source: 'barcode',
@@ -411,7 +453,9 @@ export function readSheet(image: ImageDataLike, quad: Quad, paper: string): Read
   // 2) 自己写的解码器兜底（清晰的截图/扫描件；真实照片基本走不到这里）。
   const code = readBarcodeFromPhoto(image, quad);
   if (code !== null) {
-    const page = warpToPage(image, quad, code.paper);
+    const effectiveQuad =
+      options.fiducialQuad === true ? expandFiducialQuad(quad, code.paper) : quad;
+    const page = warpToPage(image, effectiveQuad, code.paper);
     return {
       ok: true,
       source: 'barcode',

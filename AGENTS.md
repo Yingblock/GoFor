@@ -197,6 +197,12 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
   渲染时行高要正好等于 `ROW_HEIGHT_MM` 并从块顶铺起。改渲染或改切分都要同步改另一边。
 - **坐标清单在进入打印页时就固化**（`sheetManifests`，键 `模板@日期@纸张`），不要绑在
   「打印这一张」按钮上：用户经常直接按 Ctrl/⌘+P，那条路不会触发点击处理。
+- **四角定位块（fiducial）的尺寸/位置是打印与扫描的共享契约**：`FIDUCIAL_SIZE_MM` /
+  `FIDUCIAL_OFFSET_MM` / `FIDUCIAL_INSET_MM` 在 `core/print/blocks.ts`，打印在
+  `PrintSheet`、检测在 `vision/fiducial.ts`、外扩在 `scan/pipeline.ts`。改任何一处
+  都要同时改另外两个，否则自动框选会整体偏移。
+- **`checkboxList` 的采样窗只覆盖勾选框（5mm）**，不要扩到整行：行里的印刷标题是墨迹，
+  会把"没勾"读成"勾了"。`manifest.ts` 与 `PrintSheet` 的勾选框位置必须同时改。
 - **二维码 ≥ 16mm**。12mm 在 300dpi 下每模块约 0.3mm，手机经常扫不出；
   e2e 用 4 倍像素密度截图当"照片"来验证整条链路。
 - **二维码从整张照片解码，但必须按手动四角做位置校验**（允许 10% 外溢）：

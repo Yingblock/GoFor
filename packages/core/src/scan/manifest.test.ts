@@ -45,7 +45,7 @@ const input = (blocks: Block[], overrides: Partial<ManifestInput> = {}): Manifes
 });
 
 describe('坐标注册表：checkboxList', () => {
-  it('单行坐标落在块内，且是整页归一化坐标', () => {
+  it('单行坐标只覆盖勾选框（5mm），且是整页归一化坐标', () => {
     const blocks = [taskList(1)];
     const manifest = buildSheetManifest(input(blocks));
     const page = layout(blocks, { paper: 'A5' }).pages[0];
@@ -58,12 +58,13 @@ describe('坐标注册表：checkboxList', () => {
     // 只覆盖内容区：1 行 × 7mm ÷ 块高 15mm（8mm 底部留白不采样）
     expect(target?.rect.x).toBeCloseTo(expected.x);
     expect(target?.rect.y).toBeCloseTo(expected.y);
-    expect(target?.rect.w).toBeCloseTo(expected.w);
+    // 采样窗只取行首的勾选框（5mm），不覆盖整行的印刷标题。
+    expect(target?.rect.w).toBeCloseTo(5 / 148);
     expect(target?.rect.h).toBeCloseTo((expected.h * 7) / 15);
     // A5 宽 148mm、默认边距 8mm：整页坐标从 8/148 开始。
     expect(target?.rect.x).toBeCloseTo(8 / 148);
     expect(target?.rect.y).toBeCloseTo(8 / 210);
-    expect(target?.rect.w).toBeCloseTo((148 - 16) / 148);
+    expect(target?.rect.w).toBeLessThan((148 - 16) / 148);
     expect(target?.rect.w).toBeLessThanOrEqual(1);
     expect(target?.rect.h).toBeLessThanOrEqual(1);
   });
