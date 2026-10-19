@@ -372,6 +372,28 @@ try {
     const longWidth = (await noteInputs.first().boundingBox())?.width ?? 0;
     check('课程备注框随文字变长', longWidth > shortWidth + 4, `${shortWidth}px → ${longWidth}px`);
 
+    // 备注变长时不能把同一行的科目名/结束时间挤没：
+    // 科目名 min-w-16（64px）且溢出省略，结束时间 shrink-0 固定在最右。
+    const noteRow = noteInputs.first().locator('xpath=ancestor::li');
+    const rowBox = await noteRow.boundingBox();
+    const labelBox = await noteRow.locator('span').nth(1).boundingBox();
+    const endSpan = noteRow.locator('span').last();
+    const endBox = await endSpan.boundingBox();
+    const endText = (await endSpan.innerText()).trim();
+    check(
+      '长备注不挤掉科目名',
+      (labelBox?.width ?? 0) >= 60,
+      `${Math.round(labelBox?.width ?? 0)}px（下限 64px）`,
+    );
+    check(
+      '长备注不顶掉结束时间',
+      !!endBox &&
+        endBox.width > 0 &&
+        /– \d{2}:\d{2}/.test(endText) &&
+        endBox.x + endBox.width <= (rowBox?.x ?? 0) + (rowBox?.width ?? 0) + 1,
+      `${endText} 右缘 ${Math.round((endBox?.x ?? 0) + (endBox?.width ?? 0))}`,
+    );
+
     // 恢复短备注，后面的打印断言用这一条。
     await noteInputs.first().fill('带错题本');
     await noteInputs.first().press('Enter');

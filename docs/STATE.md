@@ -67,6 +67,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 要能改「当前时间」调试（后期删） | 宿主层 `appClock` + 侧栏「调试 · 当前时间」面板：只偏 `now()`，`monotonic`/定时器原样转发（偏了会算坏运行中的番茄钟）；偏移存 localStorage，应用后 reload；`TODO(debug-clock)` 可 grep，三步删除法在 `docs/LATER.md` |
 | 首页要打卡提示 | 首页「打卡提示」：今天该打未打的项，可就地勾完并显示 `已完成 x/y`；**只读 `habitLogs`**，不看番茄钟 |
 | 首页要看当天课表 | 首页「今日课表」：起止时间 + 科目，复用 App 里给打印层算好的同一份 schedule；今天没课明确写「今天没有课」 |
+| 课表备注会挤掉科目名/结束时间 | 备注框随内容变宽，但**不再设百分比上限**（上限会把空闲宽度浪费掉）；改用 flex 收缩兜底：科目名 `min-w-16` + `truncate`（≥64px，超出省略号）、结束时间 `shrink-0`、整行 `min-w-0 overflow-hidden`。e2e 加「长备注不挤掉科目名」「长备注不顶掉结束时间」两条断言 |
 
 ### 第二批反馈修复（2026-xx）
 

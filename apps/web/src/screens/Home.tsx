@@ -75,7 +75,7 @@ function ScheduleNoteInput({ entry, date }: { entry: HomeScheduleEntry; date: st
         if (event.key === 'Enter') event.currentTarget.blur();
       }}
       title={draft === '' ? '添加课程备注' : draft}
-      className="min-w-16 max-w-[45%] shrink-0 rounded border-b border-line bg-transparent px-1 py-0.5 text-caption text-ellipsis outline-none transition-colors duration-fast placeholder:opacity-25 focus:border-accent md:max-w-[55%] [field-sizing:content]"
+      className="min-w-16 max-w-full shrink rounded border-b border-line bg-transparent px-1 py-0.5 text-caption text-ellipsis outline-none transition-colors duration-fast placeholder:opacity-25 focus:border-accent [field-sizing:content]"
     />
   );
 }
@@ -195,12 +195,15 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
               {schedule.map((entry) => (
                 <li
                   key={`${entry.time}-${entry.label}`}
-                  className="flex items-center gap-3 px-4 py-2 text-body"
+                  className="flex min-w-0 items-center gap-3 overflow-hidden px-4 py-2 text-body"
                 >
                   <span className="w-11 shrink-0 tabular-nums opacity-45">{entry.time}</span>
-                  <span className="min-w-0 flex-1 break-words">{entry.label}</span>
+                  {/* 科目名至少保留 4rem：备注再长也不能把课程名挤没。 */}
+                  <span className="min-w-16 flex-1 truncate">{entry.label}</span>
                   <ScheduleNoteInput entry={entry} date={today} />
-                  <span className="text-caption tabular-nums opacity-30">– {entry.end}</span>
+                  <span className="shrink-0 text-caption tabular-nums opacity-30">
+                    – {entry.end}
+                  </span>
                 </li>
               ))}
             </ul>
