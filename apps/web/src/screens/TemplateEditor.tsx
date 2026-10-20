@@ -1,5 +1,5 @@
 import { newId } from '@gofor/core';
-import { dateKey, type Task } from '@gofor/core/domain';
+import { dateKey } from '@gofor/core/domain';
 import {
   type Block,
   BUILTIN_TEMPLATES,
@@ -17,7 +17,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '../clock.ts';
-import { PrintPreview } from '../print/PrintSheet.tsx';
+import { PrintPreview, type SheetData } from '../print/PrintSheet.tsx';
 import {
   CUSTOM_TEMPLATE_PREFIX,
   customIdFromSelection,
@@ -81,6 +81,13 @@ const BLOCK_PRESETS: Record<string, () => Block> = {
 function todayLabel(date: string): string {
   const [year, month, day] = date.split('-');
   return `${year} 年 ${Number(month)} 月 ${Number(day)} 日`;
+}
+
+/** `YYYY-MM-DD` 加天数；只处理合法输入。 */
+function addDays(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  if (!year || !month || !day) return date;
+  return new Date(Date.UTC(year, month - 1, day) + days * 86_400_000).toISOString().slice(0, 10);
 }
 
 /** 数字输入框：解析失败就丢弃这次输入，草稿里永远不会出现 NaN 或负值。 */
@@ -370,8 +377,8 @@ function BlockFields({ block, onChange }: { block: Block; onChange: (next: Block
 }
 
 export interface TemplateEditorScreenProps {
-  /** 当日课表，已排序；没有课就是空数组。编辑器只做预览，不负责算课表。 */
-  schedule: { time: string; label: string }[];
+  /** 按日期现算纸面数据（任务/课表/备注/打卡/二维码），与打印页同一份逻辑。 */
+  buildSheetData: (date: string, templateId: string) => SheetData;
   /** 配置里当前的模板 id：进页面就选中它，避免「看到的不是要打印的那张」。 */
   initialTemplateId: string;
   /** 配置里当前的纸张。 */
@@ -385,12 +392,13 @@ export interface TemplateEditorScreenProps {
 
 /** 离线·M3 模板与校准页：选模板、改区块、换纸张、预览、打印。 */
 export function TemplateEditorScreen({
-  schedule,
+  buildSheetData,
   initialTemplateId,
   initialPaper,
   onPrint,
 }: TemplateEditorScreenProps) {
   const today = dateKey(appClock);
+  const [previewDate, setPreviewDate] = useState<string>(() => addDays(today, 1));
   const [selectedId, setSelectedId] = useState<string>(() => editorSelectionId(initialTemplateId));
   const [paper, setPaper] = useState<PaperId>(initialPaper);
   const [draft, setDraft] = useState<PrintTemplate | null>(null);
@@ -440,8 +448,12 @@ export function TemplateEditorScreen({
   }, [customId, draft, isCustom, paper, selectedId]);
 
   const blocks = useMemo(
-    () => materialize(currentTemplate, { date: today, dateLabel: todayLabel(today) }),
-    [currentTemplate, today],
+    () =>
+      materialize(currentTemplate, {
+        date: previewDate,
+        dateLabel: todayLabel(previewDate),
+      }),
+    [currentTemplate, previewDate],
   );
 
   const pageCount = layout(blocks, { paper: currentTemplate.paper }).pages.length;
@@ -757,16 +769,21 @@ export function TemplateEditorScreen({
         <PrintPreview
           blocks={blocks}
           paper={currentTemplate.paper}
-          data={{
-            tasks: [] as Task[],
-            schedule,
-            qr: {
-              templateId: currentTemplate.id,
-              date: dateKey(appClock),
-              paper: currentTemplate.paper,
-            },
-          }}
+          data={buildSheetData(previewDate, currentTemplate.id)}
         />
+        <label className="flex items-center gap-2 text-caption opacity-60">
+          <span>预览日期</span>
+          <input
+            type="date"
+            aria-label="预览日期"
+            value={previewDate}
+            onChange={(event) => {
+              if (event.target.value !== '') setPreviewDate(event.target.value);
+            }}
+            className="rounded-md border border-line bg-card px-2 py-1 text-xs"
+          />
+          <span className="opacity-50">默认明天；改日期可看当天纸面</span>
+        </label>
         {selectedId === CALIBRATION_TEMPLATE.id ? (
           <p className="text-caption leading-relaxed opacity-45">
             每台打印机第一次使用前打一张：确认有没有被整体缩放、四角有没有被裁掉。

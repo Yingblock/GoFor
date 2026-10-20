@@ -29,6 +29,13 @@ export interface WeekSectionProps {
   onWeekStartChange: (next: string) => void;
   /** 编辑模式点空格子：给这个科目在这一天这一节排一节课。 */
   onAddForCell: (courseId: string, day: number, periodIndex: number) => void;
+  /** 编辑模式点课程块选另一门课：把这一块换成那门课（只换科目，不动时间）。 */
+  onReplaceCourse: (input: {
+    date: string;
+    startPeriod: number;
+    span: number;
+    courseId: string;
+  }) => void;
   onDeleteRule: (ruleId: string) => void;
 }
 
@@ -50,6 +57,7 @@ export function WeekSection({
   subjects,
   onWeekStartChange,
   onAddForCell,
+  onReplaceCourse,
   onDeleteRule,
 }: WeekSectionProps) {
   /** 编辑模式默认关闭：课表首先是"看"的，改是偶发动作。 */
@@ -79,6 +87,18 @@ export function WeekSection({
     setPopover(null);
   };
 
+  /** 把当前这一块换成另一门课；和删除一样改完就关浮层。 */
+  const replaceCourseOfBlock = (courseId: string) => {
+    if (popover === null || popover.kind !== 'lesson') return;
+    onReplaceCourse({
+      date: popover.date,
+      startPeriod: popover.startPeriod,
+      span: popover.span,
+      courseId,
+    });
+    setPopover(null);
+  };
+
   /** 把浮层贴在格子左下角；下方放不下就翻到上面，横向不越界。 */
   const anchorOf = (element: HTMLElement): { x: number; y: number } => {
     const host = gridHostRef.current;
@@ -99,9 +119,10 @@ export function WeekSection({
     setPopover({ kind: 'add', day, periodIndex, ...anchorOf(event.currentTarget) });
   };
 
-  const openDeletePopover = (event: ReactMouseEvent<HTMLButtonElement>, occurrence: Occurrence) => {
+  const openLessonPopover = (event: ReactMouseEvent<HTMLButtonElement>, occurrence: Occurrence) => {
     setPopover({
-      kind: 'delete',
+      kind: 'lesson',
+      date: occurrence.date,
       ruleId: occurrence.ruleId,
       courseId: occurrence.courseId,
       startPeriod: occurrence.startPeriod,
@@ -173,7 +194,9 @@ export function WeekSection({
           </button>
         </div>
 
-        {editing ? <p className="text-[11px] opacity-45">点空白格子加课，点课程块删除</p> : null}
+        {editing ? (
+          <p className="text-[11px] opacity-45">点空白格子加课，点课程块换课或删除</p>
+        ) : null}
 
         <div ref={gridHostRef} className="relative">
           {/* 浮层用的是"相对容器"的静态坐标，横向滚动后会和格子错位；
@@ -268,10 +291,10 @@ export function WeekSection({
                     <button
                       key={occurrence.key}
                       type="button"
-                      onClick={(event) => openDeletePopover(event, occurrence)}
+                      onClick={(event) => openLessonPopover(event, occurrence)}
                       className={blockClass}
                       style={style}
-                      title={`${title}（点击删除）`}
+                      title={`${title}（点击换课或删除）`}
                     >
                       {label}
                     </button>
@@ -322,15 +345,48 @@ export function WeekSection({
                   <p className="px-1 pb-1 text-[11px] tabular-nums opacity-50">
                     {courseLabel(popover.courseId)} · 第 {popover.startPeriod} 节起
                   </p>
+                  {subjects.length === 0 ? (
+                    <p className="px-1 py-1 text-[11px] leading-relaxed opacity-50">
+                      还没有科目，先在「科目」里加一门。
+                    </p>
+                  ) : (
+                    <>
+                      <p className="px-1 pb-1 text-[11px] opacity-40">换成：</p>
+                      <ul className="max-h-40 overflow-y-auto" aria-label="换成哪门课">
+                        {subjects.map((subject) => {
+                          const current = subject.id === popover.courseId;
+                          return (
+                            <li key={subject.id}>
+                              <button
+                                type="button"
+                                onClick={() => replaceCourseOfBlock(subject.id)}
+                                aria-current={current ? 'true' : undefined}
+                                className={`w-full rounded px-2 py-1 text-left hover:bg-overlay ${
+                                  current ? 'opacity-40' : ''
+                                }`}
+                              >
+                                {subject.name}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </>
+                  )}
+                  {subjects.length > 0 ? (
+                    <p className="px-1 pt-1 text-[11px] leading-relaxed opacity-40">
+                      换课只改科目，不动时间与节次；作用于产生这一块的规则，这条规则排的其它天也会一起换。
+                    </p>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => removeRule(popover.ruleId)}
-                    className="w-full rounded px-2 py-1 text-left text-red-600 hover:bg-red-50"
+                    className="mt-1 w-full rounded px-2 py-1 text-left text-red-600 hover:bg-red-50"
                   >
                     删除这节
                   </button>
                   <p className="px-1 pt-1 text-[11px] leading-relaxed opacity-40">
-                    会删掉产生它的那条规则（这条规则排的其它天也一起消失）。
+                    会删掉产生这一块的第一条规则（这条规则排的其它天也一起消失）。
                     {popover.span > 1 ? '连堂块只删第一条规则，剩下的会变回单独的块。' : ''}
                   </p>
                 </>

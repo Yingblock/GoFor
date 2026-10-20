@@ -241,6 +241,17 @@ export function App() {
     [habits],
   );
 
+  /** 某一天的纸面数据（不含 blocks）：任务/课表/备注/打卡/二维码。 */
+  const buildSheetData = useCallback(
+    (date: string, templateIdForSheet: string): SheetData => ({
+      tasks: tasksForDate(date),
+      schedule: scheduleForDate(date),
+      qr: { templateId: templateIdForSheet, date, paper },
+      habits: habitsForDate(date),
+    }),
+    [habitsForDate, paper, scheduleForDate, tasksForDate],
+  );
+
   /**
    * 某一天的完整纸面：blocks + data（任务/课表/备注/打卡/二维码）。
    * 批量打印时每一天都走这一份，绝不共享"今天"的数据。
@@ -253,15 +264,10 @@ export function App() {
       });
       const sheetTasks = tasksForDate(date);
       const sheetHabits = habitsForDate(date);
-      const data: SheetData = {
-        tasks: sheetTasks,
-        schedule: scheduleForDate(date),
-        qr: { templateId: printTemplate.id, date, paper },
-        habits: sheetHabits,
-      };
+      const data = buildSheetData(date, printTemplate.id);
       return { date, blocks: sheetBlocks, data, tasks: sheetTasks, habits: sheetHabits };
     },
-    [habitsForDate, paper, printTemplate, scheduleForDate, tasksForDate],
+    [buildSheetData, habitsForDate, printTemplate, tasksForDate],
   );
 
   /** 当前打印队列（1 天或连续 N 天）。默认今天，进打印页后会改成明天。 */
@@ -424,7 +430,7 @@ export function App() {
       case 'templates':
         return (
           <TemplateEditorScreen
-            schedule={schedule}
+            buildSheetData={buildSheetData}
             initialTemplateId={printTemplate.id}
             initialPaper={paper}
             onPrint={printTemplateSelection}

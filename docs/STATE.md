@@ -11,7 +11,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
 任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
 
-验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 105 项浏览器 e2e）：
+验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 106 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
 - ✅ TypeScript 7.0.2 strict
@@ -57,7 +57,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续学习） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
-测试：core 348 + store 42 + vision 41 = **431 单测**；e2e **105 项**（含条码兜底、打卡行、课程备注、定位块、日期范围联动、每天预览、备注框自适应）。
+测试：core 353 + store 42 + vision 41 = **436 单测**；e2e **106 项**（含条码兜底、打卡行、课程备注、定位块、日期范围联动、每天预览、备注框自适应、模板预览日期、编辑模式换课）。
 
 ### 第三批反馈修复（2026-xx）
 
@@ -245,6 +245,11 @@ pnpm verify      # typecheck + test + build + e2e
 - 墨迹阈值：0.12；`scan.autoApply = false`（识别结果进待确认列表）。
 
 ## 最近一次更新
+
+2026-10-20 **模板/校准页预览日期**：预览下方新增日期选择（默认明天），预览按该日期现算任务/课表/备注/打卡与二维码，与打印页共用 `buildSheetData`。
+
+2026-10-20 **P2-2.19 课表编辑换课**：编辑模式点课程块，浮层除「删除这节」外列出全部科目，点一门即把这一块换成该课。只换科目、不动时间与节次；`replaceCourseForBlock`（core，5 测试）先展开当天课再按节次范围圈定规则，所以连堂块背后的多条规则会一起换，规则排的其它天也一起变；当天若有 `replace` 覆盖会一并清掉。e2e 新增「编辑模式点课程块可换课」。
+
 
 2026-10-20 **打印预览与滑块再调整**：多天预览改为横排自适应网格，已选/未选轨道改用 `strong`/`line-strong`；
 预览懒加载一次最多 100 天（可“加载更多”）；>31 天警告只在从 ≤31 跨到 >31 时触发一次。

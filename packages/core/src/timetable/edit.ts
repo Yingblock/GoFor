@@ -7,6 +7,7 @@
  */
 
 import type { Period } from '../config/schema.ts';
+import { occurrencesOn } from './occurrences.ts';
 import type { Rule, TimetableData } from './types.ts';
 
 /** 新规则的最小输入：id 由调用方生成。 */
@@ -74,6 +75,62 @@ export function addRuleForCell(
     span: 1,
     intervalWeeks: 1,
   });
+}
+
+/** 换课要定位的那一块：哪一天、从第几节起、占几节、换成哪门课。 */
+export interface ReplaceCourseInput {
+  /** 被点的那一块所在的日期（'YYYY-MM-DD'）。 */
+  date: string;
+  /** 块的起始节次。 */
+  startPeriod: number;
+  /** 块占的节数：连堂合并后可能大于 1。 */
+  span: number;
+  /** 新的科目 id。 */
+  courseId: string;
+}
+
+/**
+ * 把某一天的某一节课换成另一门课：只改科目，不动时间与节次。
+ *
+ * 换的是**产生这一块的规则**，不是这一天的临时调整——这和编辑模式里"点课块删除"
+ * 的粒度一致（那条规则排的其它天会一起变），用户在浮层里能看到同样的说明。
+ * 之所以用 `occurrencesOn` 而不是直接按 `byDay`/`startPeriod` 匹配规则：
+ * 连堂块可能是多条规则拼出来的，也可能被当天的 Override 挪过位置，
+ * 只有先展开再按节次范围圈定，才能把这一块背后的规则全部找齐。
+ *
+ * 当天若有 `action='replace'` 的代课覆盖，会一并删掉：否则规则换了科目，
+ * 那天的覆盖还会把显示改回旧课，等于点了没反应。
+ *
+ * 没有匹配到任何规则、或这一块已经是目标课程时，返回同一个引用（调用方据此跳过保存）。
+ */
+export function replaceCourseForBlock(
+  data: TimetableData,
+  input: ReplaceCourseInput,
+): TimetableData {
+  const endPeriod = input.startPeriod + Math.max(1, input.span) - 1;
+  const covered = occurrencesOn(input.date, data).filter(
+    (occurrence) =>
+      occurrence.startPeriod >= input.startPeriod &&
+      occurrence.startPeriod + occurrence.span - 1 <= endPeriod,
+  );
+  const ruleIds = new Set(covered.map((occurrence) => occurrence.ruleId));
+  if (ruleIds.size === 0) return data;
+  if (covered.every((occurrence) => occurrence.courseId === input.courseId)) return data;
+
+  return {
+    ...data,
+    rules: data.rules.map((rule) =>
+      ruleIds.has(rule.id) ? { ...rule, courseId: input.courseId } : rule,
+    ),
+    overrides: data.overrides.filter(
+      (override) =>
+        !(
+          ruleIds.has(override.ruleId) &&
+          override.date === input.date &&
+          override.action === 'replace'
+        ),
+    ),
+  };
 }
 
 /** 改某一节的起止时间；索引越界时原样返回。 */

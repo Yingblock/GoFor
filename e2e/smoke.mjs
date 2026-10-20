@@ -257,6 +257,10 @@ try {
   await page.fill('input[placeholder="科目名，如 数学"]', '地理');
   await page.getByRole('button', { name: '加科目' }).click();
   await page.getByText('地理', { exact: true }).first().waitFor({ timeout: 5000 });
+  // 第二门科目：换课用例要换到一门只出现在这一块的课，删除断言才不会误命中别的块。
+  await page.fill('input[placeholder="科目名，如 数学"]', '历史');
+  await page.getByRole('button', { name: '加科目' }).click();
+  await page.getByText('历史', { exact: true }).first().waitFor({ timeout: 5000 });
   check('课表可新增全局科目', true);
 
   // 默认规则只排周一；e2e 的「课程备注」用例要求今天有课，否则备注输入框不渲染。
@@ -275,8 +279,8 @@ try {
   check('课程表可录入并在周视图显示', true);
 
   /*
-   * 编辑模式：点空白格子加课 → 课程块出现在周视图 → 点块删除 → 块消失。
-   * 这条链路是课表拆分时搬动最多的逻辑（浮层定位、占格判断、增删规则），
+   * 编辑模式：点空白格子加课 → 课程块出现在周视图 → 点块换课 → 点块删除 → 块消失。
+   * 这条链路是课表拆分时搬动最多的逻辑（浮层定位、占格判断、增删规则、换科目），
    * 单测只能覆盖纯函数，真实的点击/浮层必须由浏览器兜。
    */
   await page.getByRole('button', { name: '编辑模式' }).click();
@@ -295,13 +299,27 @@ try {
     .catch(() => false);
   check('编辑模式点格子可加课', addedByCell);
 
+  // 换课：点课程块 → 浮层里列出科目 → 点「历史」→ 这一块变成历史，地理那块消失。
   await weekGrid.getByRole('button', { name: '地理' }).first().click();
+  const lessonDialog = page.getByRole('dialog', { name: '编辑格子' });
+  await lessonDialog.waitFor({ timeout: 5000 });
+  await lessonDialog.getByRole('button', { name: '历史', exact: true }).click();
+  const replacedByCell = await weekGrid
+    .getByRole('button', { name: '历史' })
+    .first()
+    .waitFor({ timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  const oldGone = (await weekGrid.getByRole('button', { name: '地理' }).count()) === 0;
+  check('编辑模式点课程块可换课', replacedByCell && oldGone);
+
+  await weekGrid.getByRole('button', { name: '历史' }).first().click();
   await page
     .getByRole('dialog', { name: '编辑格子' })
     .getByRole('button', { name: '删除这节' })
     .click();
   const removedByCell = await weekGrid
-    .getByText('地理', { exact: true })
+    .getByText('历史', { exact: true })
     .first()
     .waitFor({ state: 'detached', timeout: 5000 })
     .then(() => true)
@@ -321,7 +339,29 @@ try {
   await page.waitForSelector('text=每台打印机第一次使用前', { timeout: 5000 });
   check('模板编辑器与校准页可打开', true);
 
+  // 模板/校准页的预览日期：默认明天，可切换。
+  const tplToday = new Date().toLocaleDateString('sv-SE');
+  const tplTomorrow = new Date(Date.now() + 86_400_000).toLocaleDateString('sv-SE');
+  const previewDateInput = page.getByLabel('预览日期');
+  check(
+    '模板预览默认明天',
+    (await previewDateInput.inputValue()) === tplTomorrow,
+    await previewDateInput.inputValue(),
+  );
+  // 校准页的标题是固定文案（模板只在标题为空时才填中文日期），断言日期必须换到
+  // 「我的一天」；否则这条 check 永远失败，看起来像功能坏了。
   await page.getByRole('button', { name: '我的一天' }).click();
+  await previewDateInput.fill(tplToday);
+  await sleep(300);
+  const [tplYear, tplMonth, tplDay] = tplToday.split('-').map(Number);
+  const tplPageText = await page.locator('.print-page').first().innerText();
+  check(
+    '模板预览日期可切换',
+    tplPageText.includes(`${tplYear} 年 ${tplMonth} 月 ${tplDay} 日`) &&
+      (await previewDateInput.inputValue()) === tplToday,
+    tplPageText.slice(0, 60),
+  );
+
   const missing = [];
   for (const size of ['A4', 'A6', 'B5 (JIS)', 'Letter']) {
     if ((await page.getByRole('button', { name: size, exact: true }).count()) === 0) {

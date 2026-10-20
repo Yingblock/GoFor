@@ -8,6 +8,7 @@ import {
   occupiedCellKeys,
   parseTimetable,
   removeRule,
+  replaceCourseForBlock,
   type TimetableData,
   validatePeriods,
   validateRules,
@@ -239,6 +240,19 @@ export function TimetableScreen() {
   );
 
   /**
+   * 编辑模式点课程块换课：只换科目，不动时间与节次。
+   *
+   * 展开/圈定规则在 core 的 `replaceCourseForBlock`：连堂块可能由多条规则拼成，
+   * 也可能被 Override 挪过位置，只有先展开才能把这一块背后的规则找齐。
+   */
+  const replaceCourseAt = useCallback(
+    (input: { date: string; startPeriod: number; span: number; courseId: string }) => {
+      update((current) => replaceCourseForBlock(current, input));
+    },
+    [update],
+  );
+
+  /**
    * 卸载时把没落库的改动写掉。
    *
    * 防抖窗口是 600ms：用户改完立刻切页，定时器还没触发，不能因为"没点保存"就丢改动。
@@ -355,6 +369,7 @@ export function TimetableScreen() {
         subjects={subjects}
         onWeekStartChange={setWeekStart}
         onAddForCell={addRuleAt}
+        onReplaceCourse={replaceCourseAt}
         onDeleteRule={removeRuleById}
       />
 

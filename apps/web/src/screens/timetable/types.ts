@@ -2,7 +2,9 @@
 export type EditPopover =
   | { kind: 'add'; day: number; periodIndex: number; x: number; y: number }
   | {
-      kind: 'delete';
+      kind: 'lesson';
+      /** 被点的那一块是哪一天（换课要用它定位规则）。 */
+      date: string;
       ruleId: string;
       courseId: string;
       startPeriod: number;
@@ -13,4 +15,4 @@ export type EditPopover =
 
 /** 浮层宽/高估算：只用于防止浮层被网格容器裁掉，不参与布局计算。 */
 export const POPOVER_WIDTH = 224;
-export const POPOVER_HEIGHT = 260;
+export const POPOVER_HEIGHT = 320;

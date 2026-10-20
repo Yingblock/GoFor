@@ -9,6 +9,7 @@ import {
   movePeriod,
   removePeriodAt,
   removeRule,
+  replaceCourseForBlock,
   updatePeriodAt,
   validatePeriods,
   validateRules,
@@ -80,6 +81,107 @@ describe('课表编辑：规则', () => {
     expect(data.overrides).toEqual([
       { id: 'o1', ruleId: 'r1', date: '2026-10-01', action: 'cancel' },
     ]);
+  });
+});
+
+describe('课表编辑：换课', () => {
+  // 2026-09-07 是学期第一周的周一。
+  const MONDAY = '2026-09-07';
+
+  it('换掉这一块背后的所有规则，不动别的规则', () => {
+    let data = empty();
+    data = addRule(data, { id: 'r1', courseId: 'c-math', byDay: [1], startPeriod: 2 });
+    data = addRule(data, { id: 'r2', courseId: 'c-math', byDay: [1], startPeriod: 3 });
+    data = addRule(data, { id: 'r3', courseId: 'c-english', byDay: [1], startPeriod: 4 });
+
+    const next = replaceCourseForBlock(data, {
+      date: MONDAY,
+      startPeriod: 2,
+      span: 2,
+      courseId: 'c-chinese',
+    });
+
+    expect(next.rules.map((rule) => [rule.id, rule.courseId])).toEqual([
+      ['r1', 'c-chinese'],
+      ['r2', 'c-chinese'],
+      ['r3', 'c-english'],
+    ]);
+    // 只换科目，时间与节次保持原样。
+    expect(next.rules.map((rule) => rule.startPeriod)).toEqual([2, 3, 4]);
+  });
+
+  it('换的是规则：这条规则排的其它天也一起变', () => {
+    let data = empty();
+    data = addRule(data, { id: 'r1', courseId: 'c-math', byDay: [1, 3], startPeriod: 2 });
+
+    const next = replaceCourseForBlock(data, {
+      date: MONDAY,
+      startPeriod: 2,
+      span: 1,
+      courseId: 'c-chinese',
+    });
+
+    expect(next.rules[0]).toMatchObject({ courseId: 'c-chinese', byDay: [1, 3] });
+  });
+
+  it('已经是目标课程时返回同一个引用（不触发无谓保存）', () => {
+    const data = addRule(empty(), {
+      id: 'r1',
+      courseId: 'c-math',
+      byDay: [1],
+      startPeriod: 2,
+    });
+    const next = replaceCourseForBlock(data, {
+      date: MONDAY,
+      startPeriod: 2,
+      span: 1,
+      courseId: 'c-math',
+    });
+    expect(next).toBe(data);
+  });
+
+  it('这一天没有课时返回同一个引用', () => {
+    const original = empty();
+    expect(
+      replaceCourseForBlock(original, {
+        date: MONDAY,
+        startPeriod: 2,
+        span: 1,
+        courseId: 'c-chinese',
+      }),
+    ).toBe(original);
+  });
+
+  it('删掉当天的 replace 覆盖，其它日期的覆盖保留', () => {
+    let data = addRule(empty(), {
+      id: 'r1',
+      courseId: 'c-math',
+      byDay: [1],
+      startPeriod: 2,
+    });
+    data = {
+      ...data,
+      overrides: [
+        { id: 'o1', ruleId: 'r1', date: MONDAY, action: 'replace', payload: { courseId: 'c-art' } },
+        {
+          id: 'o2',
+          ruleId: 'r1',
+          date: '2026-09-14',
+          action: 'replace',
+          payload: { courseId: 'c-art' },
+        },
+      ],
+    };
+
+    const next = replaceCourseForBlock(data, {
+      date: MONDAY,
+      startPeriod: 2,
+      span: 1,
+      courseId: 'c-chinese',
+    });
+
+    expect(next.rules[0]?.courseId).toBe('c-chinese');
+    expect(next.overrides.map((override) => override.id)).toEqual(['o2']);
   });
 });
 
