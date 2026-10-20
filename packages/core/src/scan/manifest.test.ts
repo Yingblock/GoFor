@@ -297,3 +297,44 @@ describe('坐标注册表：habitRow 多行', () => {
     expect(manifest.pages.flatMap((page) => page.targets)).toEqual([]);
   });
 });
+
+describe('坐标注册表：区块小定位点', () => {
+  it('每个区块记录两个对角小点（归一化），targets 带 blockId', () => {
+    const blocks: Block[] = [
+      { id: 'title', kind: 'title', span: 12, text: '3 月 5 日', align: 'left' },
+      taskList(2),
+    ];
+    const manifest = buildSheetManifest(input(blocks));
+    const page = layout(blocks, { paper: 'A5' }).pages[0];
+    if (page === undefined) throw new Error('缺少页面');
+    const manifestPage = manifest.pages[0];
+    if (manifestPage === undefined) throw new Error('清单缺页');
+
+    expect(manifestPage.blocks).toHaveLength(2);
+    const taskBlock = manifestPage.blocks?.find((block) => block.id === 'tasks');
+    if (taskBlock === undefined) throw new Error('缺少作业区块');
+    expect(taskBlock.x).toBeGreaterThanOrEqual(0);
+    expect(taskBlock.w).toBeGreaterThan(0);
+
+    // 上点 = 块顶上方 1mm、左 1/4；下点 = 块底下方 1mm、右 3/4。
+    const placement = page.placements.find((item) => item.block.id === 'tasks');
+    if (placement === undefined) throw new Error('缺少 placement');
+    const topExpected = {
+      x: (placement.xMm + placement.widthMm * 0.05) / page.widthMm,
+      y: (placement.yMm - 1) / page.heightMm,
+    };
+    const bottomExpected = {
+      x: (placement.xMm + placement.widthMm * 0.95) / page.widthMm,
+      y: (placement.yMm + placement.heightMm + 1) / page.heightMm,
+    };
+    expect(taskBlock.marks.top.x).toBeCloseTo(topExpected.x, 6);
+    expect(taskBlock.marks.top.y).toBeCloseTo(topExpected.y, 6);
+    expect(taskBlock.marks.bottom.x).toBeCloseTo(bottomExpected.x, 6);
+    expect(taskBlock.marks.bottom.y).toBeCloseTo(bottomExpected.y, 6);
+
+    const taskTargets = manifestPage.targets.filter((target) => target.blockId === 'tasks');
+    expect(taskTargets).toHaveLength(2);
+    // 纯印刷区块没有 target，但仍有定位点，供扫描端校正局部坐标。
+    expect(manifestPage.targets.every((target) => target.blockId !== undefined)).toBe(true);
+  });
+});

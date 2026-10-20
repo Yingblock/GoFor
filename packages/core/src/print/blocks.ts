@@ -57,6 +57,45 @@ export function fiducialBottomInsetMm(paperHeightMm: number): number {
   return fiducialFooterInsetMm(paperHeightMm) + FIDUCIAL_SIZE_MM / 2;
 }
 
+/**
+ * 区块小定位点（P2-2.17 v2）：每个区块两个对角小十字，印在区块之间的行距里。
+ *
+ * 为什么不印在区块内部角落：会压到勾选框/文字，甚至落进 5mm 采样窗，
+ * 把"没勾"读成"有墨"。行距只有 2mm，所以点很小（1.2mm），用**十字**而不是实心方块：
+ * 实心方块的填充率会让页面四角定位检测把它当成候选，十字填充率低会被过滤掉。
+ */
+export const BLOCK_MARK_SIZE_MM = 1.2;
+export const BLOCK_MARK_STROKE_MM = 0.3;
+/** 小点中心离块边 1mm（正好落在 2mm 行距中间）。 */
+export const BLOCK_MARK_GAP_MM = 1;
+
+export interface BlockMarkCenters {
+  /** 上沿、左 1/4 处。 */
+  top: { x: number; y: number };
+  /** 下沿、右 3/4 处。 */
+  bottom: { x: number; y: number };
+}
+
+/**
+ * 一个区块的两个小定位点中心（毫米，纸面坐标）。
+ *
+ * 对角取点：两个点连起来能同时校正局部平移与缩放（等比），又不会和上下相邻
+ * 区块的点重叠——上下都居中时，上一块的下点会压到下一块的上点。
+ */
+export function blockMarkCenters(rect: {
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+}): BlockMarkCenters {
+  // 靠两端（5% / 95%）而不是 1/4、3/4：页尾条码画在正文下方居中，最后一行区块的
+  // 下点若在中间会被条码的白色底盖住；靠两端就能躲开条码，也不碰页面四角定位块。
+  return {
+    top: { x: rect.xMm + rect.widthMm * 0.05, y: rect.yMm - BLOCK_MARK_GAP_MM },
+    bottom: { x: rect.xMm + rect.widthMm * 0.95, y: rect.yMm + rect.heightMm + BLOCK_MARK_GAP_MM },
+  };
+}
+
 /** 书写行高（毫米）。约等于正常手写一行的高度。 */
 export const ROW_HEIGHT_MM = 7;
 /** 时间登记行需要更多空间（要写"做了什么"+两组时间）。 */

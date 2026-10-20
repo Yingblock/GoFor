@@ -1,9 +1,10 @@
-import { PAPER_SIZES, type PaperId } from '@gofor/core/print';
+import { BLOCK_MARK_SIZE_MM, PAPER_SIZES, type PaperId } from '@gofor/core/print';
 import {
   decodeCode128Row,
   decodeQrLocated,
   expandFiducialQuad,
   type FillLink,
+  type ManifestBlock,
   parseFillLink,
   parseSheetCode,
   type SheetCode,
@@ -11,6 +12,7 @@ import {
 import {
   binarize,
   findFiducialQuad,
+  findMarkNear,
   type ImageDataLike,
   type Quad,
   toGray,
@@ -478,4 +480,114 @@ export function sampleTargets(
     targetId: target.targetId,
     ink: visionInkRatio(binary, page.width, page.height, target.rect),
   }));
+}
+
+type RectTarget = { targetId: string; rect: { x: number; y: number; w: number; h: number } };
+
+/**
+ * 区块级局部校正（P2-2.17 v2）：用每个区块印在行距里的两个对角小十字，
+ * 把这一块的采样窗再对齐一次。
+ *
+ * 页面级透视矫正只解决"整张纸"的形变；纸张局部拉伸、扫描仪边缘畸变、手机镜头畸变
+ * 会让下半页/边角整体偏移 1–3mm。页面坐标清单是按"理想纸面"算的，offset 超过半个
+ * 勾选框就会漏读/误读。这里对每一块单独求「平移 + 等比缩放」（两个点足够），
+ * 找不到小点（旧纸、反光、裁边）就保持原坐标，绝不因此报错。
+ */
+export function refineTargetsByBlockMarks<T extends RectTarget>(
+  binary: Uint8Array,
+  page: ImageDataLike,
+  manifestPage: {
+    widthMm: number;
+    heightMm: number;
+    blocks?: readonly ManifestBlock[] | undefined;
+  },
+  targets: readonly T[],
+): readonly T[] {
+  const blocks = manifestPage.blocks;
+  if (blocks === undefined || blocks.length === 0) return targets;
+
+  const pxPerMm = page.width / manifestPage.widthMm;
+  const markPx = BLOCK_MARK_SIZE_MM * pxPerMm;
+  const radiusPx = Math.max(4, Math.round(3 * pxPerMm));
+  const minBoxPx = Math.max(2, Math.round(markPx * 0.4));
+  const maxBoxPx = Math.max(4, Math.round(markPx * 1.9));
+
+  interface Correction {
+    expected: { x: number; y: number };
+    detected: { x: number; y: number };
+    cos: number;
+    sin: number;
+    scale: number;
+  }
+  const corrections = new Map<string, Correction>();
+
+  for (const block of blocks) {
+    const expectedTop = {
+      x: block.marks.top.x * page.width,
+      y: block.marks.top.y * page.height,
+    };
+    const expectedBottom = {
+      x: block.marks.bottom.x * page.width,
+      y: block.marks.bottom.y * page.height,
+    };
+    const detectedTop = findMarkNear(binary, page.width, page.height, expectedTop, {
+      radiusPx,
+      minBoxPx,
+      maxBoxPx,
+    });
+    const detectedBottom = findMarkNear(binary, page.width, page.height, expectedBottom, {
+      radiusPx,
+      minBoxPx,
+      maxBoxPx,
+    });
+    if (detectedTop === null || detectedBottom === null) continue;
+
+    const ex = expectedBottom.x - expectedTop.x;
+    const ey = expectedBottom.y - expectedTop.y;
+    const dx = detectedBottom.x - detectedTop.x;
+    const dy = detectedBottom.y - detectedTop.y;
+    const expectedLength = Math.hypot(ex, ey);
+    if (expectedLength < 1) continue;
+    const scale = Math.hypot(dx, dy) / expectedLength;
+    // 只接受"看起来还是同一块纸"的校正：缩放离谱或平移超过搜索半径，多半认错了墨迹。
+    if (scale < 0.8 || scale > 1.25) continue;
+    if (Math.hypot(detectedTop.x - expectedTop.x, detectedTop.y - expectedTop.y) > radiusPx * 1.5) {
+      continue;
+    }
+    const rotation = Math.atan2(dy, dx) - Math.atan2(ey, ex);
+    corrections.set(block.id, {
+      expected: expectedTop,
+      detected: detectedTop,
+      cos: Math.cos(rotation),
+      sin: Math.sin(rotation),
+      scale,
+    });
+  }
+
+  if (corrections.size === 0) return targets;
+
+  return targets.map((target) => {
+    const blockId = (target as { blockId?: string }).blockId;
+    if (blockId === undefined) return target;
+    const correction = corrections.get(blockId);
+    if (correction === undefined) return target;
+
+    const centerX = (target.rect.x + target.rect.w / 2) * page.width;
+    const centerY = (target.rect.y + target.rect.h / 2) * page.height;
+    const localX = (centerX - correction.expected.x) * correction.scale;
+    const localY = (centerY - correction.expected.y) * correction.scale;
+    const mappedX = correction.detected.x + localX * correction.cos - localY * correction.sin;
+    const mappedY = correction.detected.y + localX * correction.sin + localY * correction.cos;
+    const scaledW = target.rect.w * correction.scale;
+    const scaledH = target.rect.h * correction.scale;
+    return {
+      ...target,
+      rect: {
+        x: mappedX / page.width - scaledW / 2,
+        y: mappedY / page.height - scaledH / 2,
+        w: scaledW,
+        h: scaledH,
+      },
+    };
+  });
 }

@@ -9,6 +9,7 @@ export { binarize } from './binarize.ts';
 export { type FiducialOptions, findFiducialQuad } from './fiducial.ts';
 export { toGray } from './gray.ts';
 export { inkCount, inkRatio } from './ink.ts';
+export { type FindMarkOptions, findMarkNear } from './mark.ts';
 export { otsuThreshold } from './otsu.ts';
 export { detectPageQuad } from './page.ts';
 export type { ImageDataLike, Point, Quad } from './types.ts';

@@ -559,6 +559,19 @@ try {
     `${fiducialBottomGap.toFixed(1)}mm`,
   );
 
+  // 每个区块两个对角小定位点（P2-2.17 v2）：扫描端按它校正局部平移/缩放。
+  const blockMarks = await page.locator('.print-page').first().locator('[data-block-mark]').count();
+  const declaredBlockMarks = await page
+    .locator('.print-page')
+    .first()
+    .locator('svg[data-block-mark-count]')
+    .getAttribute('data-block-mark-count');
+  check(
+    '每个区块都有两个小定位点',
+    blockMarks > 0 && blockMarks === Number(declaredBlockMarks),
+    `${blockMarks} 个`,
+  );
+
   // 打卡行（P2-2.13）：e2e 前面已经建了「背单词」，默认 A4 模板要把它印出来。
   const printedHabit = await page.locator('.print-page').first().getByText('背单词').count();
   check('纸面包含打卡行', printedHabit > 0);

@@ -40,7 +40,12 @@ import {
 import { CameraCapture } from './scan/CameraCapture.tsx';
 import { CornerPicker } from './scan/CornerPicker.tsx';
 import { type LoadedPhoto, loadPhotoFile } from './scan/capture.ts';
-import { readFiducialQuad, readSheet, sampleTargets } from './scan/pipeline.ts';
+import {
+  readFiducialQuad,
+  readSheet,
+  refineTargetsByBlockMarks,
+  sampleTargets,
+} from './scan/pipeline.ts';
 import { ScanReview } from './scan/ScanReview.tsx';
 
 type Stage = 'pick' | 'corner' | 'rebuild' | 'review';
@@ -148,7 +153,14 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
     }
 
     const scoped: SheetManifest = { ...input.manifest, pages: [pageManifest] };
-    const readings: InkReading[] = sampleTargets(input.binary, input.page, pageManifest.targets);
+    // 页面级矫正后的局部残差用区块小定位点再对齐一次；旧纸没有小点就原样采样。
+    const refinedTargets = refineTargetsByBlockMarks(
+      input.binary,
+      input.page,
+      pageManifest,
+      pageManifest.targets,
+    );
+    const readings: InkReading[] = sampleTargets(input.binary, input.page, refinedTargets);
     const results: ScanResult[] = classifyInk(scoped, readings);
 
     const next: ScanBatch = {

@@ -1,6 +1,9 @@
 import type { Task } from '@gofor/core/domain';
 import {
+  BLOCK_MARK_SIZE_MM,
+  BLOCK_MARK_STROKE_MM,
   type Block,
+  blockMarkCenters,
   type CheckboxListBlock,
   FIDUCIAL_OFFSET_MM,
   FIDUCIAL_SIZE_MM,
@@ -459,11 +462,15 @@ function BarcodeStrip({ page, data }: { page: PageLayout; data: SheetData }) {
     return null;
   }
 
-  // 条码与下方定位块共用页脚线：固定在离纸底 8–11mm，避开打印机最下方不可打印区，
-  // 也不会因为模板内容长短而漂移（扫描端只知道纸张尺寸，位置必须可预测）。
-  const topMm = page.heightMm - fiducialFooterInsetMm(page.heightMm);
+  // 条码仍钉在正文下方（contentBottom + 1）：这是扫描兜底最容易被拍进画面的位置，
+  // 不跟着「页脚线」走。下方定位块才会为避开不可打印区上移（见 PageFiducials）。
+  const contentBottom = Math.max(
+    0,
+    ...page.placements.map((placement) => placement.yMm + placement.heightMm),
+  );
+  const topMm = contentBottom + 1;
   // 8mm 高：一维码要靠"一行像素"穿过它，纸在照片里一斜（3° 就有约 7mm 的纵向漂移），
-  // 条太矮时任何一行扫描都会在中途跑出条码。8mm 把容忍角提高到约 3°。
+  // 条太矮时任何一行扫描都会在中途跑出条码。8mm 把容忍角提高到约 3°；空间不够时按可用高度缩。
   const heightMm = Math.min(8, page.heightMm - 0.4 - topMm);
   if (heightMm < 3) return null;
 
@@ -648,9 +655,49 @@ function PageView({ page, data }: { page: PageLayout; data: SheetData }) {
           <BlockView block={placement.block} data={data} />
         </div>
       ))}
+      <BlockMarks page={page} />
       <PageFiducials page={page} />
       <BarcodeStrip page={page} data={data} />
     </div>
+  );
+}
+
+/**
+ * 区块小定位点（P2-2.17 v2）：每个区块两个对角十字，印在区块之间的行距里。
+ *
+ * 十字而不是实心方块：实心块的填充率会让页面四角的 `findFiducialQuad` 把它当候选；
+ * 十字填充率低，会被方块过滤器挡掉，扫描端另有专门的「找十字」逻辑。
+ * 位置由 `blockMarkCenters` 统一计算，坐标清单里的 marks 也用同一个函数，
+ * 保证「印在哪」与「去哪儿找」是同一份几何。
+ */
+function BlockMarks({ page }: { page: PageLayout }) {
+  const size = BLOCK_MARK_SIZE_MM;
+  const stroke = BLOCK_MARK_STROKE_MM;
+  return (
+    <svg
+      aria-hidden="true"
+      data-block-mark-count={page.placements.length * 2}
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+      viewBox={`0 0 ${page.widthMm} ${page.heightMm}`}
+      preserveAspectRatio="none"
+    >
+      {page.placements.map((placement) => {
+        const centers = blockMarkCenters(placement);
+        return [
+          { key: 'top', center: centers.top },
+          { key: 'bottom', center: centers.bottom },
+        ].map(({ key, center }) => (
+          <g
+            key={`${placement.block.id}-${key}`}
+            data-block-mark={`${placement.block.id}-${key}`}
+            fill="#111111"
+          >
+            <rect x={center.x - size / 2} y={center.y - stroke / 2} width={size} height={stroke} />
+            <rect x={center.x - stroke / 2} y={center.y - size / 2} width={stroke} height={size} />
+          </g>
+        ));
+      })}
+    </svg>
   );
 }
 

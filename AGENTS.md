@@ -203,11 +203,18 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
   `FIDUCIAL_OFFSET_MM` / `FIDUCIAL_INSET_MM` 在 `core/print/blocks.ts`，打印在
   `PrintSheet`、检测在 `vision/fiducial.ts`、外扩在 `core/scan/fiducial.ts`。改任何一处
   都要同时改另外三个，否则自动框选会整体偏移。**上下内缩不对称**：下方定位点为了避开
-  打印机不可打印区，和页尾条码共用页脚线（`fiducialFooterInsetMm`）；外扩逻辑按每条边
-  的方向算，不能再套「绕中心按 H/(H-11) 对称缩放」。
+  打印机不可打印区，上移到页脚线（`fiducialFooterInsetMm`）；页尾条码**保持正文下方**
+  不动（扫描兜底最容易被拍进画面的位置）。外扩逻辑按每条边的方向算，不能再套
+  「绕中心按 H/(H-11) 对称缩放」。
 - **纸面需要实心墨块时一律用 SVG 矢量填充，不要用 `background`**：浏览器打印默认不印
   「背景图形」，`div + background` 只在预览里出现、纸上没有（定位点就踩过）。同理，
   e2e 要断言 `svg [data-fiducial]` 而不只是 `[data-fiducial]`。
+- **区块小定位点（P2-2.17 v2）同样是一份共享契约**：位置由 `blockMarkCenters` 计算
+  （上沿 5%、下沿 95%，印在 2mm 行距里，避开页尾条码与页面四角定位块），打印在 `PrintSheet` 的 `BlockMarks`、
+  清单在 `manifest.ts` 的 `pages[].blocks[].marks`、扫描校正在 `pipeline.ts` 的
+  `refineTargetsByBlockMarks`。小点必须是**十字**而不是实心方块：实心块的填充率会让
+  页面四角的 `findFiducialQuad` 把它当候选；十字还会被 5mm 勾选框采样窗避开。
+  旧清单没有 `blocks` 字段时扫描端直接跳过校正，不要因此报错。
 - **`checkboxList` 的采样窗只覆盖勾选框（5mm）**，不要扩到整行：行里的印刷标题是墨迹，
   会把"没勾"读成"勾了"。`manifest.ts` 与 `PrintSheet` 的勾选框位置必须同时改。
 - **二维码 ≥ 16mm**。12mm 在 300dpi 下每模块约 0.3mm，手机经常扫不出；

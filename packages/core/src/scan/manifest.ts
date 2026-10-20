@@ -13,6 +13,7 @@
 import {
   type Block,
   blockHeightMm,
+  blockMarkCenters,
   type CheckboxGridBlock,
   type CheckboxListBlock,
   type HabitRowBlock,
@@ -47,6 +48,26 @@ export interface ScanTarget {
    * `applyPayload` 是"写回时用什么格式"。`classifyInk` 优先用它填 `ScanResult.payload`。
    */
   applyPayload?: string | null;
+  /** 这一格属于哪个区块：扫描时按区块小定位点做局部校正（见 `blocks`）。 */
+  blockId?: string;
+}
+
+/**
+ * 一个区块在页面上的位置（归一化 0–1）与它的两个小定位点中心。
+ *
+ * 小点是打印时额外印在行距里的十字（`blockMarkCenters`），扫描矫正后用它把
+ * 这一块的采样窗再对齐一次——页面级透视矫正解决不了纸张局部拉伸/起翘。
+ */
+export interface ManifestBlock {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  marks: {
+    top: { x: number; y: number };
+    bottom: { x: number; y: number };
+  };
 }
 
 export interface SheetManifest {
@@ -61,6 +82,8 @@ export interface SheetManifest {
     widthMm: number;
     heightMm: number;
     targets: ScanTarget[];
+    /** 旧清单没有这个字段（旧纸也没印小点）：缺省时扫描不做区块级校正。 */
+    blocks?: ManifestBlock[];
   }[];
 }
 
@@ -93,12 +116,32 @@ export function buildSheetManifest(input: ManifestInput): SheetManifest {
     templateId: input.templateId,
     date: input.date,
     paper: input.paper,
-    pages: result.pages.map((page) => ({
-      index: page.index,
-      widthMm: page.widthMm,
-      heightMm: page.heightMm,
-      targets: page.placements.flatMap((placement) => buildTargets(placement, page, input)),
-    })),
+    pages: result.pages.map((page) => {
+      const blocks = page.placements.map((placement) => {
+        const rect = normalizePlacement(placement, page);
+        const centers = blockMarkCenters(placement);
+        return {
+          id: placement.block.id,
+          ...rect,
+          marks: {
+            top: { x: centers.top.x / page.widthMm, y: centers.top.y / page.heightMm },
+            bottom: { x: centers.bottom.x / page.widthMm, y: centers.bottom.y / page.heightMm },
+          },
+        };
+      });
+      return {
+        index: page.index,
+        widthMm: page.widthMm,
+        heightMm: page.heightMm,
+        blocks,
+        targets: page.placements.flatMap((placement) =>
+          buildTargets(placement, page, input).map((target) => ({
+            ...target,
+            blockId: placement.block.id,
+          })),
+        ),
+      };
+    }),
   };
 }
 

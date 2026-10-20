@@ -37,6 +37,7 @@ export {
 
 export {
   buildSheetManifest,
+  type ManifestBlock,
   type ManifestInput,
   type ScanTarget,
   type SheetManifest,
