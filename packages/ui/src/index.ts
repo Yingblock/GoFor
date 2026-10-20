@@ -26,5 +26,6 @@ export { Modal, type ModalProps, type ModalSize } from './modal.tsx';
 export { ProgressBar, type ProgressBarProps } from './progress-bar.tsx';
 export { Section, type SectionProps } from './section.tsx';
 export { Select, type SelectProps } from './select.tsx';
+export { Slider, type SliderProps } from './slider.tsx';
 export { StatCard, type StatCardProps } from './stat-card.tsx';
 export { Textarea, type TextareaProps } from './textarea.tsx';

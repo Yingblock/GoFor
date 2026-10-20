@@ -421,6 +421,18 @@ try {
   await page.getByLabel('范围天数', { exact: true }).fill('32');
   check('范围超过 31 天有提示', (await page.getByText('一次打印很多天？').count()) > 0);
   await page.getByRole('button', { name: '取消' }).click();
+
+  // 改结束日期 → 天数实时重算（开始/结束/天数/滑动条联动）
+  const plusDays = (date, days) => {
+    const [year, month, day] = date.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day) + days * 86_400_000).toISOString().slice(0, 10);
+  };
+  await page.getByLabel('范围结束').fill(plusDays(todayKey, 2));
+  check(
+    '改结束日期会实时重算天数',
+    (await page.getByLabel('范围天数', { exact: true }).inputValue()) === '2',
+  );
+  await page.getByLabel('范围结束').fill(todayKey);
   await printDateInput.fill(todayKey);
   await sleep(300);
 

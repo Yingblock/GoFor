@@ -1,6 +1,7 @@
 import { dateKey, type MoodLog } from '@gofor/core/domain';
 import { addDays } from '@gofor/core/stats';
 import { db, getMoodLog, listMoodLogs, saveMoodLog } from '@gofor/store';
+import { Slider } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { appClock } from '../clock.ts';
@@ -27,21 +28,25 @@ interface MoodSliderProps {
 
 /** 一根 1–5 的滑块 + 数字显示。数字必须可见：滑块位置不够精确，也不方便回看。 */
 function MoodSlider({ label, value, onChange }: MoodSliderProps) {
+  const sliderId = `mood-${label}`;
   return (
-    <label className="block rounded-xl border border-line bg-card-faint px-4 py-3">
+    <label
+      htmlFor={sliderId}
+      className="block rounded-xl border border-line bg-card-faint px-4 py-3"
+    >
       <span className="flex items-baseline justify-between">
         <span className="text-sm">{label}</span>
         <span className="text-xl font-semibold tabular-nums">{value}</span>
       </span>
-      <input
-        type="range"
+      <Slider
+        id={sliderId}
+        value={value}
         min={1}
         max={5}
         step={1}
-        value={value}
         aria-label={label}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="mt-3 w-full accent-[var(--color-ink)]"
+        onValueChange={onChange}
+        className="mt-3"
       />
       <span className="flex justify-between text-[10px] opacity-35">
         <span>1 · 很差</span>

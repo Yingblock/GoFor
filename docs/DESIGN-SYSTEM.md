@@ -123,6 +123,7 @@ import { Button, Card, Section, StatCard } from '@gofor/ui';
 | `select.tsx` | `Select` | 原生 select + `invalid`、`ref` |
 | `textarea.tsx` | `Textarea` | 原生 textarea + `invalid`、`ref` |
 | `checkbox.tsx` | `Checkbox` | 原生 checkbox + `invalid`；必须有 `aria-label` 或 `Field` label |
+| `slider.tsx` | `Slider` | `value`/`min`/`max`/`step`、`onValueChange`；原生 range + token 配色，必须给 `aria-label` 或包在带 `htmlFor` 的 label 里 |
 | `badge.tsx` | `Badge` | `tone: neutral/ok/warn/danger`，只读状态 |
 | `chip.tsx` | `Chip` | `onClick`（可点，带 `aria-pressed`）、`onRemove`（可移除）、`active`、`disabled` |
 | `stat-card.tsx` | `StatCard` | `label` / `value` / `note` |
@@ -173,6 +174,17 @@ import { Button, Card, Section, StatCard } from '@gofor/ui';
 `bg-white*` / `border-black*` / `text-black` 这类原生色；统一走 `@theme` token
 （`bg-card` / `bg-card-soft` / `border-line` / `bg-overlay` / `bg-strong` / `text-on-strong` / `bg-scrim`）。
 新增页面照抄现有组件即可，不需要再逐个迁移。
+
+## 5.1 滑块（Slider）
+
+`@gofor/ui` 新增 `Slider`：原生 `input[type=range]` + token 配色（`bg-overlay` 轨道、
+`bg-strong` 圆点、accent 强调），键盘/读屏/触屏行为全部来自浏览器。用法：
+
+```tsx
+<Slider value={days} min={1} max={31} onValueChange={setDays} aria-label="范围天数滑动条" />
+```
+
+不要再直接写 `<input type="range" className="accent-...">`；需要特殊宽度用 `className`。
 
 ## 6. 深色主题（P2-2.16）
 

@@ -2,7 +2,7 @@ import { dateKey, type Task } from '@gofor/core/domain';
 import { type Block, layout, PAPER_IDS, PAPER_SIZES, type PaperId } from '@gofor/core/print';
 import { buildSheetManifest } from '@gofor/core/scan';
 import { db, saveSheetManifest, sheetManifestId } from '@gofor/store';
-import { Modal } from '@gofor/ui';
+import { Modal, Slider } from '@gofor/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '../clock.ts';
@@ -65,29 +65,56 @@ export function PrintScreen({
   const pageCount = layout(blocks, { paper }).pages.length;
   const [previewOpen, setPreviewOpen] = useState(false);
   const today = dateKey(appClock);
-  const [rangeStart, setRangeStart] = useState(today);
-  const [rangeDays, setRangeDays] = useState(1);
-  const [pendingDays, setPendingDays] = useState<number | null>(null);
+  // 默认打印明天：开始=结束=明天，天数 1。
+  const defaultDate = addDays(today, 1);
+  const [rangeStart, setRangeStart] = useState(defaultDate);
+  const [rangeEnd, setRangeEnd] = useState(defaultDate);
+  /** 超过 31 天时先弹窗；取消要能恢复上一次合法的范围。 */
+  const [pendingRange, setPendingRange] = useState<{
+    days: number;
+    restore: { start: string; end: string };
+  } | null>(null);
   const [busy, setBusy] = useState(false);
-  const didSetDefaultDate = useRef(false);
+  const lastValidRange = useRef({ start: defaultDate, end: defaultDate });
+  const didInitRange = useRef(false);
 
-  // 单张打印默认「第二天」；进入打印页时若还是今天，自动切到明天。
-  useEffect(() => {
-    if (didSetDefaultDate.current) return;
-    didSetDefaultDate.current = true;
-    if (date === today) onChangeDate(addDays(today, 1));
-  }, [date, onChangeDate, today]);
+  /** 闭区间天数：start 到 end 一共几天。 */
+  const daysBetween = (start: string, end: string): number => {
+    const [sy, sm, sd] = start.split('-').map(Number);
+    const [ey, em, ed] = end.split('-').map(Number);
+    if (!sy || !sm || !sd || !ey || !em || !ed) return 1;
+    const startMs = Date.UTC(sy, sm - 1, sd);
+    const endMs = Date.UTC(ey, em - 1, ed);
+    return Math.floor((endMs - startMs) / 86_400_000) + 1;
+  };
+  const rangeDays = Math.max(1, daysBetween(rangeStart, rangeEnd));
 
-  const printOne = async () => {
-    setBusy(true);
-    try {
-      await onPrintDates([date]);
-    } finally {
-      setBusy(false);
+  /** 改任意一个控件都走这里：范围非法就夹住，超过 31 天弹提示。 */
+  const applyRange = (nextStart: string, nextEnd: string) => {
+    const days = daysBetween(nextStart, nextEnd);
+    if (days < 1) return;
+    setRangeStart(nextStart);
+    setRangeEnd(nextEnd);
+    if (days <= MAX_SLIDER_DAYS) {
+      lastValidRange.current = { start: nextStart, end: nextEnd };
+    } else {
+      setPendingRange({ days, restore: lastValidRange.current });
     }
   };
 
-  const printRange = async () => {
+  // 首次进入打印页：把预览切到明天（App 的打印队列也变明天）。
+  useEffect(() => {
+    if (didInitRange.current) return;
+    didInitRange.current = true;
+    if (date === today) onChangeDate(defaultDate);
+  }, [date, onChangeDate, today, defaultDate]);
+
+  // 开始日期一变就同步预览（结束日期只影响批量范围，不动预览）。
+  useEffect(() => {
+    if (rangeStart !== date) onChangeDate(rangeStart);
+  }, [date, onChangeDate, rangeStart]);
+
+  const printAll = async () => {
     setBusy(true);
     try {
       const dates = Array.from({ length: rangeDays }, (_, index) => addDays(rangeStart, index));
@@ -164,14 +191,6 @@ export function PrintScreen({
         >
           打印预览
         </button>
-        <button
-          type="button"
-          onClick={() => void printOne()}
-          disabled={busy}
-          className="rounded-lg bg-strong px-4 py-2 text-sm text-on-strong disabled:opacity-50"
-        >
-          打印这一天
-        </button>
 
         <label className="ml-1 flex items-center gap-1.5 text-xs">
           <span className="opacity-50">模板</span>
@@ -208,55 +227,47 @@ export function PrintScreen({
         </span>
       </div>
 
-      {/* 指定日期 / 批量打印（P2-2.18）：每张纸按该日期独立算内容与二维码。 */}
-      <div className="space-y-3 rounded-xl border border-line bg-card-soft p-3 text-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5">
-            <span className="opacity-50">日期</span>
+      {/* 日期范围（P2-2.18）：开始/结束/天数/滑动条实时联动，每张纸独立算内容与二维码。 */}
+      <div className="space-y-2 rounded-xl border border-line bg-card-soft p-3 text-xs">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <label className="flex items-center gap-1.5 whitespace-nowrap">
+            <span className="opacity-50">开始</span>
             <input
               type="date"
               aria-label="打印日期"
-              value={date}
-              onChange={(event) => {
-                if (event.target.value !== '') onChangeDate(event.target.value);
-              }}
-              className="rounded-md border border-line bg-card px-2 py-1"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void printOne()}
-            disabled={busy}
-            className="rounded-lg border border-line bg-card px-3 py-1.5 disabled:opacity-50"
-          >
-            打印这一天
-          </button>
-          <span className="opacity-40">单张默认明天，可选任意日期</span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-          <label className="flex items-center gap-1.5">
-            <span className="opacity-50">范围开始</span>
-            <input
-              type="date"
-              aria-label="范围开始"
               value={rangeStart}
               onChange={(event) => {
-                if (event.target.value !== '') setRangeStart(event.target.value);
+                const next = event.target.value;
+                if (next === '') return;
+                applyRange(next, next > rangeEnd ? next : rangeEnd);
               }}
               className="rounded-md border border-line bg-card px-2 py-1"
             />
           </label>
-          <label className="flex items-center gap-1.5">
-            <span className="opacity-50">天数</span>
+          <label className="flex items-center gap-1.5 whitespace-nowrap">
+            <span className="opacity-50">结束</span>
             <input
-              type="range"
+              type="date"
+              aria-label="范围结束"
+              value={rangeEnd}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (next === '') return;
+                applyRange(rangeStart, next < rangeStart ? rangeStart : next);
+              }}
+              className="rounded-md border border-line bg-card px-2 py-1"
+            />
+          </label>
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <span className="opacity-50">天数</span>
+            <Slider
               aria-label="范围天数滑动条"
+              value={Math.min(rangeDays, MAX_SLIDER_DAYS)}
               min={1}
               max={MAX_SLIDER_DAYS}
-              value={Math.min(rangeDays, MAX_SLIDER_DAYS)}
-              onChange={(event) => setRangeDays(Number(event.target.value))}
-              className="w-36 accent-[var(--color-accent)]"
+              step={1}
+              onValueChange={(next) => applyRange(rangeStart, addDays(rangeStart, next - 1))}
+              className="w-40"
             />
             <input
               type="number"
@@ -266,23 +277,25 @@ export function PrintScreen({
               onChange={(event) => {
                 const next = Number(event.target.value);
                 if (!Number.isFinite(next) || next < 1) return;
-                if (next > MAX_SLIDER_DAYS) setPendingDays(next);
-                else setRangeDays(next);
+                applyRange(rangeStart, addDays(rangeStart, next - 1));
               }}
               className="w-16 rounded-md border border-line bg-card px-2 py-1 tabular-nums"
             />
             <span className="opacity-50">天</span>
-          </label>
+          </div>
           <button
             type="button"
-            onClick={() => void printRange()}
+            onClick={() => void printAll()}
             disabled={busy}
-            className="rounded-lg border border-line bg-card px-3 py-1.5 disabled:opacity-50"
+            className="rounded-lg bg-strong px-3 py-1.5 text-on-strong disabled:opacity-50"
           >
-            打印范围
+            {rangeDays === 1 ? '打印这一天' : `打印 ${rangeDays} 天`}
           </button>
-          <span className="opacity-40">默认今天开始；超过 31 天会提示</span>
         </div>
+        <p className="opacity-40">
+          默认打印明天；改开始/结束/天数/滑动条会实时联动。滑动条上限 31
+          天，数字输入可超过（会提示风险）。
+        </p>
       </div>
 
       <PrintPreview blocks={blocks} paper={paper} data={data} />
@@ -300,15 +313,27 @@ export function PrintScreen({
       {previewOpen ? <PrintPreviewDialog {...dialogProps} /> : null}
 
       <Modal
-        open={pendingDays !== null}
-        onClose={() => setPendingDays(null)}
+        open={pendingRange !== null}
+        onClose={() => {
+          if (pendingRange !== null) {
+            setRangeStart(pendingRange.restore.start);
+            setRangeEnd(pendingRange.restore.end);
+          }
+          setPendingRange(null);
+        }}
         title="一次打印很多天？"
         size="sm"
         footer={
           <>
             <button
               type="button"
-              onClick={() => setPendingDays(null)}
+              onClick={() => {
+                if (pendingRange !== null) {
+                  setRangeStart(pendingRange.restore.start);
+                  setRangeEnd(pendingRange.restore.end);
+                }
+                setPendingRange(null);
+              }}
               className="rounded-lg border border-line px-3 py-1.5 text-xs"
             >
               取消
@@ -316,8 +341,8 @@ export function PrintScreen({
             <button
               type="button"
               onClick={() => {
-                if (pendingDays !== null) setRangeDays(pendingDays);
-                setPendingDays(null);
+                lastValidRange.current = { start: rangeStart, end: rangeEnd };
+                setPendingRange(null);
               }}
               className="rounded-lg bg-strong px-3 py-1.5 text-xs text-on-strong"
             >
@@ -327,8 +352,8 @@ export function PrintScreen({
         }
       >
         <p className="text-small leading-relaxed opacity-70">
-          你选择了 {pendingDays ?? 0} 天。一次会生成 {pendingDays ?? 0} 份纸面（每天可能 1–N 页），
-          系统打印框会明显变慢，也更容易卡住或占用大量内存。
+          你选择了 {pendingRange?.days ?? 0} 天。一次会生成 {pendingRange?.days ?? 0} 份纸面
+          （每天可能 1–N 页），系统打印框会明显变慢，也更容易卡住或占用大量内存。
           建议分批打印；如果确实要一次打完，点「继续」。
         </p>
       </Modal>
