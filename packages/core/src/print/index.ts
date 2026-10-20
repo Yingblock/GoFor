@@ -11,6 +11,8 @@ export {
   FIDUCIAL_OFFSET_MM,
   FIDUCIAL_SIZE_MM,
   type FooterBlock,
+  fiducialBottomInsetMm,
+  fiducialFooterInsetMm,
   HABIT_ROW_MAX,
   type HabitRowBlock,
   type HintLineBlock,

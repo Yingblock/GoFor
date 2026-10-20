@@ -4,6 +4,7 @@ import {
   type CheckboxListBlock,
   FIDUCIAL_OFFSET_MM,
   FIDUCIAL_SIZE_MM,
+  fiducialFooterInsetMm,
   habitRowLayout,
   layout,
   type Margin,
@@ -458,16 +459,13 @@ function BarcodeStrip({ page, data }: { page: PageLayout; data: SheetData }) {
     return null;
   }
 
-  const contentBottom = Math.max(
-    0,
-    ...page.placements.map((placement) => placement.yMm + placement.heightMm),
-  );
+  // 条码与下方定位块共用页脚线：固定在离纸底 8–11mm，避开打印机最下方不可打印区，
+  // 也不会因为模板内容长短而漂移（扫描端只知道纸张尺寸，位置必须可预测）。
+  const topMm = page.heightMm - fiducialFooterInsetMm(page.heightMm);
   // 8mm 高：一维码要靠"一行像素"穿过它，纸在照片里一斜（3° 就有约 7mm 的纵向漂移），
-  // 条太矮时任何一行扫描都会在中途跑出条码。8mm 把容忍角提高到约 3°，同时仍塞得进
-  // 默认页边距。空间不够时按可用高度缩，最少 3mm。
-  const heightMm = Math.min(8, page.heightMm - 0.4 - (contentBottom + 1));
+  // 条太矮时任何一行扫描都会在中途跑出条码。8mm 把容忍角提高到约 3°。
+  const heightMm = Math.min(8, page.heightMm - 0.4 - topMm);
   if (heightMm < 3) return null;
-  const topMm = contentBottom + 1;
 
   // 0.6mm 是"手机拍 2000px 还能稳解"的舒适区；纸太窄时按可用宽度缩，
   // 但不低于 0.3mm（再小就只是装饰了）。
@@ -588,15 +586,19 @@ function HabitRowView({ data }: { data: SheetData }) {
  * 用 `<svg>` 矢量填充而不是带 `background` 的 `<div>`：浏览器打印默认关闭
  * 「背景图形」，背景色方块只在预览里有、纸上没有——用户看到的现象就是
  * "定位点只出现在预览页，打不出来"。矢量图形（和二维码/条码一样）一定会打印。
+ *
+ * 下方两个定位块不贴纸底：和页尾条码共用「页脚线」（`fiducialFooterInsetMm`），
+ * 因为部分打印机最下方 5–10mm 不可打印，贴底的方块纸上根本不会出现。
  */
 function PageFiducials({ page }: { page: PageLayout }) {
   const size = FIDUCIAL_SIZE_MM;
   const offset = FIDUCIAL_OFFSET_MM;
+  const footerTop = page.heightMm - fiducialFooterInsetMm(page.heightMm);
   const positions = [
     { key: 'tl', left: offset, top: offset },
     { key: 'tr', left: page.widthMm - offset - size, top: offset },
-    { key: 'br', left: page.widthMm - offset - size, top: page.heightMm - offset - size },
-    { key: 'bl', left: offset, top: page.heightMm - offset - size },
+    { key: 'br', left: page.widthMm - offset - size, top: footerTop },
+    { key: 'bl', left: offset, top: footerTop },
   ];
   return (
     <svg

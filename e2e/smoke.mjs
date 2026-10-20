@@ -542,6 +542,23 @@ try {
     .count();
   check('定位点是矢量图形（不靠背景色打印）', vectorFiducials === 4, `${vectorFiducials} 个`);
 
+  // 下方定位点必须离开纸底：部分打印机最下方 5–10mm 不可打印，贴底会打不出来。
+  // 与页尾条码共用页脚线（A4 约 11mm），这里量纸底到定位块底边的距离。
+  const fiducialBottomGap = await page
+    .locator('.print-page')
+    .first()
+    .evaluate((root) => {
+      const rect = root.querySelector('svg [data-fiducial="bl"]');
+      const viewBox = rect?.ownerSVGElement?.viewBox.baseVal;
+      if (!rect || !viewBox) return -1;
+      return viewBox.height - (rect.y.baseVal.value + rect.height.baseVal.value);
+    });
+  check(
+    '底部定位点离开纸底（避开不可打印区）',
+    fiducialBottomGap >= 8,
+    `${fiducialBottomGap.toFixed(1)}mm`,
+  );
+
   // 打卡行（P2-2.13）：e2e 前面已经建了「背单词」，默认 A4 模板要把它印出来。
   const printedHabit = await page.locator('.print-page').first().getByText('背单词').count();
   check('纸面包含打卡行', printedHabit > 0);

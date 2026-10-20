@@ -11,7 +11,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
 任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
 
-验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 113 项浏览器 e2e）：
+验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 114 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
 - ✅ TypeScript 7.0.2 strict
@@ -57,7 +57,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续学习） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
-测试：core 360 + store 42 + vision 41 = **443 单测**；e2e **113 项**（含条码兜底、打卡行换行、课程备注、矢量定位块、日期范围联动、每天预览、备注框自适应、模板预览日期、编辑模式换课、预览弹窗与「继续打印」覆盖整个范围）。
+测试：core 367 + store 42 + vision 41 = **450 单测**；e2e **114 项**（含条码兜底、打卡行换行、课程备注、矢量定位块与页脚线、日期范围联动、每天预览、备注框自适应、模板预览日期、编辑模式换课、预览弹窗与「继续打印」覆盖整个范围）。
 
 ### 第三批反馈修复（2026-xx）
 
@@ -262,6 +262,8 @@ pnpm verify      # typecheck + test + build + e2e
 2026-10-20 **打印链路两处修复**：「打印预览 → 继续打印」现在把整个日期范围交给打印队列并逐日固化清单（以前直接 `window.print()`，只打队列里那 1 天，对应 P2-2.18）；打卡行显示全部打卡项，超过每行 6 个自动换行、各行数量尽量均分（7→4+3、13→5+4+4），名字过长用省略号防重叠（P2-2.20）。行数由 `materialize()` 按当天打卡项数量算好，`PrintSheet` 与 `manifest.ts` 共用 `habitRowLayout`，采样窗仍只盖 5mm 勾选框。换行多占的高度从「我的一天」的作业清单行里让出（至少 4 行），A4 在 ≤25 个打卡项时仍是一页。
 
 2026-10-20 **定位点打印修复**：四角定位块原来用 `div` + `background` 画，浏览器打印默认不印「背景图形」，所以只在预览里有、纸上没有；改成 SVG 矢量填充后不依赖该选项，二维码/条码同等。e2e 新增断言 `svg [data-fiducial]`。
+
+2026-10-20 **下方定位点离开纸底**：底部两个定位块不再贴纸底（4mm），改为和页尾条码共用页脚线（`fiducialFooterInsetMm`：A4≈11mm、A5≈8mm），避开部分打印机最下方不可打印区；扫描端外扩改到 `core/scan/fiducial.ts`，按上下非对称内缩、沿每条边方向外扩（保留透视），新增 7 条几何单测。e2e 量了纸底到定位块底边 ≥8mm。
 
 
 2026-10-20 **打印预览与滑块再调整**：多天预览改为横排自适应网格，已选/未选轨道改用 `strong`/`line-strong`；

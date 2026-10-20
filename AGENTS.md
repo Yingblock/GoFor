@@ -201,8 +201,10 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
   「打印这一张」按钮上：用户经常直接按 Ctrl/⌘+P，那条路不会触发点击处理。
 - **四角定位块（fiducial）的尺寸/位置是打印与扫描的共享契约**：`FIDUCIAL_SIZE_MM` /
   `FIDUCIAL_OFFSET_MM` / `FIDUCIAL_INSET_MM` 在 `core/print/blocks.ts`，打印在
-  `PrintSheet`、检测在 `vision/fiducial.ts`、外扩在 `scan/pipeline.ts`。改任何一处
-  都要同时改另外两个，否则自动框选会整体偏移。
+  `PrintSheet`、检测在 `vision/fiducial.ts`、外扩在 `core/scan/fiducial.ts`。改任何一处
+  都要同时改另外三个，否则自动框选会整体偏移。**上下内缩不对称**：下方定位点为了避开
+  打印机不可打印区，和页尾条码共用页脚线（`fiducialFooterInsetMm`）；外扩逻辑按每条边
+  的方向算，不能再套「绕中心按 H/(H-11) 对称缩放」。
 - **纸面需要实心墨块时一律用 SVG 矢量填充，不要用 `background`**：浏览器打印默认不印
   「背景图形」，`div + background` 只在预览里出现、纸上没有（定位点就踩过）。同理，
   e2e 要断言 `svg [data-fiducial]` 而不只是 `[data-fiducial]`。

@@ -41,6 +41,22 @@ export const FIDUCIAL_OFFSET_MM = 4;
 /** 定位块中心离页边的距离：扫描端把中心四角外扩到真实纸角时用。 */
 export const FIDUCIAL_INSET_MM = FIDUCIAL_OFFSET_MM + FIDUCIAL_SIZE_MM / 2;
 
+/**
+ * 底部定位块与页尾条码共用的「页脚线」：离纸底的距离（毫米）。
+ *
+ * 打印机最下方常有 5–10mm 不可打印区，定位块贴纸底会**打不出来**（预览里有、纸上没有），
+ * 自动找纸就失效了。所以下方定位块上移到页脚线，和条码同一纵坐标。
+ * 页脚线随纸高在 8–11mm 之间：A4 取 11mm，A5 只能取 8mm（再高就压到正文）。
+ */
+export function fiducialFooterInsetMm(paperHeightMm: number): number {
+  return Math.round(Math.min(11, Math.max(8, paperHeightMm * 0.037)) * 10) / 10;
+}
+
+/** 底部定位块**中心**离纸底的距离（页脚线 + 半个块）：扫描端外扩用。 */
+export function fiducialBottomInsetMm(paperHeightMm: number): number {
+  return fiducialFooterInsetMm(paperHeightMm) + FIDUCIAL_SIZE_MM / 2;
+}
+
 /** 书写行高（毫米）。约等于正常手写一行的高度。 */
 export const ROW_HEIGHT_MM = 7;
 /** 时间登记行需要更多空间（要写"做了什么"+两组时间）。 */

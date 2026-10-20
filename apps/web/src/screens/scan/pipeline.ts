@@ -1,7 +1,8 @@
-import { FIDUCIAL_INSET_MM, PAPER_SIZES, type PaperId } from '@gofor/core/print';
+import { PAPER_SIZES, type PaperId } from '@gofor/core/print';
 import {
   decodeCode128Row,
   decodeQrLocated,
+  expandFiducialQuad,
   type FillLink,
   parseFillLink,
   parseSheetCode,
@@ -166,25 +167,11 @@ function isAroundQuad(point: { x: number; y: number }, quad: Quad): boolean {
 }
 
 /**
- * 定位块中心四角 → 真实纸角。
+ * 定位块中心四角 → 真实纸角（实现在 `@gofor/core/scan` 的 `expandFiducialQuad`）。
  *
- * 定位块印在离页边 4mm 处（中心 5.5mm），所以找到的四角比真实纸角小一圈；
- * 直接拿它矫正会让整页坐标向里缩约 5mm。这里按纸张尺寸把四角绕中心外扩：
- * 横向乘 W/(W-11)、纵向乘 H/(H-11)。近似（不是严格补投影），但误差远小于
- * 手动框选；真实使用中还会再经过一次四角确认。
+ * 上下内缩量不再对称：下方定位块为避开打印机不可打印区，和页尾条码一起上移到
+ * 页脚线；core 里按每条边的实际方向外扩，扫描端与打印端共用同一组常量。
  */
-function expandFiducialQuad(quad: Quad, paper: string): Quad {
-  const size = PAPER_SIZES[paper as PaperId] ?? PAPER_SIZES.A4;
-  const inset = FIDUCIAL_INSET_MM;
-  const scaleX = size.widthMm / Math.max(1, size.widthMm - inset * 2);
-  const scaleY = size.heightMm / Math.max(1, size.heightMm - inset * 2);
-  const centerX = quad.reduce((sum, point) => sum + point.x, 0) / quad.length;
-  const centerY = quad.reduce((sum, point) => sum + point.y, 0) / quad.length;
-  return quad.map((point) => ({
-    x: centerX + (point.x - centerX) * scaleX,
-    y: centerY + (point.y - centerY) * scaleY,
-  })) as unknown as Quad;
-}
 
 /**
  * 从一张纸的照片里读出二维码（这一步**在矫正之前**做）。

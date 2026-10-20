@@ -29,6 +29,11 @@ export {
   type ParseFillLinkResult,
   parseFillLink,
 } from './deeplink.ts';
+export {
+  expandFiducialQuad,
+  type FiducialPoint,
+  type FiducialQuad,
+} from './fiducial.ts';
 
 export {
   buildSheetManifest,
