@@ -28,7 +28,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 | 产物 | 状态 | 说明 |
 |---|---|---|
-| `release/GoFor-win-x64.zip` | ✅ 本地预览包（2026-10-20，HEAD `5e37d90`，P2-2.17 v1 + 课表备注布局修复，**未发布**） | 104,876,277 B / 31 文件 / sha256 `6aadffc4…7982`；Electron v33，双击 `GoFor.exe`；**固定端口 47821**。已发布的是 `v0.2.6-p2`（对应 740e3b9，不含备注布局修复） |
+| `release/GoFor-win-x64.zip` | ✅ 本地预览包（2026-10-20，HEAD `9cb23ca`，P2-2.19 换课 + 模板/校准页预览日期，**未发布**） | 104,879,979 B / 31 文件 / sha256 `4612a763…8639`；Electron v33，双击 `GoFor.exe`；**固定端口 47821**。包内 `index-KiOiS7wu.js`（sha256 `46252358…e0ac`）与本地 `apps/web/dist` 逐字节一致。已发布的是 `v0.2.6-p2`（对应 740e3b9，不含后两批功能） |
 | `release/GoFor-debug.apk` | ⏸ 暂时停打（用户要求：先只做 Windows，Android 后期适配） | 4.6 MB（4,622,941 B），`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
 | `release/README.md` | ✅ | 安装说明与已知限制 |
 
@@ -249,6 +249,8 @@ pnpm verify      # typecheck + test + build + e2e
 2026-10-20 **模板/校准页预览日期**：预览下方新增日期选择（默认明天），预览按该日期现算任务/课表/备注/打卡与二维码，与打印页共用 `buildSheetData`。
 
 2026-10-20 **P2-2.19 课表编辑换课**：编辑模式点课程块，浮层除「删除这节」外列出全部科目，点一门即把这一块换成该课。只换科目、不动时间与节次；`replaceCourseForBlock`（core，5 测试）先展开当天课再按节次范围圈定规则，所以连堂块背后的多条规则会一起换，规则排的其它天也一起变；当天若有 `replace` 覆盖会一并清掉。e2e 新增「编辑模式点课程块可换课」。
+
+2026-10-20 **本地 Windows 包按 `9cb23ca` 重建**：104,879,979 B / 31 文件 / sha256 `4612a763…8639`，Python `zipfile.testzip()` 无错（环境无 `unzip`）；包内 `index-KiOiS7wu.js` 与本地 `apps/web/dist` 逐字节一致；**未发 Release**。
 
 
 2026-10-20 **打印预览与滑块再调整**：多天预览改为横排自适应网格，已选/未选轨道改用 `strong`/`line-strong`；
