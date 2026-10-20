@@ -41,9 +41,10 @@ export function Slider({
       step={step}
       disabled={disabled}
       onChange={(event) => onValueChange(Number(event.target.value))}
-      // 轨道用渐变画“已选/未选”两段：原生 range 的两侧默认同色，视觉上分不出当前位置。
+      // 轨道用渐变画“已选/未选”两段；颜色取主题的 strong/line-strong，
+      // 与按钮、描边同一套色，不再用 accent 蓝单独一套。
       style={{
-        background: `linear-gradient(to right, var(--color-accent) 0%, var(--color-accent) ${percent}%, var(--color-overlay) ${percent}%, var(--color-overlay) 100%)`,
+        background: `linear-gradient(to right, var(--color-strong) 0%, var(--color-strong) ${percent}%, var(--color-line-strong) ${percent}%, var(--color-line-strong) 100%)`,
       }}
       className={cn(
         'h-1.5 w-full cursor-pointer appearance-none rounded-full',

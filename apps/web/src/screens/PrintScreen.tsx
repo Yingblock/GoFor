@@ -79,6 +79,8 @@ export function PrintScreen({
     restore: { start: string; end: string };
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  /** 预览懒加载：一次最多渲染 100 天。 */
+  const [visibleCount, setVisibleCount] = useState(100);
   const lastValidRange = useRef({ start: defaultDate, end: defaultDate });
   const didInitRange = useRef(false);
 
@@ -95,15 +97,21 @@ export function PrintScreen({
 
   /** 改任意一个控件都走这里：范围非法就夹住，超过 31 天弹提示。 */
   const applyRange = (nextStart: string, nextEnd: string) => {
-    const days = daysBetween(nextStart, nextEnd);
-    if (days < 1) return;
+    const nextDays = daysBetween(nextStart, nextEnd);
+    if (nextDays < 1) return;
+    const previousDays = daysBetween(rangeStart, rangeEnd);
+
     setRangeStart(nextStart);
     setRangeEnd(nextEnd);
-    if (days <= MAX_SLIDER_DAYS) {
-      lastValidRange.current = { start: nextStart, end: nextEnd };
-    } else {
-      setPendingRange({ days, restore: lastValidRange.current });
+    // 范围一变就回到第一批，避免“上次加载到第 300 天，这次只选 3 天却还是 300”。
+    setVisibleCount(100);
+
+    // 只在「从 ≤31 跨到 >31」时提醒；已经在 >31 上继续加天数不再反复弹窗。
+    if (nextDays > MAX_SLIDER_DAYS && previousDays <= MAX_SLIDER_DAYS) {
+      setPendingRange({ days: nextDays, restore: lastValidRange.current });
+      return;
     }
+    lastValidRange.current = { start: nextStart, end: nextEnd };
   };
 
   // 首次进入打印页：把预览切到明天（App 的打印队列也变明天）。
@@ -118,10 +126,13 @@ export function PrintScreen({
     if (rangeStart !== date) onChangeDate(rangeStart);
   }, [date, onChangeDate, rangeStart]);
 
-  /** 范围里每一天的预览：与真正进纸的 blocks/data 同一份构建函数。 */
+  /**
+   * 范围里的预览：与真正进纸的 blocks/data 同一份构建函数。
+   * 懒加载——只构建/渲染前 `visibleCount` 天，避免 1000 天范围直接卡死。
+   */
   const previewSheets = useMemo(
     () =>
-      Array.from({ length: rangeDays }, (_, index) => {
+      Array.from({ length: Math.min(rangeDays, visibleCount) }, (_, index) => {
         const previewDate = addDays(rangeStart, index);
         const sheet = buildSheetForDate(previewDate);
         return {
@@ -131,7 +142,7 @@ export function PrintScreen({
           pages: layout(sheet.blocks, { paper }).pages.length,
         };
       }),
-    [buildSheetForDate, paper, rangeDays, rangeStart],
+    [buildSheetForDate, paper, rangeDays, rangeStart, visibleCount],
   );
 
   const printAll = async () => {
@@ -318,7 +329,13 @@ export function PrintScreen({
         </p>
       </div>
 
-      <div className="space-y-4">
+      <div
+        className={
+          previewSheets.length > 1
+            ? 'grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]'
+            : 'space-y-4'
+        }
+      >
         {previewSheets.map((sheet) => (
           <section key={sheet.date} data-print-preview-date={sheet.date}>
             <div className="mb-1 flex items-baseline gap-2 text-caption opacity-50">
@@ -326,10 +343,30 @@ export function PrintScreen({
               <span>·</span>
               <span>共 {sheet.pages} 页</span>
             </div>
-            <PrintPreview blocks={sheet.blocks} paper={paper} data={sheet.data} />
+            <PrintPreview
+              blocks={sheet.blocks}
+              paper={paper}
+              data={sheet.data}
+              maxScale={previewSheets.length > 1 ? 1 : 0.62}
+            />
           </section>
         ))}
       </div>
+
+      {rangeDays > previewSheets.length ? (
+        <div className="flex flex-wrap items-center gap-2 text-caption opacity-50">
+          <span>
+            已显示 {previewSheets.length} / {rangeDays} 天
+          </span>
+          <button
+            type="button"
+            onClick={() => setVisibleCount((count) => count + 100)}
+            className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs"
+          >
+            加载更多（每次 100 天）
+          </button>
+        </div>
+      ) : null}
 
       <p className="text-caption leading-relaxed opacity-40">
         打印前请确认：缩放 100% · 关闭页眉页脚 · 勾选「背景图形」。
@@ -349,6 +386,7 @@ export function PrintScreen({
           if (pendingRange !== null) {
             setRangeStart(pendingRange.restore.start);
             setRangeEnd(pendingRange.restore.end);
+            setVisibleCount(100);
           }
           setPendingRange(null);
         }}
@@ -362,6 +400,7 @@ export function PrintScreen({
                 if (pendingRange !== null) {
                   setRangeStart(pendingRange.restore.start);
                   setRangeEnd(pendingRange.restore.end);
+                  setVisibleCount(100);
                 }
                 setPendingRange(null);
               }}

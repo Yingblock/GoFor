@@ -48,6 +48,8 @@ export interface PrintSheetProps {
   paper: PaperId;
   margin?: Margin;
   data: SheetData;
+  /** 屏幕预览的最大缩放；打印层不使用。默认 0.62，多天横排时传 1 让预览占满列宽。 */
+  maxScale?: number;
 }
 
 const mm = (value: number): string => `${value}mm`;
@@ -662,7 +664,13 @@ export function PrintLayer({ paper, sheets }: { paper: PaperId; sheets: PrintLay
 }
 
 /** 屏幕预览：与打印层同一套版式，只是缩放显示。 */
-export function PrintPreview({ blocks, paper, margin, data }: PrintSheetProps) {
+export function PrintPreview({
+  blocks,
+  paper,
+  margin,
+  data,
+  maxScale = PREVIEW_SCALE,
+}: PrintSheetProps) {
   const result = layout(blocks, margin ? { paper, margin } : { paper });
   const size = PAPER_SIZES[paper];
   const hostRef = useRef<HTMLDivElement>(null);
@@ -687,9 +695,7 @@ export function PrintPreview({ blocks, paper, margin, data }: PrintSheetProps) {
 
   const naturalWidthPx = size.widthMm * PX_PER_MM;
   const scale =
-    hostWidth !== null && hostWidth > 0
-      ? Math.min(PREVIEW_SCALE, hostWidth / naturalWidthPx)
-      : PREVIEW_SCALE;
+    hostWidth !== null && hostWidth > 0 ? Math.min(maxScale, hostWidth / naturalWidthPx) : maxScale;
 
   return (
     // 外层按「缩放后的尺寸」占位，内层再做 transform——
