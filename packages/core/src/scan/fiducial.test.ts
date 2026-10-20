@@ -1,30 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import {
   FIDUCIAL_SIZE_MM,
-  fiducialBottomInsetMm,
+  fiducialBottomTopMm,
   fiducialFooterInsetMm,
   PAPER_SIZES,
 } from '../print/index.ts';
 import { expandFiducialQuad, type FiducialQuad } from './fiducial.ts';
 
 /** 以 pxPerMm 生成 A4 正对镜头时的四个定位块中心（TL/TR/BR/BL）。 */
-function axisAlignedA4(pxPerMm: number): FiducialQuad {
+function axisAlignedA4(pxPerMm: number, bottomTopMm = A4_BOTTOM_TOP): FiducialQuad {
   const paper = PAPER_SIZES.A4;
   const top = 5.5;
   const side = 5.5;
-  const bottom = fiducialBottomInsetMm(paper.heightMm);
+  const bottomCenter = bottomTopMm + FIDUCIAL_SIZE_MM / 2;
   return [
     { x: side * pxPerMm, y: top * pxPerMm },
     { x: (paper.widthMm - side) * pxPerMm, y: top * pxPerMm },
-    { x: (paper.widthMm - side) * pxPerMm, y: (paper.heightMm - bottom) * pxPerMm },
-    { x: side * pxPerMm, y: (paper.heightMm - bottom) * pxPerMm },
+    { x: (paper.widthMm - side) * pxPerMm, y: bottomCenter * pxPerMm },
+    { x: side * pxPerMm, y: bottomCenter * pxPerMm },
   ];
 }
+
+/** A4「我的一天」正文底部 286mm → 页尾条码/定位点顶端 287mm（安全线 286mm）。 */
+const A4_BOTTOM_TOP = fiducialBottomTopMm(278 + 8, PAPER_SIZES.A4.heightMm);
 
 describe('定位块外扩：非对称页脚', () => {
   it('A4 正对镜头：外扩后正好是纸角（上下内缩不同）', () => {
     const pxPerMm = 4;
-    const quad = expandFiducialQuad(axisAlignedA4(pxPerMm), 'A4');
+    const quad = expandFiducialQuad(axisAlignedA4(pxPerMm), 'A4', { bottomTopMm: A4_BOTTOM_TOP });
     const width = PAPER_SIZES.A4.widthMm * pxPerMm;
     const height = PAPER_SIZES.A4.heightMm * pxPerMm;
     expect(quad[0].x).toBeCloseTo(0, 6);
@@ -37,16 +40,29 @@ describe('定位块外扩：非对称页脚', () => {
     expect(quad[3].y).toBeCloseTo(height, 6);
   });
 
-  it('下方定位块比上方更靠里：纸角高度仍对得上（不是按 H/(H-11) 对称缩放）', () => {
-    const quad = axisAlignedA4(3);
-    const expanded = expandFiducialQuad(quad, 'A4');
-    // 对称旧算法会把底边算在 297/(297-11) 比例的 297 - 5.5*... 处，底角会偏上；
-    // 这里直接要求底角就是纸底边。
+  it('下方定位块更靠里：按清单给的底部位置外扩，底角仍对到纸底边', () => {
+    const quad = axisAlignedA4(3, A4_BOTTOM_TOP);
+    const expanded = expandFiducialQuad(quad, 'A4', { bottomTopMm: A4_BOTTOM_TOP });
     expect(expanded[3].y).toBeCloseTo(PAPER_SIZES.A4.heightMm * 3, 6);
-    // 底角到底部定位块中心的距离 = 底部中心内缩量 × 每毫米像素数。
+    const bottomInset = PAPER_SIZES.A4.heightMm - A4_BOTTOM_TOP - FIDUCIAL_SIZE_MM / 2;
     const bottomCenter = quad[3].y;
-    const pxPerMm = (expanded[3].y - bottomCenter) / fiducialBottomInsetMm(PAPER_SIZES.A4.heightMm);
+    const pxPerMm = (expanded[3].y - bottomCenter) / bottomInset;
     expect(pxPerMm).toBeCloseTo(3, 6);
+  });
+
+  it('底部定位点跟着条码上移时，外扩也随之上移（短模板）', () => {
+    // 例：本周计划的正文底部约 243mm → 定位点顶端 244mm。
+    const bottomTop = fiducialBottomTopMm(243, PAPER_SIZES.A4.heightMm);
+    expect(bottomTop).toBe(244);
+    const quad = axisAlignedA4(3, bottomTop);
+    const expanded = expandFiducialQuad(quad, 'A4', { bottomTopMm: bottomTop });
+    expect(expanded[3].y).toBeCloseTo(PAPER_SIZES.A4.heightMm * 3, 6);
+  });
+
+  it('旧纸没有底部几何时按对称 5.5mm 外扩（保持旧行为）', () => {
+    const oldQuad = axisAlignedA4(3, PAPER_SIZES.A4.heightMm - 5.5 - FIDUCIAL_SIZE_MM / 2);
+    const expanded = expandFiducialQuad(oldQuad, 'A4');
+    expect(expanded[3].y).toBeCloseTo(PAPER_SIZES.A4.heightMm * 3, 6);
   });
 
   it('透视：四个角沿各自相邻边外扩，不退化成同一条水平线', () => {
@@ -99,7 +115,10 @@ describe('页脚线常量', () => {
     }
   });
 
-  it('底部定位块中心内缩 = 页脚线 + 半个块高', () => {
-    expect(fiducialBottomInsetMm(297)).toBeCloseTo(11 + FIDUCIAL_SIZE_MM / 2, 6);
+  it('fiducialBottomTopMm 取「条码位置」与「页脚安全线」的较小值', () => {
+    // 正文底部 286mm → 条码 287mm，但安全线是 286mm（A4），取 286。
+    expect(fiducialBottomTopMm(286, 297)).toBe(286);
+    // 短模板：正文底部 57mm → 58mm，远高于安全线，跟着条码走。
+    expect(fiducialBottomTopMm(57, 297)).toBe(58);
   });
 });

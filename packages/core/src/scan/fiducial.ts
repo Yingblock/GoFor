@@ -11,7 +11,7 @@
  * 而不是绕中心整体缩放。纯函数、无平台依赖，可单测。
  */
 
-import { FIDUCIAL_INSET_MM, fiducialBottomInsetMm } from '../print/blocks.ts';
+import { FIDUCIAL_INSET_MM, FIDUCIAL_SIZE_MM } from '../print/blocks.ts';
 import { PAPER_SIZES, type PaperId } from '../print/paper.ts';
 
 export interface FiducialPoint {
@@ -52,11 +52,20 @@ function step(origin: FiducialPoint, direction: Vector, px: number): FiducialPoi
  * 纸张 id 不认识时按 A4 处理（和旧实现一致）；四角退化（边长≈0）时原样返回，
  * 让调用方回退到手动四角，而不是算出 NaN。
  */
-export function expandFiducialQuad(quad: readonly FiducialPoint[], paper: string): FiducialQuad {
+export function expandFiducialQuad(
+  quad: readonly FiducialPoint[],
+  paper: string,
+  options: { bottomTopMm?: number | undefined } = {},
+): FiducialQuad {
   const size = PAPER_SIZES[paper as PaperId] ?? PAPER_SIZES.A4;
   const topInset = FIDUCIAL_INSET_MM;
   const sideInset = FIDUCIAL_INSET_MM;
-  const bottomInset = fiducialBottomInsetMm(size.heightMm);
+  // 底部定位块为避开打印机不可打印区会随模板内容上移（见 `fiducialBottomTopMm`），
+  // 内缩量由打印时固化的坐标清单传进来；旧纸没有这个值 → 仍按对称 5.5mm。
+  const bottomInset =
+    options.bottomTopMm === undefined
+      ? FIDUCIAL_INSET_MM
+      : Math.max(0, size.heightMm - options.bottomTopMm - FIDUCIAL_SIZE_MM / 2);
 
   const [tl, tr, br, bl] = quad as readonly [
     FiducialPoint,

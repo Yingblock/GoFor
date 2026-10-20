@@ -1107,6 +1107,19 @@ try {
     await page.waitForTimeout(400);
     check('模板切换生效', (await templateSelect.inputValue()) === 'week');
 
+    // 短模板（本周计划）正文只到 243mm：下方定位点应跟着页尾条码上移，而不是
+    // 还钉在页脚安全线。长模板上它仍在 8mm 安全线（上面量过）。
+    const weekBottomGap = await page
+      .locator('.print-page')
+      .first()
+      .evaluate((root) => {
+        const rect = root.querySelector('svg [data-fiducial="bl"]');
+        const viewBox = rect?.ownerSVGElement?.viewBox.baseVal;
+        if (!rect || !viewBox) return -1;
+        return viewBox.height - (rect.y.baseVal.value + rect.height.baseVal.value);
+      });
+    check('短模板的底部定位点跟着条码上移', weekBottomGap > 20, `${weekBottomGap.toFixed(1)}mm`);
+
     // 应用内打印预览：模态里同样是真实版式
     await page.getByRole('button', { name: '打印预览' }).click();
     const previewDialog = page.getByRole('dialog');

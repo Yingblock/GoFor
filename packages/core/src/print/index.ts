@@ -16,7 +16,7 @@ export {
   FIDUCIAL_OFFSET_MM,
   FIDUCIAL_SIZE_MM,
   type FooterBlock,
-  fiducialBottomInsetMm,
+  fiducialBottomTopMm,
   fiducialFooterInsetMm,
   HABIT_ROW_MAX,
   type HabitRowBlock,

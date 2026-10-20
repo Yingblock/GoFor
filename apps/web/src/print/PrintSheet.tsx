@@ -7,7 +7,7 @@ import {
   type CheckboxListBlock,
   FIDUCIAL_OFFSET_MM,
   FIDUCIAL_SIZE_MM,
-  fiducialFooterInsetMm,
+  fiducialBottomTopMm,
   habitRowLayout,
   layout,
   type Margin,
@@ -600,7 +600,13 @@ function HabitRowView({ data }: { data: SheetData }) {
 function PageFiducials({ page }: { page: PageLayout }) {
   const size = FIDUCIAL_SIZE_MM;
   const offset = FIDUCIAL_OFFSET_MM;
-  const footerTop = page.heightMm - fiducialFooterInsetMm(page.heightMm);
+  // 下方定位点跟页尾条码对齐（正文底部 + 1mm），但不低于页脚安全线；
+  // 这样短模板（本周计划/打卡卡）上它们会跟着条码一起上移，长模板仍避开不可打印区。
+  const contentBottom = Math.max(
+    0,
+    ...page.placements.map((placement) => placement.yMm + placement.heightMm),
+  );
+  const footerTop = fiducialBottomTopMm(contentBottom, page.heightMm);
   const positions = [
     { key: 'tl', left: offset, top: offset },
     { key: 'tr', left: page.widthMm - offset - size, top: offset },

@@ -11,7 +11,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
 任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
 
-验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 115 项浏览器 e2e）：
+验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 114 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
 - ✅ TypeScript 7.0.2 strict
@@ -57,7 +57,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续学习） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
-测试：core 368 + store 42 + vision 46 = **456 单测**；e2e **115 项**（含条码兜底、打卡行换行、课程备注、矢量定位块与页脚线、区块小定位点、日期范围联动、每天预览、备注框自适应、模板预览日期、编辑模式换课、预览弹窗与「继续打印」覆盖整个范围）。
+测试：core 371 + store 42 + vision 46 = **459 单测**；e2e **114 项**（含条码兜底、打卡行换行、课程备注、矢量定位块与页脚线、区块小定位点、日期范围联动、每天预览、备注框自适应、模板预览日期、编辑模式换课、预览弹窗与「继续打印」覆盖整个范围；个别断言按当天数据分支执行，条数会上下浮动）。
 
 ### 第三批反馈修复（2026-xx）
 
@@ -264,6 +264,8 @@ pnpm verify      # typecheck + test + build + e2e
 2026-10-20 **定位点打印修复**：四角定位块原来用 `div` + `background` 画，浏览器打印默认不印「背景图形」，所以只在预览里有、纸上没有；改成 SVG 矢量填充后不依赖该选项，二维码/条码同等。e2e 新增断言 `svg [data-fiducial]`。
 
 2026-10-20 **下方定位点离开纸底**：底部两个定位块不再贴纸底（4mm），上移到页脚线（`fiducialFooterInsetMm`：A4≈11mm、A5≈8mm），避开部分打印机最下方不可打印区；**条码仍在正文下方（contentBottom+1）不动**。扫描端外扩改到 `core/scan/fiducial.ts`，按上下非对称内缩、沿每条边方向外扩（保留透视），新增 7 条几何单测。e2e 量了纸底到定位块底边 ≥8mm。
+
+2026-10-20 **下方定位点跟条码走**：底部定位点改为「正文底部 + 1mm，但不低于页脚安全线」——短模板（本周计划/打卡卡）上移到与条码同一高度，长模板（我的一天）留在 8mm 安全线；每页坐标清单新增 `fiducialBottomTopMm`，扫描端先按旧对称几何试读、清单值不同再用清单几何重新矫正一次（旧纸没有该字段则保持旧行为）。修正 `fiducialBottomInset` 少算半个块高的错误（改为由 `fiducialBottomTopMm` 推导）。
 
 2026-10-20 **区块小定位点（P2-2.17 v2）**：每个区块在 2mm 行距里印两个对角小十字（1.2mm、线宽 0.3mm），坐标清单新增 `pages[].blocks[]`（区块矩形 + 两个小点归一化坐标）与 `targets[].blockId`；扫描矫正后逐块找小十字，按「平移+等比缩放」再次对齐该块采样窗（找不到就保持原坐标）。十字不是实心块：避免被页面四角检测选中，也避开勾选框采样窗。新增 vision 5 条、manifest 1 条单测与 e2e「每个区块都有两个小定位点」。
 

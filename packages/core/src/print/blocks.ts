@@ -52,9 +52,17 @@ export function fiducialFooterInsetMm(paperHeightMm: number): number {
   return Math.round(Math.min(11, Math.max(8, paperHeightMm * 0.037)) * 10) / 10;
 }
 
-/** 底部定位块**中心**离纸底的距离（页脚线 + 半个块）：扫描端外扩用。 */
-export function fiducialBottomInsetMm(paperHeightMm: number): number {
-  return fiducialFooterInsetMm(paperHeightMm) + FIDUCIAL_SIZE_MM / 2;
+/**
+ * 底部定位块的顶部纵坐标（毫米，纸面坐标）。
+ *
+ * 优先跟页尾条码对齐（正文底部 + 1mm）——用户看纸时两者应在同一高度；
+ * 但不能低于页脚安全线（`fiducialFooterInsetMm`），否则又落进打印机不可打印区。
+ * 取两者较小值：内容长的模板（我的一天）落在安全线；内容短的模板（本周计划、
+ * 打卡卡）跟着条码上移。打印端与坐标清单共用这一个函数。
+ */
+export function fiducialBottomTopMm(contentBottomMm: number, paperHeightMm: number): number {
+  const safeTop = paperHeightMm - fiducialFooterInsetMm(paperHeightMm);
+  return Math.min(contentBottomMm + 1, safeTop);
 }
 
 /**

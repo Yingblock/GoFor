@@ -202,10 +202,11 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
 - **四角定位块（fiducial）的尺寸/位置是打印与扫描的共享契约**：`FIDUCIAL_SIZE_MM` /
   `FIDUCIAL_OFFSET_MM` / `FIDUCIAL_INSET_MM` 在 `core/print/blocks.ts`，打印在
   `PrintSheet`、检测在 `vision/fiducial.ts`、外扩在 `core/scan/fiducial.ts`。改任何一处
-  都要同时改另外三个，否则自动框选会整体偏移。**上下内缩不对称**：下方定位点为了避开
-  打印机不可打印区，上移到页脚线（`fiducialFooterInsetMm`）；页尾条码**保持正文下方**
-  不动（扫描兜底最容易被拍进画面的位置）。外扩逻辑按每条边的方向算，不能再套
-  「绕中心按 H/(H-11) 对称缩放」。
+  都要同时改另外三个，否则自动框选会整体偏移。**上下内缩不对称**：下方定位点跟着页尾
+  条码走（正文底部 + 1mm），但不越过页脚安全线（`fiducialFooterInsetMm`）——短模板上移，
+  长模板留在安全线；页尾条码**位置本身不动**。每页的 `fiducialBottomTopMm` 必须写进
+  坐标清单，扫描端按清单值外扩（首次用旧对称几何试读，清单值不同再矫正一次），
+  不能再套「绕中心按 H/(H-11) 对称缩放」。
 - **纸面需要实心墨块时一律用 SVG 矢量填充，不要用 `background`**：浏览器打印默认不印
   「背景图形」，`div + background` 只在预览里出现、纸上没有（定位点就踩过）。同理，
   e2e 要断言 `svg [data-fiducial]` 而不只是 `[data-fiducial]`。

@@ -196,26 +196,30 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
             Math.abs(point.x - (fiducialQuad[index]?.x ?? Number.NaN)) < 1.5 &&
             Math.abs(point.y - (fiducialQuad[index]?.y ?? Number.NaN)) < 1.5,
         );
-      const sheet = readSheet(photo.image, quad, '', { fiducialQuad: untouched });
+      let sheet = readSheet(photo.image, quad, '', { fiducialQuad: untouched });
       if (!sheet.ok) {
         setError(sheet.reason);
         return;
       }
 
-      const { page, binary, pageIndex } = sheet;
+      const { pageIndex } = sheet;
+      let page = sheet.page;
+      let binary = sheet.binary;
       let templateId: string;
       let date: string;
       let paper: string;
       let record: SheetManifestRecord | undefined;
 
       if (sheet.source === 'barcode') {
-        date = sheet.code.date;
-        paper = sheet.code.paper;
+        // 存成局部常量：`sheet` 后面可能因几何重跑被重新赋值，闭包里不能依赖收窄。
+        const code = sheet.code;
+        date = code.date;
+        paper = code.paper;
         // 条码只带模板短码：在当天、同纸张的清单里按短码反查。
         // 不按「模板 + 日期 + 纸张」直接取，是因为短码本来就是为了不让纸上写全 id。
         const sameDay = await db.sheetManifests.where('date').equals(date).toArray();
         const hits = sameDay.filter(
-          (item) => item.paper === paper && sheetCodeToken(item.templateId) === sheet.code.token,
+          (item) => item.paper === paper && sheetCodeToken(item.templateId) === code.token,
         );
         if (hits.length > 1) {
           setError('这张纸的条码对上了多条坐标记录，没法确定是哪一张。重新打印一次再扫。');
@@ -226,7 +230,7 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
           templateId = record.templateId;
         } else {
           // 清单丢了但模板还在（换了设备、清了库）：短码能反查出模板，后面可以重建。
-          templateId = (await findTemplateIdByToken(sheet.code.token)) ?? '';
+          templateId = (await findTemplateIdByToken(code.token)) ?? '';
           if (templateId === '') {
             setError(
               '条码读出来了，但本机既没有这张纸的坐标记录，也找不到对应模板。' +
@@ -259,6 +263,31 @@ export function ScanScreen({ onOpenPrint }: { onOpenPrint?: () => void }) {
       }
 
       const manifest = JSON.parse(record.json) as SheetManifest;
+
+      /*
+       * 下方定位点跟着正文底部/页脚安全线走，不同模板高度不同；外扩必须用**这张纸
+       * 打印时固化**的几何。第一次 readSheet 用的是旧对称几何（兼容旧纸），
+       * 如果清单里的值和它不同，就用清单值重新矫正一次。
+       */
+      const storedBottomTop = manifest.pages.find(
+        (item) => item.index === pageIndex,
+      )?.fiducialBottomTopMm;
+      if (
+        untouched &&
+        storedBottomTop !== undefined &&
+        Math.abs(storedBottomTop - sheet.fiducialBottomTopMm) > 0.5
+      ) {
+        const corrected = readSheet(photo.image, quad, paper, {
+          fiducialQuad: untouched,
+          fiducialBottomTopMm: storedBottomTop,
+        });
+        if (corrected.ok) {
+          sheet = corrected;
+          page = corrected.page;
+          binary = corrected.binary;
+        }
+      }
+
       await finishScan({
         manifest,
         manifestSource: 'stored',

@@ -16,6 +16,7 @@ import {
   blockMarkCenters,
   type CheckboxGridBlock,
   type CheckboxListBlock,
+  fiducialBottomTopMm,
   type HabitRowBlock,
   habitRowLayout,
   type RatingGridBlock,
@@ -84,6 +85,12 @@ export interface SheetManifest {
     targets: ScanTarget[];
     /** 旧清单没有这个字段（旧纸也没印小点）：缺省时扫描不做区块级校正。 */
     blocks?: ManifestBlock[];
+    /**
+     * 这一页下方定位块的顶部纵坐标（mm）。
+     * 下方定位点跟着正文底部/页脚安全线走，扫描端必须按它计算底部内缩；
+     * 旧清单没有这个字段 → 回退到旧的对称几何。
+     */
+    fiducialBottomTopMm?: number;
   }[];
 }
 
@@ -129,11 +136,16 @@ export function buildSheetManifest(input: ManifestInput): SheetManifest {
           },
         };
       });
+      const contentBottomMm = Math.max(
+        0,
+        ...page.placements.map((placement) => placement.yMm + placement.heightMm),
+      );
       return {
         index: page.index,
         widthMm: page.widthMm,
         heightMm: page.heightMm,
         blocks,
+        fiducialBottomTopMm: fiducialBottomTopMm(contentBottomMm, page.heightMm),
         targets: page.placements.flatMap((placement) =>
           buildTargets(placement, page, input).map((target) => ({
             ...target,

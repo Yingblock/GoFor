@@ -6,6 +6,7 @@ import type {
   RatingGridBlock,
   TimeLogBlock,
 } from '../print/blocks.ts';
+import { fiducialBottomTopMm } from '../print/blocks.ts';
 import { layout, normalizePlacement } from '../print/layout.ts';
 import { buildSheetManifest, type ManifestInput } from './manifest.ts';
 
@@ -336,5 +337,21 @@ describe('坐标注册表：区块小定位点', () => {
     expect(taskTargets).toHaveLength(2);
     // 纯印刷区块没有 target，但仍有定位点，供扫描端校正局部坐标。
     expect(manifestPage.targets.every((target) => target.blockId !== undefined)).toBe(true);
+  });
+});
+
+describe('坐标注册表：下方定位点几何', () => {
+  it('每页记录打印时的底部定位点顶部纵坐标；内容短时跟着条码上移', () => {
+    const blocks: Block[] = [taskList(1)];
+    const manifest = buildSheetManifest(input(blocks));
+    const page = layout(blocks, { paper: 'A5' }).pages[0];
+    if (page === undefined) throw new Error('缺少页面');
+    const contentBottom = Math.max(
+      ...page.placements.map((placement) => placement.yMm + placement.heightMm),
+    );
+    const expected = fiducialBottomTopMm(contentBottom, page.heightMm);
+    expect(manifest.pages[0]?.fiducialBottomTopMm).toBe(expected);
+    // 内容只有一行时远高于页脚安全线（A5 约 202mm），说明它跟着条码/正文走。
+    expect(expected).toBeCloseTo(contentBottom + 1, 6);
   });
 });

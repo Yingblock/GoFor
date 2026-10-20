@@ -1,4 +1,10 @@
-import { BLOCK_MARK_SIZE_MM, PAPER_SIZES, type PaperId } from '@gofor/core/print';
+import {
+  BLOCK_MARK_SIZE_MM,
+  FIDUCIAL_INSET_MM,
+  FIDUCIAL_SIZE_MM,
+  PAPER_SIZES,
+  type PaperId,
+} from '@gofor/core/print';
 import {
   decodeCode128Row,
   decodeQrLocated,
@@ -52,6 +58,8 @@ export type ReadSheetResult =
       binary: Uint8Array;
       /** 0 起的页号。二维码只印在第 1 页，所以是 0。 */
       pageIndex: number;
+      /** 这次外扩实际用的下方定位块顶部纵坐标（mm）；坐标清单里的值不同就要重跑。 */
+      fiducialBottomTopMm: number;
     }
   | {
       ok: true;
@@ -62,6 +70,8 @@ export type ReadSheetResult =
       binary: Uint8Array;
       /** 条码里带页号，条码印在每一页的页尾。 */
       pageIndex: number;
+      /** 见 qr 分支：扫描端用清单里的几何再校正一次。 */
+      fiducialBottomTopMm: number;
     }
   | { ok: false; reason: string };
 
@@ -379,6 +389,12 @@ export function binaryOfPage(page: ImageDataLike): Uint8Array {
   return binarize(toGray(page));
 }
 
+/** 旧行为（对称 5.5mm）下方定位块的顶部纵坐标；旧纸没有清单几何时用它。 */
+function defaultBottomTopMm(paper: string): number {
+  const size = PAPER_SIZES[paper as PaperId] ?? PAPER_SIZES.A4;
+  return size.heightMm - FIDUCIAL_INSET_MM - FIDUCIAL_SIZE_MM / 2;
+}
+
 /**
  * 完整链路：原图 + 四角 → 二维码或条码 → 矫正后的整页与二值图。
  *
@@ -392,7 +408,7 @@ export function readSheet(
   image: ImageDataLike,
   quad: Quad,
   paper: string,
-  options: { fiducialQuad?: boolean } = {},
+  options: { fiducialQuad?: boolean; fiducialBottomTopMm?: number } = {},
 ): ReadSheetResult {
   const located = decodeQrMultiScale(image);
   let qrOutsideFrame = false;
@@ -403,8 +419,11 @@ export function readSheet(
       if (parsed.ok) {
         const link = parsed.value;
         const effectivePaper = paper === '' ? link.paper : paper;
+        const bottomTopMm = options.fiducialBottomTopMm ?? defaultBottomTopMm(effectivePaper);
         const effectiveQuad =
-          options.fiducialQuad === true ? expandFiducialQuad(quad, effectivePaper) : quad;
+          options.fiducialQuad === true
+            ? expandFiducialQuad(quad, effectivePaper, { bottomTopMm: options.fiducialBottomTopMm })
+            : quad;
         const page = warpToPage(image, effectiveQuad, effectivePaper);
         return {
           ok: true,
@@ -413,6 +432,7 @@ export function readSheet(
           page,
           binary: binaryOfPage(page),
           pageIndex: 0,
+          fiducialBottomTopMm: bottomTopMm,
         };
       }
     } else {
@@ -425,8 +445,11 @@ export function readSheet(
   if (zxingHit !== null) {
     const code = parseSheetCode(zxingHit.text);
     if (code !== null && (zxingHit.center === undefined || isAroundQuad(zxingHit.center, quad))) {
+      const bottomTopMm = options.fiducialBottomTopMm ?? defaultBottomTopMm(code.paper);
       const effectiveQuad =
-        options.fiducialQuad === true ? expandFiducialQuad(quad, code.paper) : quad;
+        options.fiducialQuad === true
+          ? expandFiducialQuad(quad, code.paper, { bottomTopMm: options.fiducialBottomTopMm })
+          : quad;
       const page = warpToPage(image, effectiveQuad, code.paper);
       return {
         ok: true,
@@ -435,6 +458,7 @@ export function readSheet(
         page,
         binary: binaryOfPage(page),
         pageIndex: code.page - 1,
+        fiducialBottomTopMm: bottomTopMm,
       };
     }
   }
@@ -442,8 +466,11 @@ export function readSheet(
   // 2) 自己写的解码器兜底（清晰的截图/扫描件；真实照片基本走不到这里）。
   const code = readBarcodeFromPhoto(image, quad);
   if (code !== null) {
+    const bottomTopMm = options.fiducialBottomTopMm ?? defaultBottomTopMm(code.paper);
     const effectiveQuad =
-      options.fiducialQuad === true ? expandFiducialQuad(quad, code.paper) : quad;
+      options.fiducialQuad === true
+        ? expandFiducialQuad(quad, code.paper, { bottomTopMm: options.fiducialBottomTopMm })
+        : quad;
     const page = warpToPage(image, effectiveQuad, code.paper);
     return {
       ok: true,
@@ -452,6 +479,7 @@ export function readSheet(
       page,
       binary: binaryOfPage(page),
       pageIndex: code.page - 1,
+      fiducialBottomTopMm: bottomTopMm,
     };
   }
 
