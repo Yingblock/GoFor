@@ -11,7 +11,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
 任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
 
-验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 102 项浏览器 e2e）：
+验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 105 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
 - ✅ TypeScript 7.0.2 strict
@@ -57,7 +57,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续学习） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
-测试：core 348 + store 42 + vision 41 = **431 单测**；e2e **102 项**（含条码兜底、打卡行、课程备注、定位块、日期范围联动、备注框自适应）。
+测试：core 348 + store 42 + vision 41 = **431 单测**；e2e **105 项**（含条码兜底、打卡行、课程备注、定位块、日期范围联动、每天预览、备注框自适应）。
 
 ### 第三批反馈修复（2026-xx）
 
@@ -245,6 +245,10 @@ pnpm verify      # typecheck + test + build + e2e
 - 墨迹阈值：0.12；`scan.autoApply = false`（识别结果进待确认列表）。
 
 ## 最近一次更新
+
+2026-10-20 **打印页二次调整**：日期范围每一天都有独立预览（与真正进纸同一份 `buildSheetForDate`）；
+`Slider` 轨道改为「已选 accent / 未选 overlay」两段渐变，位置一眼可见。
+
 
 2026-10-20 **P2-2.18 二次调整**：打印页单日/范围合并为「开始 / 结束 / 天数滑动条 / 数字输入」一行，实时联动；结束日期可改；滑动条上限 31、数字可超过（弹窗提示，取消恢复上次合法范围）；默认打印明天。`@gofor/ui` 新增 `Slider`，打印页与三格自评统一使用。
 

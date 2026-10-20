@@ -432,6 +432,11 @@ try {
     '改结束日期会实时重算天数',
     (await page.getByLabel('范围天数', { exact: true }).inputValue()) === '2',
   );
+  check(
+    '多天时每天都有预览',
+    (await page.locator('[data-print-preview-date]').count()) === 2,
+    `${await page.locator('[data-print-preview-date]').count()} 个`,
+  );
   await page.getByLabel('范围结束').fill(todayKey);
   await printDateInput.fill(todayKey);
   await sleep(300);

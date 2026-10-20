@@ -29,6 +29,9 @@ export function Slider({
   disabled = false,
   ...rest
 }: SliderProps) {
+  const span = Math.max(1, max - min);
+  const percent = Math.min(100, Math.max(0, ((value - min) / span) * 100));
+
   return (
     <input
       type="range"
@@ -38,14 +41,18 @@ export function Slider({
       step={step}
       disabled={disabled}
       onChange={(event) => onValueChange(Number(event.target.value))}
+      // 轨道用渐变画“已选/未选”两段：原生 range 的两侧默认同色，视觉上分不出当前位置。
+      style={{
+        background: `linear-gradient(to right, var(--color-accent) 0%, var(--color-accent) ${percent}%, var(--color-overlay) ${percent}%, var(--color-overlay) 100%)`,
+      }}
       className={cn(
-        'h-1.5 w-full cursor-pointer appearance-none rounded-full bg-overlay',
-        'accent-[var(--color-accent)]',
-        // WebKit：去掉原生外观，圆点用 token 色
+        'h-1.5 w-full cursor-pointer appearance-none rounded-full',
+        // WebKit / Firefox 的 track 需要透明，否则会盖住上面的渐变
+        '[&::-webkit-slider-runnable-track]:bg-transparent',
+        '[&::-moz-range-track]:bg-transparent',
         '[&::-webkit-slider-thumb]:size-3.5 [&::-webkit-slider-thumb]:appearance-none',
         '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-strong',
         '[&::-webkit-slider-thumb]:shadow-card',
-        // Firefox
         '[&::-moz-range-thumb]:size-3.5 [&::-moz-range-thumb]:rounded-full',
         '[&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-strong',
         focusRing,

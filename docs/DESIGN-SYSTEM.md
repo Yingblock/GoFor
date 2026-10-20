@@ -123,7 +123,7 @@ import { Button, Card, Section, StatCard } from '@gofor/ui';
 | `select.tsx` | `Select` | 原生 select + `invalid`、`ref` |
 | `textarea.tsx` | `Textarea` | 原生 textarea + `invalid`、`ref` |
 | `checkbox.tsx` | `Checkbox` | 原生 checkbox + `invalid`；必须有 `aria-label` 或 `Field` label |
-| `slider.tsx` | `Slider` | `value`/`min`/`max`/`step`、`onValueChange`；原生 range + token 配色，必须给 `aria-label` 或包在带 `htmlFor` 的 label 里 |
+| `slider.tsx` | `Slider` | `value`/`min`/`max`/`step`、`onValueChange`；原生 range + token 配色（**已选段 accent、未选段 overlay**），必须给 `aria-label` 或包在带 `htmlFor` 的 label 里 |
 | `badge.tsx` | `Badge` | `tone: neutral/ok/warn/danger`，只读状态 |
 | `chip.tsx` | `Chip` | `onClick`（可点，带 `aria-pressed`）、`onRemove`（可移除）、`active`、`disabled` |
 | `stat-card.tsx` | `StatCard` | `label` / `value` / `note` |

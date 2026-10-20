@@ -445,6 +445,7 @@ export function App() {
             date={selectedSheet.date}
             onChangeDate={(next) => setPrintDates([next])}
             onPrintDates={printDatesNow}
+            buildSheetForDate={buildSheetForDate}
             onChangePaper={changePaper}
             onChangeTemplate={changeTemplate}
           />

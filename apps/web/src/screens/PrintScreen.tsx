@@ -6,6 +6,7 @@ import { Modal, Slider } from '@gofor/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '../clock.ts';
+import { todayLabel } from '../format.ts';
 import {
   PrintPreview,
   PrintPreviewDialog,
@@ -32,6 +33,8 @@ export interface PrintScreenProps {
   onChangeDate: (date: string) => void;
   /** 打印这些日期：App 先逐日固化清单，再换打印队列并调用 window.print()。 */
   onPrintDates: (dates: string[]) => Promise<void>;
+  /** 按日期现算一张纸（与 App 的打印队列同一份逻辑），用于多天逐日预览。 */
+  buildSheetForDate: (date: string) => { blocks: Block[]; data: SheetData };
   onChangePaper: (paper: PaperId) => void;
   onChangeTemplate: (templateId: string) => void;
 }
@@ -59,6 +62,7 @@ export function PrintScreen({
   date,
   onChangeDate,
   onPrintDates,
+  buildSheetForDate,
   onChangePaper,
   onChangeTemplate,
 }: PrintScreenProps) {
@@ -113,6 +117,22 @@ export function PrintScreen({
   useEffect(() => {
     if (rangeStart !== date) onChangeDate(rangeStart);
   }, [date, onChangeDate, rangeStart]);
+
+  /** 范围里每一天的预览：与真正进纸的 blocks/data 同一份构建函数。 */
+  const previewSheets = useMemo(
+    () =>
+      Array.from({ length: rangeDays }, (_, index) => {
+        const previewDate = addDays(rangeStart, index);
+        const sheet = buildSheetForDate(previewDate);
+        return {
+          date: previewDate,
+          blocks: sheet.blocks,
+          data: sheet.data,
+          pages: layout(sheet.blocks, { paper }).pages.length,
+        };
+      }),
+    [buildSheetForDate, paper, rangeDays, rangeStart],
+  );
 
   const printAll = async () => {
     setBusy(true);
@@ -298,7 +318,18 @@ export function PrintScreen({
         </p>
       </div>
 
-      <PrintPreview blocks={blocks} paper={paper} data={data} />
+      <div className="space-y-4">
+        {previewSheets.map((sheet) => (
+          <section key={sheet.date} data-print-preview-date={sheet.date}>
+            <div className="mb-1 flex items-baseline gap-2 text-caption opacity-50">
+              <span data-print-preview-label>{todayLabel(sheet.date)}</span>
+              <span>·</span>
+              <span>共 {sheet.pages} 页</span>
+            </div>
+            <PrintPreview blocks={sheet.blocks} paper={paper} data={sheet.data} />
+          </section>
+        ))}
+      </div>
 
       <p className="text-caption leading-relaxed opacity-40">
         打印前请确认：缩放 100% · 关闭页眉页脚 · 勾选「背景图形」。
