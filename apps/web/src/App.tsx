@@ -8,6 +8,7 @@ import {
 } from '@gofor/core/domain';
 import { type Habit, isHabitActiveOn } from '@gofor/core/habits';
 import { materialize, type PaperId } from '@gofor/core/print';
+import { buildSheetManifest } from '@gofor/core/scan';
 import { occurrencesOn, parseTimetable } from '@gofor/core/timetable';
 import {
   currentConfigOrDefault,
@@ -15,13 +16,14 @@ import {
   ensureSubjects,
   exportAll,
   importAll,
-  listCourseNotesByDate,
   listHabits,
   listSubjects,
   listTasks,
   listTemplates,
   loadTimetable,
   saveConfig,
+  saveSheetManifest,
+  sheetManifestId,
 } from '@gofor/store';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -111,61 +113,60 @@ export function App() {
   const customTemplates = useLiveQuery(() => listTemplates(db), [], [] as StoredTemplate[]);
   /** 今天该做的打卡项：打印到纸上的「打卡行」，扫描后按 habit id 回填。 */
   const habits = useLiveQuery(() => listHabits(db), [], [] as Habit[]);
-  const activeHabits = useMemo(
-    () =>
-      habits
-        .filter((habit) => isHabitActiveOn(habit, today))
-        .map((habit) => ({ id: habit.id, name: habit.name })),
-    [habits, today],
-  );
-
   // 课表存在 Dexie 里是 `unknown`（导入可能带进坏数据），用上面的守卫收窄。
   const timetable = useLiveQuery(() => loadTimetable(db, TIMETABLE_ID), [], undefined);
-  /** 今天的课程备注：打印到课表行后面；扫码回填手写备注要 OCR，属 P4。 */
-  const courseNotes = useLiveQuery(
-    () => listCourseNotesByDate(db, today),
-    [today],
-    [] as CourseNote[],
-  );
+  /** 所有课程备注：按日期分组，任意打印日期都能取到自己那天的备注。 */
+  const allCourseNotes = useLiveQuery(() => db.courseNotes.toArray(), [], [] as CourseNote[]);
+  const notesByDate = useMemo(() => {
+    const map = new Map<string, Map<string, string>>();
+    for (const note of allCourseNotes) {
+      const day = map.get(note.date) ?? new Map<string, string>();
+      day.set(`${note.courseId}@${note.startMinute}`, note.text);
+      map.set(note.date, day);
+    }
+    return map;
+  }, [allCourseNotes]);
   const subjects = useLiveQuery(() => listSubjects(db), [], [] as Subject[]);
 
   /**
-   * 当日课表：从 Dexie 一路算到纸面的一行。
+   * 任意一天的课表：从 Dexie 一路算到纸面的一行。
    *
-   * 没有课表 / 课表坏了 / 今天没课，一律给空数组——打印层据此留空行，
+   * 没有课表 / 课表坏了 / 当天没课，一律给空数组——打印层据此留空行，
    * 而不是报错或跳过这块版式（版式高度是固定的）。
    */
-  const schedule = useMemo<ScheduleEntry[]>(() => {
-    const data = parseTimetable(timetable);
-    if (!data) return [];
+  const scheduleForDate = useCallback(
+    (date: string): ScheduleEntry[] => {
+      const data = parseTimetable(timetable);
+      if (!data) return [];
 
-    const subjectNames = new Map(subjects.map((subject) => [subject.id, subject.name]));
-    const courseNames = new Map(data.courses.map((course) => [course.id, course.name]));
+      const subjectNames = new Map(subjects.map((subject) => [subject.id, subject.name]));
+      const courseNames = new Map(data.courses.map((course) => [course.id, course.name]));
+      const noteByCourse = notesByDate.get(date) ?? new Map<string, string>();
 
-    try {
-      const occurrences = occurrencesOn(today, data).sort((a, b) => a.startMinute - b.startMinute);
-      const noteByCourse = new Map(
-        courseNotes.map((note) => [`${note.courseId}@${note.startMinute}`, note.text]),
-      );
-      return occurrences.map((occurrence) => ({
-        time: clockLabel(occurrence.startMinute),
-        end: clockLabel(occurrence.endMinute),
-        courseId: occurrence.courseId,
-        startMinute: occurrence.startMinute,
-        note: noteByCourse.get(`${occurrence.courseId}@${occurrence.startMinute}`) ?? '',
-        // 优先按 id 对到科目表；课表里的 Course 是本地快照，对不上时退回它自己的名字，
-        // 免得纸上印出一串 id。
-        label:
-          subjectNames.get(occurrence.courseId) ??
-          courseNames.get(occurrence.courseId) ??
-          occurrence.courseId,
-      }));
-    } catch {
-      // 形状检查挡不住数组元素里的坏字段（比如 period.start 不是字符串），
-      // 宁可纸面上没有课表，也不能让整个 App 白屏。
-      return [];
-    }
-  }, [courseNotes, subjects, timetable, today]);
+      try {
+        const occurrences = occurrencesOn(date, data).sort((a, b) => a.startMinute - b.startMinute);
+        return occurrences.map((occurrence) => ({
+          time: clockLabel(occurrence.startMinute),
+          end: clockLabel(occurrence.endMinute),
+          courseId: occurrence.courseId,
+          startMinute: occurrence.startMinute,
+          note: noteByCourse.get(`${occurrence.courseId}@${occurrence.startMinute}`) ?? '',
+          // 优先按 id 对到科目表；课表里的 Course 是本地快照，对不上时退回它自己的名字，
+          // 免得纸上印出一串 id。
+          label:
+            subjectNames.get(occurrence.courseId) ??
+            courseNames.get(occurrence.courseId) ??
+            occurrence.courseId,
+        }));
+      } catch {
+        // 形状检查挡不住数组元素里的坏字段（比如 period.start 不是字符串），
+        // 宁可纸面上没有课表，也不能让整个 App 白屏。
+        return [];
+      }
+    },
+    [notesByDate, subjects, timetable],
+  );
+  const schedule = useMemo(() => scheduleForDate(today), [scheduleForDate, today]);
 
   useEffect(() => {
     void currentConfigOrDefault(db).then((result) => {
@@ -224,25 +225,97 @@ export function App() {
     [customTemplates, paper, templateId],
   );
 
-  const blocks = useMemo(
-    () => materialize(printTemplate, { date: today, dateLabel: todayLabel(today) }),
-    [printTemplate, today],
-  );
-
   const templateChoices = useMemo(() => printTemplateChoices(customTemplates), [customTemplates]);
 
+  /** 某一天纸上的任务：今天延续原行为（全部任务），其它日期只取该日到期的。 */
+  const tasksForDate = useCallback(
+    (date: string) => (date === today ? tasks : tasks.filter((task) => task.due === date)),
+    [tasks, today],
+  );
+  /** 某一天该做的打卡。 */
+  const habitsForDate = useCallback(
+    (date: string) =>
+      habits
+        .filter((habit) => isHabitActiveOn(habit, date))
+        .map((habit) => ({ id: habit.id, name: habit.name })),
+    [habits],
+  );
+
   /**
-   * 预览与打印共用这一份数据（同一个对象），避免"预览是 A5、打印是 A4"这类分叉。
-   * 二维码写的是**解析后**的模板 id：模板损坏回退时，纸上的身份也得跟着回退。
+   * 某一天的完整纸面：blocks + data（任务/课表/备注/打卡/二维码）。
+   * 批量打印时每一天都走这一份，绝不共享"今天"的数据。
    */
-  const sheetData = useMemo<SheetData>(
-    () => ({
-      tasks,
-      schedule,
-      qr: { templateId: printTemplate.id, date: today, paper },
-      habits: activeHabits,
-    }),
-    [activeHabits, paper, printTemplate.id, schedule, tasks, today],
+  const buildSheetForDate = useCallback(
+    (date: string) => {
+      const sheetBlocks = materialize(printTemplate, {
+        date,
+        dateLabel: todayLabel(date),
+      });
+      const sheetTasks = tasksForDate(date);
+      const sheetHabits = habitsForDate(date);
+      const data: SheetData = {
+        tasks: sheetTasks,
+        schedule: scheduleForDate(date),
+        qr: { templateId: printTemplate.id, date, paper },
+        habits: sheetHabits,
+      };
+      return { date, blocks: sheetBlocks, data, tasks: sheetTasks, habits: sheetHabits };
+    },
+    [habitsForDate, paper, printTemplate, scheduleForDate, tasksForDate],
+  );
+
+  /** 当前打印队列（1 天或连续 N 天）。默认今天，进打印页后会改成明天。 */
+  const [printDates, setPrintDates] = useState<string[]>([today]);
+  const selectedDate = printDates[0] ?? today;
+  const selectedSheet = useMemo(
+    () => buildSheetForDate(selectedDate),
+    [buildSheetForDate, selectedDate],
+  );
+  const printSheets = useMemo(
+    () => printDates.map((date) => buildSheetForDate(date)),
+    [buildSheetForDate, printDates],
+  );
+
+  /**
+   * 打印指定日期：先逐日固化坐标清单，再把打印队列换成这几天，等两帧后打印。
+   *
+   * 顺序不能反：`window.print()` 一弹框，浏览器可能冻结后续异步写库；
+   * 清单没落库的话，扫回来只会得到"没有坐标记录"。
+   */
+  const printDatesNow = useCallback(
+    async (dates: string[]) => {
+      for (const date of dates) {
+        const sheet = buildSheetForDate(date);
+        const manifest = buildSheetManifest({
+          templateId: printTemplate.id,
+          date,
+          paper,
+          blocks: sheet.blocks,
+          bindings: {
+            'tasks.today': sheet.tasks.map((task) => task.id),
+            'habits.today': sheet.habits.map((habit) => habit.id),
+          },
+          labels: {
+            'tasks.today': sheet.tasks.map((task) => task.title),
+            'habits.today': sheet.habits.map((habit) => habit.name),
+          },
+        });
+        await saveSheetManifest(db, {
+          id: sheetManifestId(printTemplate.id, date, paper),
+          templateId: printTemplate.id,
+          date,
+          paper,
+          json: JSON.stringify(manifest),
+          createdAt: appClock.now(),
+        });
+      }
+      setPrintDates(dates);
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+      window.print();
+    },
+    [buildSheetForDate, paper, printTemplate.id],
   );
 
   const navigate = useCallback((next: ScreenId) => {
@@ -362,14 +435,16 @@ export function App() {
       case 'print':
         return (
           <PrintScreen
-            blocks={blocks}
+            blocks={selectedSheet.blocks}
             paper={paper}
-            tasks={tasks}
-            data={sheetData}
+            tasks={selectedSheet.tasks}
+            data={selectedSheet.data}
             templateId={printTemplate.id}
             templateName={printTemplate.name}
             templates={templateChoices}
-            date={today}
+            date={selectedSheet.date}
+            onChangeDate={(next) => setPrintDates([next])}
+            onPrintDates={printDatesNow}
             onChangePaper={changePaper}
             onChangeTemplate={changeTemplate}
           />
@@ -479,7 +554,7 @@ export function App() {
       </div>
 
       {/* 打印层必须在 .screen-only 之外，否则打印时被一起隐藏成白纸 */}
-      <PrintLayer blocks={blocks} paper={paper} data={sheetData} />
+      <PrintLayer paper={paper} sheets={printSheets} />
       <input
         ref={fileInputRef}
         type="file"

@@ -199,6 +199,7 @@ P1 / P2 已完成（含 P2-2.12 条码、2.13 打卡行、2.15 课程备注、2.
 | 手写 Code 128 解码 | 真实照片一斜/一糊就解不出，用户两张纸都扫不出来 | 解码改用 ZXing（Apache-2.0，`@zxing/library`），原图直接解 + 结果点做框内校验；手写解码器只留作兜底 |
 | 「我的一天」A5 再塞打卡行会翻页 | A5 可用高度 202mm 已经顶满，加 7mm 行直接变 2 页 | `adaptBlocks` 按纸张高度 <230mm 过滤打卡行；A4/B5/Letter 保留 |
 | 打卡行采样窗套住印刷名字 | 名字是黑字，会把「没勾」也算成有墨 | 采样窗只覆盖勾选框（5mm），渲染时名字放在窗右侧；manifest 与 PrintSheet 必须同时改 |
+| 批量打印按“今天”取数据 | 每张纸的任务/课表/二维码都写错日期，扫回来对不上 | 用 `buildSheetForDate(date)` 逐日构建；打印前逐日 `saveSheetManifest`，再 `window.print()` |
 | 深色主题把正文颜色继承到纸面 | 深色下打印预览的标题变成浅灰字，真打出来也可能浅色（白纸浅字） | `.print-root` / `.print-page` 固定 `color:#111`，纸面不跟主题；新增纸面色不要用 token 类 |
 | 主题切换只改系统偏好 | 晚上调试要手动深色，系统却是浅色 | 三态（跟随系统/浅色/深色）存在 localStorage，`<html data-theme>` 驱动 token |
 | 运行时依赖没带许可证文本 | Apache-2.0 要求随分发附许可证；之前只在 README 提了一嘴 | `apps/web/public/THIRD-PARTY-NOTICES.txt`（组件+全文）随 dist/包分发，「数据与备份」页有入口 |
@@ -214,7 +215,7 @@ P1 / P2 已完成（含 P2-2.12 条码、2.13 打卡行、2.15 课程备注、2.
 ## 什么坏了 / 什么没做完
 
 - 无已知崩溃。`apps/web` 还没接路由与 shadcn/ui 组件库（当前是手写 Tailwind）。
-- 首屏 bundle **约 1.19 MB（gzip 362 KB）**，单包、无分包；ZXing 是主要增量。PWA 首次加载后走 Service Worker，但手机上首次打开明显变慢。计划：扫描页动态 `import()` ZXing（见 LATER）。
+- 首屏 bundle **约 1.20 MB（gzip 363 KB）**，单包、无分包；ZXing 是主要增量。PWA 首次加载后走 Service Worker，但手机上首次打开明显变慢。计划：扫描页动态 `import()` ZXing（见 LATER）。
 - A4 纸面底部约 1/4 留白（留给手写），不是 bug。
 
 ## 怎么跑起来
@@ -244,6 +245,9 @@ pnpm verify      # typecheck + test + build + e2e
 - 墨迹阈值：0.12；`scan.autoApply = false`（识别结果进待确认列表）。
 
 ## 最近一次更新
+
+2026-10-20 **P2-2.18 指定日期 / 批量打印**：打印页可选“这一天”（默认明天、任意日期）与“范围”（默认今天起，滑动条 1–31 天，数字输入无上限，>31 弹警告）；每张纸独立计算任务/课表/备注/打卡与二维码；批量打印前逐日固化坐标清单，再换打印队列调用 `window.print()`。今天仍沿用“全部任务”，其它日期只印该日到期任务。
+
 
 2026-10-20 **GitHub Release `v0.2.6-p2` 已发布**（commit `740e3b9`，Windows zip，
 sha256 `14cdc2ee…1779`，release notes 含已知问题）：深色主题 / 打卡上纸 / 课程备注 / ZXing 条码。

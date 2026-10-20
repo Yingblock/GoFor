@@ -633,16 +633,30 @@ function PageView({ page, data }: { page: PageLayout; data: SheetData }) {
  * **必须渲染在 `.screen-only` 容器之外**——否则打印时连它一起被隐藏，
  * 结果就是一张白纸（这个坑真的踩过一次，已由 e2e 的 PDF 校验兜住）。
  */
-export function PrintLayer({ blocks, paper, margin, data }: PrintSheetProps) {
-  const result = layout(blocks, margin ? { paper, margin } : { paper });
+export interface PrintLayerSheet {
+  blocks: Block[];
+  data: SheetData;
+}
+
+/**
+ * 打印层：屏幕上永远隐藏，只在 `@media print` 里显示。
+ *
+ * 支持一次打印多张（P2-2.18 批量日期）：`sheets` 里每个元素是一张纸（一天），
+ * 各自带 blocks/data（所以二维码/日期/清单都是那天自己的），页面按顺序拼接。
+ * 每张纸内部仍可能分页，`.print-page` 的 break-after 负责换页。
+ */
+export function PrintLayer({ paper, sheets }: { paper: PaperId; sheets: PrintLayerSheet[] }) {
   const size = PAPER_SIZES[paper];
 
   return (
     <div className="print-root">
       <style>{`@page { size: ${size.widthMm}mm ${size.heightMm}mm; margin: 0; }`}</style>
-      {result.pages.map((page) => (
-        <PageView key={page.index} page={page} data={data} />
-      ))}
+      {sheets.map((sheet, sheetIndex) =>
+        layout(sheet.blocks, { paper }).pages.map((page) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: 批次里的纸可能同一天重打，没有稳定 id
+          <PageView key={`${sheetIndex}-${page.index}`} page={page} data={sheet.data} />
+        )),
+      )}
     </div>
   );
 }

@@ -407,6 +407,23 @@ try {
   await openGroup(page, '导出');
   await clickItem(page, '打印 checklist');
   await page.waitForSelector('text=/共 \\d+ 页/', { timeout: 5000 });
+
+  // P2-2.18：单张打印默认「明天」；e2e 的扫描链路用的是今天的纸，先切回今天。
+  const todayKey = new Date().toLocaleDateString('sv-SE');
+  const tomorrowKey = new Date(Date.now() + 86_400_000).toLocaleDateString('sv-SE');
+  const printDateInput = page.getByLabel('打印日期');
+  check(
+    '打印页默认日期是明天',
+    (await printDateInput.inputValue()) === tomorrowKey,
+    await printDateInput.inputValue(),
+  );
+  check('批量范围控件存在', (await page.getByLabel('范围天数滑动条').count()) > 0);
+  await page.getByLabel('范围天数', { exact: true }).fill('32');
+  check('范围超过 31 天有提示', (await page.getByText('一次打印很多天？').count()) > 0);
+  await page.getByRole('button', { name: '取消' }).click();
+  await printDateInput.fill(todayKey);
+  await sleep(300);
+
   const pageInfo = await page.locator('text=/共 \\d+ 页/').first().innerText();
   check('默认 A4 一页装下（含当日课表）', pageInfo.includes('共 1 页'), pageInfo);
   check(
@@ -490,6 +507,9 @@ try {
   await openGroup(photoPage, '导出');
   await clickItem(photoPage, '打印 checklist');
   await photoPage.waitForSelector('.print-page', { timeout: 10000 });
+  // 打印页默认明天；扫描用例验的是今天的纸，先切到今天。
+  await photoPage.getByLabel('打印日期').fill(new Date().toLocaleDateString('sv-SE'));
+  await photoPage.waitForTimeout(300);
   const sheetPng = await photoPage.locator('.print-page').first().screenshot();
 
   // 再截一张"二维码被挡住"的同一页：验证页尾条码兜底（P2-2.12）。
@@ -556,8 +576,6 @@ try {
   const inkedBase64 = await inkSheet(sheetPng.toString('base64'));
   const barcodeInkedBase64 = await inkSheet(photoLikeBase64, 0.7, 0.85);
   await canvasPage.close();
-
-  const todayKey = new Date().toLocaleDateString('sv-SE');
 
   await openGroup(page, '记录');
   await clickItem(page, '扫描回填');
