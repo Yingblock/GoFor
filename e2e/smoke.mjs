@@ -477,6 +477,16 @@ try {
     (await page.locator('[data-print-preview-date]').count()) === 2,
     `${await page.locator('[data-print-preview-date]').count()} 个`,
   );
+
+  // 左上角「打印预览」必须覆盖整个范围：以前只拿当前一天，选 2 天也只看到 1 天。
+  await page.getByRole('button', { name: '打印预览' }).click();
+  const rangePreview = page.getByRole('dialog', { name: '打印预览' });
+  await rangePreview.waitFor({ timeout: 5000 });
+  const rangePreviewHeader = await rangePreview.locator('header').innerText();
+  check('打印预览覆盖整个日期范围', rangePreviewHeader.includes('2 天'), rangePreviewHeader);
+  await page.keyboard.press('Escape');
+  await sleep(200);
+
   await page.getByLabel('范围结束').fill(todayKey);
   await printDateInput.fill(todayKey);
   await sleep(300);

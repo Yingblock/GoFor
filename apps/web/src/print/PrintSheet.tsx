@@ -15,7 +15,7 @@ import {
   type TimeLogBlock,
 } from '@gofor/core/print';
 import { buildFillLink, encodeCode128, encodeQrSvgPath, encodeSheetCode } from '@gofor/core/scan';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，恢复 `new Date()`）。
 import { appClock } from '../clock.ts';
 
@@ -48,7 +48,7 @@ export interface PrintSheetProps {
   paper: PaperId;
   margin?: Margin;
   data: SheetData;
-  /** 屏幕预览的最大缩放；打印层不使用。默认 0.62，多天横排时传 1 让预览占满列宽。 */
+  /** 屏幕预览的最大缩放；打印层不使用。默认 0.93，多天横排时传 1 让预览占满列宽。 */
   maxScale?: number;
 }
 
@@ -57,8 +57,8 @@ const mm = (value: number): string => `${value}mm`;
 /** CSS 里 1mm 恒等于 96/25.4 px；把毫米版式换算成像素才能判断要不要缩。 */
 const PX_PER_MM = 96 / 25.4;
 
-/** 桌面预览的默认比例：再大就比屏幕还宽，再小看不清。 */
-const PREVIEW_SCALE = 0.62;
+/** 桌面预览的默认比例：0.93 约等于 A4 纸宽 738px，看得清又不至于溢出容器（原来 0.62 太小）。 */
+const PREVIEW_SCALE = 0.93;
 
 function TitleBlockView({ text }: { text: string }) {
   return <div style={{ fontSize: mm(5), fontWeight: 600, letterSpacing: '0.02em' }}>{text}</div>;
@@ -677,7 +677,7 @@ export function PrintPreview({
   const [hostWidth, setHostWidth] = useState<number | null>(null);
 
   /*
-   * 预览宽度跟着容器走：容器够宽就仍用原来的 0.62，窄屏（手机 360px）按比例缩到刚好放下。
+   * 预览宽度跟着容器走：容器够宽就仍用原来的 0.93，窄屏（手机 360px）按比例缩到刚好放下。
    *
    * 关键边界：**只有预览缩，打印不缩**。真正打印的是 `PrintLayer`，它的毫米尺寸
    * 一个都没动；这里缩的只是屏幕上这一份 DOM，否则打出来的字会跟着变小、纸就废了。
@@ -726,7 +726,19 @@ export function PrintPreview({
   );
 }
 
-export interface PrintPreviewDialogProps extends PrintSheetProps {
+/** 预览弹窗里的一本纸：多天打印时每天一份，按日期顺序拼成一本。 */
+export interface PrintPreviewDialogSheet {
+  blocks: Block[];
+  data: SheetData;
+  /** 这一天在标题/页码条里显示的中文日期；不传就只显示页码。 */
+  label?: string;
+}
+
+export interface PrintPreviewDialogProps {
+  /** 要预览的纸：一天一份（多页模板由 `layout` 自己分页）。 */
+  sheets: PrintPreviewDialogSheet[];
+  paper: PaperId;
+  margin?: Margin;
   /** 显示在标题栏的模板名，让人确认「打的是这张模板」。 */
   templateName: string;
   onClose: () => void;
@@ -739,21 +751,36 @@ export interface PrintPreviewDialogProps extends PrintSheetProps {
  * 这里直接复用 `PageView`（`PrintLayer` 用的同一个渲染器）与同一个 `layout()`，
  * 只是按容器缩放、一次显示一页；真正的打印仍然由 `PrintLayer` 完成。
  * 以前出过「预览好好的、打出来错位」，任何"预览另写一套"的方案都会重蹈覆辙。
+ *
+ * P2-2.18 修正：预览弹窗要覆盖**整个日期范围**（以前只拿当前这一天），
+ * 否则选了 N 天却只看到 1 天，很容易以为批量打印没生效。
  */
 export function PrintPreviewDialog({
-  blocks,
+  sheets,
   paper,
   margin,
-  data,
   templateName,
   onClose,
 }: PrintPreviewDialogProps) {
-  const result = layout(blocks, margin ? { paper, margin } : { paper });
   const size = PAPER_SIZES[paper];
-  const pageCount = result.pages.length;
   const [pageIndex, setPageIndex] = useState(0);
   const [hostWidth, setHostWidth] = useState<number | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
+
+  /** 把每天各自分页的纸摊平成一本：导航跨天连续，不按天切换。 */
+  const pages = useMemo(
+    () =>
+      sheets.flatMap((sheet, sheetIndex) =>
+        layout(sheet.blocks, margin ? { paper, margin } : { paper }).pages.map((page) => ({
+          key: `${sheetIndex}-${page.index}`,
+          page,
+          data: sheet.data,
+          label: sheet.label,
+        })),
+      ),
+    [sheets, paper, margin],
+  );
+  const pageCount = pages.length;
 
   // 换模板 / 换纸张可能让页数变少：把页码夹在有效范围内，别停在空白页。
   useEffect(() => {
@@ -786,7 +813,8 @@ export function PrintPreviewDialog({
       ? Math.min(1, Math.max(0, hostWidth - 24) / naturalWidthPx)
       : 1;
 
-  const page = result.pages[pageIndex];
+  const current = pages[pageIndex];
+  const sheetCount = sheets.length;
 
   return (
     <div
@@ -799,8 +827,13 @@ export function PrintPreviewDialog({
         <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
           <h2 className="text-sm font-medium">打印预览</h2>
           <span className="text-xs opacity-50">
-            {templateName} · {size.name}（{size.widthMm}×{size.heightMm}mm） · {pageCount} 页
+            {templateName} · {size.name}（{size.widthMm}×{size.heightMm}mm） ·{' '}
+            {sheetCount > 1 ? `${sheetCount} 天 · ` : ''}
+            {pageCount} 页
           </span>
+          {current?.label ? (
+            <span className="text-xs tabular-nums opacity-60">{current.label}</span>
+          ) : null}
           <span className="flex-1" />
           <button
             type="button"
@@ -828,7 +861,7 @@ export function PrintPreviewDialog({
                 transformOrigin: 'top left',
               }}
             >
-              {page ? <PageView page={page} data={data} /> : null}
+              {current ? <PageView page={current.page} data={current.data} /> : null}
             </div>
           </div>
         </div>

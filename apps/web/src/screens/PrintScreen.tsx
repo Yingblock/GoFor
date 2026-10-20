@@ -200,10 +200,17 @@ export function PrintScreen({
     ];
   }, [templateId, templateName, templates]);
 
+  /*
+   * 预览弹窗与下方逐日预览同一份数据：范围里每一天都要能翻到，
+   * 否则选了 N 天点「打印预览」却只看到一天，会以为批量打印没生效。
+   */
   const dialogProps: PrintPreviewDialogProps = {
-    blocks,
+    sheets: previewSheets.map((sheet) => ({
+      blocks: sheet.blocks,
+      data: sheet.data,
+      label: todayLabel(sheet.date),
+    })),
     paper,
-    data,
     templateName,
     onClose: () => setPreviewOpen(false),
   };
@@ -330,10 +337,12 @@ export function PrintScreen({
       </div>
 
       <div
-        className={
+        className={previewSheets.length > 1 ? 'grid gap-4' : 'space-y-4'}
+        style={
           previewSheets.length > 1
-            ? 'grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]'
-            : 'space-y-4'
+            ? // 多天横排：每张纸最小 360px（原来 240px，放大 1.5 倍）；用 min() 兜住窄屏不溢出。
+              { gridTemplateColumns: 'repeat(auto-fill, minmax(min(360px, 100%), 1fr))' }
+            : undefined
         }
       >
         {previewSheets.map((sheet) => (
@@ -347,7 +356,7 @@ export function PrintScreen({
               blocks={sheet.blocks}
               paper={paper}
               data={sheet.data}
-              maxScale={previewSheets.length > 1 ? 1 : 0.62}
+              maxScale={previewSheets.length > 1 ? 1 : 0.93}
             />
           </section>
         ))}
