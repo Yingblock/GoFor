@@ -260,8 +260,8 @@ pnpm verify      # typecheck + test + build + e2e
 sha256 `14cdc2ee…1779`，release notes 含已知问题）：深色主题 / 打卡上纸 / 课程备注 / ZXing 条码。
 
 同日 **P2-2.17 v1**：四角定位块 + 自动找纸 + 勾选框窄采样（详见下一条）。
-本地预览包按 `8bffe66` 重建（P2-2.18 日期/批量打印）：104,878,127 B / 31 文件 /
-sha256 `6c738d02…`，`testzip` 无错，包内 `index-CMLGMmPu.js` 与本地 dist 一致；**未发 Release**。
+本地预览包按 `d213d65` 重建（多天逐日预览 + Slider 渐变）：104,879,142 B / 31 文件 /
+sha256 `336e843e…`，`testzip` 无错，包内 `index-oNEau1vs.js` 与本地 dist 一致；**未发 Release**。
 
 
 2026-10-20 **P2-2.17 v1**：每页四角印 3mm 定位块（`FIDUCIAL_*` 常量在 core，打印/扫描共用），
