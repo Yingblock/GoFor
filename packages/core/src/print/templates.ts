@@ -26,6 +26,7 @@
  */
 
 import type { Block, TitleBlock } from './blocks.ts';
+import { HABIT_ROW_MAX } from './blocks.ts';
 import { type Margin, PAPER_SIZES, type PaperId } from './paper.ts';
 
 export interface PrintTemplate {
@@ -251,15 +252,36 @@ function adaptBlocks(template: PrintTemplate, paper: PaperId): Block[] {
  *
  * - 行数由 `template.paper` 决定（A4 完整版 / 其余精简版）；
  * - `title` 文案为空时填入 `context.dateLabel`；已有固定文案（校准页）则保留；
+ * - `habitRow` 的行数由 `context.habitCount` 决定（打卡项多就换行，不截断）；
+ *   换行多占的高度从「我的一天」的作业清单行里让出来（至少保留 4 行），
+ *   否则 A4 一天会从 1 页变成 2 页——纸是主输入端，多一页就是多一张纸；
  * - 返回全新的 Block 数组，**不修改** `template.blocks`，模板可被反复复用。
  */
 export function materialize(
   template: PrintTemplate,
-  context: { date: string; dateLabel: string },
+  context: { date: string; dateLabel: string; habitCount?: number },
 ): Block[] {
-  return adaptBlocks(template, template.paper).map((block) => {
+  const blocks = adaptBlocks(template, template.paper).map((block) => {
+    if (block.kind === 'habitRow' && context.habitCount !== undefined) {
+      // 空状态也占一行占位；每行最多 HABIT_ROW_MAX 个。
+      return { ...block, rows: Math.max(1, Math.ceil(context.habitCount / HABIT_ROW_MAX)) };
+    }
     if (block.kind !== 'title' || block.text !== '') return block;
     return { ...block, text: context.dateLabel };
+  });
+
+  if (template.id !== 'day' || context.habitCount === undefined) return blocks;
+  const habitRows = Math.max(1, Math.ceil(context.habitCount / HABIT_ROW_MAX));
+  const extraRows = habitRows - 1;
+  // A5 等小纸本来就不印打卡行（adaptBlocks 已过滤），没有要腾的空间。
+  if (extraRows <= 0 || !blocks.some((block) => block.kind === 'habitRow')) return blocks;
+
+  // 只让第一个 checkboxList（一天的作业清单）让位；保留 4 行，再多就让纸翻页。
+  let shrunk = false;
+  return blocks.map((block) => {
+    if (shrunk || block.kind !== 'checkboxList') return block;
+    shrunk = true;
+    return { ...block, rows: Math.max(4, block.rows - extraRows) };
   });
 }
 

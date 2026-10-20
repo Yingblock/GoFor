@@ -170,6 +170,42 @@ describe('模板：materialize', () => {
       );
     }
   });
+
+  it('habitRow 行数按当天打卡项算（多则换行），A5 不印打卡行', () => {
+    const rowsFor = (habitCount: number, paper: PaperId = 'A4'): number | undefined => {
+      const blocks = materialize(paperFor('day', paper), { ...CONTEXT, habitCount });
+      const block = blocks.find((candidate) => candidate.kind === 'habitRow');
+      return block?.kind === 'habitRow' ? block.rows : undefined;
+    };
+    expect(rowsFor(0)).toBe(1);
+    expect(rowsFor(6)).toBe(1);
+    expect(rowsFor(7)).toBe(2);
+    expect(rowsFor(13)).toBe(3);
+    expect(rowsFor(7, 'A5')).toBeUndefined();
+    // 不知道当天数据时保持单行（模板编辑器里新拖进来的 habitRow 就是这种情况）。
+    expect(rowsFor(0)).toBe(1);
+    const noCount = materialize(paperFor('day', 'A4'), CONTEXT).find(
+      (candidate) => candidate.kind === 'habitRow',
+    );
+    expect(noCount?.kind === 'habitRow' ? noCount.rows : 'missing').toBeUndefined();
+  });
+
+  it('打卡项换行后从作业清单行里让出高度，A4 仍是一页', () => {
+    for (const habitCount of [0, 6, 7, 13, 19, 25]) {
+      const blocks = materialize(paperFor('day', 'A4'), { ...CONTEXT, habitCount });
+      expect(layout(blocks, { paper: 'A4' }).pages, `${habitCount} 项`).toHaveLength(1);
+    }
+    // 让位的代价：7 项打卡时作业清单从 8 行缩到 7 行，而不是把纸顶到第 2 页。
+    const tasks = materialize(paperFor('day', 'A4'), { ...CONTEXT, habitCount: 7 }).find(
+      (candidate) => candidate.kind === 'checkboxList',
+    );
+    expect(tasks?.kind === 'checkboxList' ? tasks.rows : 0).toBe(7);
+    // A5 不印打卡行，作业清单行数保持精简版不变。
+    const a5Tasks = materialize(paperFor('day', 'A5'), { ...CONTEXT, habitCount: 7 }).find(
+      (candidate) => candidate.kind === 'checkboxList',
+    );
+    expect(a5Tasks?.kind === 'checkboxList' ? a5Tasks.rows : 0).toBe(4);
+  });
 });
 
 describe('模板：paperFor', () => {

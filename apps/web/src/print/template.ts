@@ -108,7 +108,8 @@ function isBlockLike(value: unknown): boolean {
     case 'qrcode':
       return typeof value.sizeMm === 'number' && Number.isFinite(value.sizeMm) && value.sizeMm > 0;
     case 'habitRow':
-      return true;
+      // rows 由 materialize 按当天打卡项算，模板里可以没有；有就必须是正整数。
+      return value.rows === undefined || isInteger(value.rows, 1);
     case 'progressDots':
       return isInteger(value.total, 1);
     case 'pageBreak':

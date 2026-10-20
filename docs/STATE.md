@@ -11,7 +11,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
 任务拆解仍以 `docs/ROADMAP.md` 为准，进入阶段后再拆 issue。
 
-验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 109 项浏览器 e2e）：
+验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 113 项浏览器 e2e）：
 
 - ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
 - ✅ TypeScript 7.0.2 strict
@@ -28,8 +28,8 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 | 产物 | 状态 | 说明 |
 |---|---|---|
-| `release/GoFor-win-x64.zip` | ✅ 本地预览包（2026-10-20，HEAD `066d9d1`，P2-2.19 换课 + 模板/校准页预览日期 + 打印预览覆盖整段范围，**未发布**） | 104,880,150 B / 31 文件 / sha256 `2bb54398…191e`；Electron v33，双击 `GoFor.exe`；**固定端口 47821**。包内 `index-6s9CV9b_.js`（sha256 `33caa2f4…31c8`）与本地 `apps/web/dist` 逐字节一致。已发布的是 `v0.2.6-p2`（对应 740e3b9，不含后三批功能） |
-| `release/GoFor-debug.apk` | ⏸ 暂时停打（用户要求：先只做 Windows，Android 后期适配） | 4.6 MB（4,622,941 B），`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
+| `release/GoFor-win-x64.zip` | ⏹ **已停止构建**（用户 2026-10-20 决定：不再打 win 包，验收在网页 4173 上进行；旧包仅作历史，不再更新） | 最后一次是 HEAD `066d9d1`：104,880,150 B / 31 文件 / sha256 `2bb54398…191e`；Electron v33，固定端口 47821。已发布的是 `v0.2.6-p2`（对应 740e3b9，不含后三批功能） |
+| `release/GoFor-debug.apk` | ⏸ 不再打（Android 后期适配） | 4.6 MB（4,622,941 B），`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
 | `release/README.md` | ✅ | 安装说明与已知限制 |
 
 两者都只是"看一眼"，不是发布形态。正式渠道仍是 PWA。
@@ -57,7 +57,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 1.13 统计 | ✅ | 36 测试 + 接入首页（今日专注、连续学习） |
 | 1.14 导入导出 | ✅ | JSON + 格式版本 |
 
-测试：core 353 + store 42 + vision 41 = **436 单测**；e2e **109 项**（含条码兜底、打卡行、课程备注、定位块、日期范围联动、每天预览、备注框自适应、模板预览日期、编辑模式换课、预览弹窗覆盖整个范围）。
+测试：core 360 + store 42 + vision 41 = **443 单测**；e2e **113 项**（含条码兜底、打卡行换行、课程备注、矢量定位块、日期范围联动、每天预览、备注框自适应、模板预览日期、编辑模式换课、预览弹窗与「继续打印」覆盖整个范围）。
 
 ### 第三批反馈修复（2026-xx）
 
@@ -201,6 +201,7 @@ P1 / P2 已完成（含 P2-2.12 条码、2.13 打卡行、2.15 课程备注、2.
 | 打卡行采样窗套住印刷名字 | 名字是黑字，会把「没勾」也算成有墨 | 采样窗只覆盖勾选框（5mm），渲染时名字放在窗右侧；manifest 与 PrintSheet 必须同时改 |
 | 批量打印按“今天”取数据 | 每张纸的任务/课表/二维码都写错日期，扫回来对不上 | 用 `buildSheetForDate(date)` 逐日构建；打印前逐日 `saveSheetManifest`，再 `window.print()` |
 | 深色主题把正文颜色继承到纸面 | 深色下打印预览的标题变成浅灰字，真打出来也可能浅色（白纸浅字） | `.print-root` / `.print-page` 固定 `color:#111`，纸面不跟主题；新增纸面色不要用 token 类 |
+| 定位点只在预览里有、纸上没有 | 实心块用 `div` + `background` 画，浏览器打印默认关闭「背景图形」 | 改成 SVG 矢量填充（与二维码/条码一致）；e2e 断言 `svg [data-fiducial]`，只数 `[data-fiducial]` 会漏 |
 | 主题切换只改系统偏好 | 晚上调试要手动深色，系统却是浅色 | 三态（跟随系统/浅色/深色）存在 localStorage，`<html data-theme>` 驱动 token |
 | 运行时依赖没带许可证文本 | Apache-2.0 要求随分发附许可证；之前只在 README 提了一嘴 | `apps/web/public/THIRD-PARTY-NOTICES.txt`（组件+全文）随 dist/包分发，「数据与备份」页有入口 |
 | 条码印在页边距 | 拍照/框选常把最外圈裁掉，码刚好被裁出画面（e2e 的"重置四角"就复现了） | 印在正文下方（`contentBottom + 1mm`），确保落在用户框的纸里 |
@@ -255,6 +256,12 @@ pnpm verify      # typecheck + test + build + e2e
 2026-10-20 **本地 Windows 包按 `066d9d1` 重建**：104,880,150 B / 31 文件 / sha256 `2bb54398…191e`，`zipfile.testzip()` 无错；包内 `index-6s9CV9b_.js`（sha256 `33caa2f4…31c8`）与本地 dist 9 个文件全部逐字节一致；**未发 Release**。
 
 2026-10-20 **打印页预览修正**：左上角「打印预览」弹窗改为覆盖整个日期范围（每天各自 `layout` 后拼成一本，页码跨天连续，标题显示当前日期；以前只拿当前一天，选 N 天也只看到 1 天）。内嵌预览整体放大 1.5 倍：单张 `maxScale` 0.62→0.93，多天网格每张纸最小宽 240→360px（`minmax(min(360px,100%),1fr)`，窄屏不横向溢出）。
+
+2026-10-20 **不再打 Windows 包**：用户决定验收一律在网页（`http://127.0.0.1:4173/`）上进行，`release/GoFor-win-x64.zip` 停止重建、不再更新校验值；`AGENTS.md` 的「打包策略」同步改写。
+
+2026-10-20 **打印链路两处修复**：「打印预览 → 继续打印」现在把整个日期范围交给打印队列并逐日固化清单（以前直接 `window.print()`，只打队列里那 1 天，对应 P2-2.18）；打卡行显示全部打卡项，超过每行 6 个自动换行、各行数量尽量均分（7→4+3、13→5+4+4），名字过长用省略号防重叠（P2-2.20）。行数由 `materialize()` 按当天打卡项数量算好，`PrintSheet` 与 `manifest.ts` 共用 `habitRowLayout`，采样窗仍只盖 5mm 勾选框。换行多占的高度从「我的一天」的作业清单行里让出（至少 4 行），A4 在 ≤25 个打卡项时仍是一页。
+
+2026-10-20 **定位点打印修复**：四角定位块原来用 `div` + `background` 画，浏览器打印默认不印「背景图形」，所以只在预览里有、纸上没有；改成 SVG 矢量填充后不依赖该选项，二维码/条码同等。e2e 新增断言 `svg [data-fiducial]`。
 
 
 2026-10-20 **打印预览与滑块再调整**：多天预览改为横排自适应网格，已选/未选轨道改用 `strong`/`line-strong`；

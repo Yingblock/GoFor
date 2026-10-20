@@ -4,7 +4,7 @@ import {
   type CheckboxListBlock,
   FIDUCIAL_OFFSET_MM,
   FIDUCIAL_SIZE_MM,
-  HABIT_ROW_MAX,
+  habitRowLayout,
   layout,
   type Margin,
   PAPER_SIZES,
@@ -511,63 +511,84 @@ function BarcodeStrip({ page, data }: { page: PageLayout; data: SheetData }) {
 }
 
 /**
- * 打卡行（P2-2.13）：一行并排若干「勾选框 + 习惯名」。
+ * 打卡行（P2-2.13）：每行并排若干「勾选框 + 习惯名」，打卡项多时换行显示。
  *
  * 采样窗只覆盖勾选框（5mm），**不覆盖习惯名**——名字是印刷字，算进去会把
  * "没勾"也读成有墨。渲染顺序必须和 `manifest.ts` 的 `habitRowTargets` 一致：
+ * 两边共用 core 的 `habitRowLayout`（每行最多 6 个、各行数量差 ≤1），
  * 每格等宽、勾选框贴在格子左侧、行高 7mm 从块顶开始。
+ *
+ * 名字过长时用 ellipsis 截断而不是换行/溢出：格子是固定宽度的，溢出会和
+ * 相邻习惯叠在一起（打印出来就是一团黑）。
  */
 function HabitRowView({ data }: { data: SheetData }) {
   const habits = data.habits ?? [];
   if (habits.length === 0) {
     return <div style={{ fontSize: mm(2.8), color: '#9ca3af' }}>还没有打卡项</div>;
   }
-  const shown = habits.slice(0, HABIT_ROW_MAX);
-  const hidden = habits.length - shown.length;
+  const rowSizes = habitRowLayout(habits.length);
+  let offset = 0;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', height: mm(7) }}>
-      {shown.map((habit) => (
-        <div
-          key={habit.id}
-          style={{
-            flex: '1 1 0',
-            minWidth: 0,
-            display: 'flex',
-            alignItems: 'center',
-            gap: mm(1.2),
-          }}
-        >
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {rowSizes.map((size, rowIndex) => {
+        const rowHabits = habits.slice(offset, offset + size);
+        offset += size;
+        return (
           <div
-            style={{
-              width: mm(4),
-              height: mm(4),
-              border: `${mm(0.25)} solid #4b5563`,
-              borderRadius: mm(0.8),
-              flex: 'none',
-            }}
-          />
-          <span
-            style={{
-              fontSize: mm(2.4),
-              color: '#374151',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
+            // biome-ignore lint/suspicious/noArrayIndexKey: 行只是固定节次的位置槽位
+            key={rowIndex}
+            data-habit-row={rowIndex + 1}
+            style={{ display: 'flex', alignItems: 'center', height: mm(ROW_HEIGHT_MM) }}
           >
-            {habit.name}
-          </span>
-        </div>
-      ))}
-      {hidden > 0 ? (
-        <span style={{ fontSize: mm(2.4), color: '#9ca3af', flex: 'none' }}>+{hidden}</span>
-      ) : null}
+            {rowHabits.map((habit) => (
+              <div
+                key={habit.id}
+                data-habit-name
+                style={{
+                  flex: '1 1 0',
+                  minWidth: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: mm(1.2),
+                }}
+              >
+                <div
+                  style={{
+                    width: mm(4),
+                    height: mm(4),
+                    border: `${mm(0.25)} solid #4b5563`,
+                    borderRadius: mm(0.8),
+                    flex: 'none',
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: mm(2.4),
+                    color: '#374151',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {habit.name}
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-/** 四角定位块（P2-2.17）：实心黑方块，尺寸/位置来自 core 常量，扫描端据此自动找纸。 */
+/**
+ * 四角定位块（P2-2.17）：实心黑方块，尺寸/位置来自 core 常量，扫描端据此自动找纸。
+ *
+ * 用 `<svg>` 矢量填充而不是带 `background` 的 `<div>`：浏览器打印默认关闭
+ * 「背景图形」，背景色方块只在预览里有、纸上没有——用户看到的现象就是
+ * "定位点只出现在预览页，打不出来"。矢量图形（和二维码/条码一样）一定会打印。
+ */
 function PageFiducials({ page }: { page: PageLayout }) {
   const size = FIDUCIAL_SIZE_MM;
   const offset = FIDUCIAL_OFFSET_MM;
@@ -578,22 +599,24 @@ function PageFiducials({ page }: { page: PageLayout }) {
     { key: 'bl', left: offset, top: page.heightMm - offset - size },
   ];
   return (
-    <>
+    <svg
+      aria-hidden="true"
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+      viewBox={`0 0 ${page.widthMm} ${page.heightMm}`}
+      preserveAspectRatio="none"
+    >
       {positions.map((position) => (
-        <div
+        <rect
           key={position.key}
           data-fiducial={position.key}
-          style={{
-            position: 'absolute',
-            left: mm(position.left),
-            top: mm(position.top),
-            width: mm(size),
-            height: mm(size),
-            background: '#111111',
-          }}
+          x={position.left}
+          y={position.top}
+          width={size}
+          height={size}
+          fill="#111111"
         />
       ))}
-    </>
+    </svg>
   );
 }
 
@@ -742,6 +765,8 @@ export interface PrintPreviewDialogProps {
   /** 显示在标题栏的模板名，让人确认「打的是这张模板」。 */
   templateName: string;
   onClose: () => void;
+  /** 「继续打印」：打印**整个当前范围**，不只是预览里的这一页。 */
+  onPrint: () => void;
 }
 
 /**
@@ -761,6 +786,7 @@ export function PrintPreviewDialog({
   margin,
   templateName,
   onClose,
+  onPrint,
 }: PrintPreviewDialogProps) {
   const size = PAPER_SIZES[paper];
   const [pageIndex, setPageIndex] = useState(0);
@@ -906,7 +932,7 @@ export function PrintPreviewDialog({
           </button>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={onPrint}
             className="rounded-lg bg-strong px-3 py-1.5 text-xs text-on-strong"
           >
             继续打印

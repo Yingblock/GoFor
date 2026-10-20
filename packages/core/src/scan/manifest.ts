@@ -15,8 +15,8 @@ import {
   blockHeightMm,
   type CheckboxGridBlock,
   type CheckboxListBlock,
-  HABIT_ROW_MAX,
   type HabitRowBlock,
+  habitRowLayout,
   type RatingGridBlock,
   ROW_HEIGHT_MM,
 } from '../print/blocks.ts';
@@ -212,11 +212,12 @@ function ratingGridTargets(
 }
 
 /**
- * 打卡行：一行并排若干「勾选框 + 习惯名」，每个习惯产生一个 checkbox target。
+ * 打卡行：并排若干「勾选框 + 习惯名」，打卡项多时换行。
  *
  * 采样窗只覆盖**勾选框那一小块**（5mm 宽），不覆盖习惯名：名字是印刷字，
  * 把它算进采样窗会让"没勾"的格子也带上墨迹。渲染端也按这个约定画
- * （见 `PrintSheet` 的 `HabitRowView`），两边必须同时改。
+ * （见 `PrintSheet` 的 `HabitRowView`），两边共用 `habitRowLayout` 分行，
+ * 每行内部等宽，行高 7mm 从块顶开始——任何一边改了都必须同步另一边。
  */
 function habitRowTargets(
   block: HabitRowBlock,
@@ -226,28 +227,32 @@ function habitRowTargets(
 ): ScanTarget[] {
   const boundIds = input.bindings?.['habits.today'] ?? [];
   const labels = input.labels?.['habits.today'] ?? [];
-  const shown = Math.min(boundIds.length, HABIT_ROW_MAX);
-  if (shown <= 0) return [];
+  const rowSizes = habitRowLayout(boundIds.length);
+  if (rowSizes.length === 0) return [];
 
-  const cellWidthMm = placement.widthMm / shown;
   const targets: ScanTarget[] = [];
-  for (let index = 0; index < shown; index += 1) {
-    const rawId = boundIds[index];
-    if (rawId === undefined) continue;
-    targets.push({
-      targetId: `${block.id}/h${index + 1}`,
-      kind: 'checkbox',
-      label: labels[index] ?? `打卡 ${index + 1}`,
-      rect: {
-        x: (placement.xMm + index * cellWidthMm) / page.widthMm,
-        y: placement.yMm / page.heightMm,
-        w: Math.min(5, cellWidthMm) / page.widthMm,
-        h: ROW_HEIGHT_MM / page.heightMm,
-      },
-      payload: rawId,
-      applyPayload: applyPayloadFor('habits.today', rawId),
-    });
-  }
+  let index = 0;
+  rowSizes.forEach((size, rowIndex) => {
+    const cellWidthMm = placement.widthMm / size;
+    for (let column = 0; column < size; column += 1) {
+      const rawId = boundIds[index];
+      index += 1;
+      if (rawId === undefined) continue;
+      targets.push({
+        targetId: `${block.id}/h${rowIndex + 1}c${column + 1}`,
+        kind: 'checkbox',
+        label: labels[index - 1] ?? `打卡 ${index}`,
+        rect: {
+          x: (placement.xMm + column * cellWidthMm) / page.widthMm,
+          y: (placement.yMm + rowIndex * ROW_HEIGHT_MM) / page.heightMm,
+          w: Math.min(5, cellWidthMm) / page.widthMm,
+          h: ROW_HEIGHT_MM / page.heightMm,
+        },
+        payload: rawId,
+        applyPayload: applyPayloadFor('habits.today', rawId),
+      });
+    }
+  });
   return targets;
 }
 

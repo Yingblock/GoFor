@@ -447,13 +447,20 @@ export function TemplateEditorScreen({
     return paperFor(builtin.id, paper);
   }, [customId, draft, isCustom, paper, selectedId]);
 
+  /** 预览日期那天的纸面数据：预览与「打卡行占几行」都从同一份数据来。 */
+  const previewData = useMemo(
+    () => buildSheetData(previewDate, currentTemplate.id),
+    [buildSheetData, currentTemplate.id, previewDate],
+  );
+
   const blocks = useMemo(
     () =>
       materialize(currentTemplate, {
         date: previewDate,
         dateLabel: todayLabel(previewDate),
+        habitCount: previewData.habits?.length ?? 0,
       }),
-    [currentTemplate, previewDate],
+    [currentTemplate, previewData.habits, previewDate],
   );
 
   const pageCount = layout(blocks, { paper: currentTemplate.paper }).pages.length;
@@ -766,11 +773,7 @@ export function TemplateEditorScreen({
       {/* 右：预览 */}
       <div className="min-w-0 space-y-2">
         <h2 className="text-xs font-medium opacity-50">预览</h2>
-        <PrintPreview
-          blocks={blocks}
-          paper={currentTemplate.paper}
-          data={buildSheetData(previewDate, currentTemplate.id)}
-        />
+        <PrintPreview blocks={blocks} paper={currentTemplate.paper} data={previewData} />
         <label className="flex items-center gap-2 text-caption opacity-60">
           <span>预览日期</span>
           <input

@@ -249,3 +249,51 @@ describe('坐标注册表：分页与跳过', () => {
     expect(manifest.pages[0]?.heightMm).toBe(210);
   });
 });
+
+describe('坐标注册表：habitRow 多行', () => {
+  const habitRow = (rows: number): Block => ({ id: 'habits', kind: 'habitRow', span: 12, rows });
+
+  it('7 项换 2 行（4+3），采样窗只覆盖 5mm 勾选框并按行下移', () => {
+    const habits = ['早读', '背单词', '错题', '跑步', '练字', '日记', '复盘'];
+    const blocks = [habitRow(2)];
+    const manifest = buildSheetManifest(
+      input(blocks, {
+        bindings: { 'habits.today': habits.map((_, index) => `h${index + 1}`) },
+        labels: { 'habits.today': habits },
+      }),
+    );
+    const page = layout(blocks, { paper: 'A5' }).pages[0];
+    if (page === undefined) throw new Error('缺少页面');
+    const placement = page.placements[0];
+    if (placement === undefined) throw new Error('缺少 placement');
+
+    const targets = manifest.pages[0]?.targets ?? [];
+    expect(targets).toHaveLength(7);
+    expect(targets.map((target) => target.label)).toEqual(habits);
+    expect(targets.map((target) => target.payload)).toEqual([
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'h7',
+    ]);
+
+    // 第 1 行 4 格等宽；第 2 行 3 格等宽（比第 1 行宽）。
+    const firstRowWidth = placement.widthMm / 4;
+    const secondRowWidth = placement.widthMm / 3;
+    expect((targets[0]?.rect.w ?? 0) * page.widthMm).toBeCloseTo(Math.min(5, firstRowWidth), 5);
+    expect((targets[4]?.rect.w ?? 0) * page.widthMm).toBeCloseTo(Math.min(5, secondRowWidth), 5);
+    expect((targets[4]?.rect.x ?? 0) * page.widthMm).toBeCloseTo(placement.xMm, 5);
+    // 第 2 行相对块顶下移一个行高（7mm），不能还落在第 1 行。
+    expect((targets[4]?.rect.y ?? 0) * page.heightMm).toBeCloseTo(placement.yMm + 7, 5);
+    // 同一行第 2 格横向偏移 = 第 1 行的格子宽。
+    expect((targets[1]?.rect.x ?? 0) * page.widthMm).toBeCloseTo(placement.xMm + firstRowWidth, 5);
+  });
+
+  it('没有打卡项时不产生采样点', () => {
+    const manifest = buildSheetManifest(input([habitRow(1)], { bindings: { 'habits.today': [] } }));
+    expect(manifest.pages.flatMap((page) => page.targets)).toEqual([]);
+  });
+});

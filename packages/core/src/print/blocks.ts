@@ -9,6 +9,9 @@
  *
  * 行数是模板里的显式参数，不是从数据推出来的。数据多了就缩字号或提示截断，
  * 而不是悄悄把版面撑破。
+ *
+ * 唯一例外是 `habitRow`：打卡项数量只有打印时才知道，行数由 `materialize()`
+ * 按当天数据算好再交给 `layout()`——仍在排版前确定，不是运行时测量。
  */
 
 export const BLOCK_KINDS = [
@@ -164,13 +167,41 @@ export interface QrCodeBlock extends BlockBase {
   sizeMm: number;
 }
 
-/** 打卡行：一行内并排若干个「勾选框 + 习惯名」，扫描时逐格判断有没有墨。 */
+/**
+ * 打卡行：并排若干个「勾选框 + 习惯名」，扫描时逐格判断有没有墨。
+ *
+ * 一行最多 `HABIT_ROW_MAX` 个；打卡项更多时**换行**显示，不截断成「+n」。
+ * `rows` 由 `materialize()` 按当天打卡项数量算好再交给 `layout()`——
+ * 高度仍在排版前确定，不做运行时测量（见文件头的设计前提）。
+ */
 export interface HabitRowBlock extends BlockBase {
   kind: 'habitRow';
+  /** 显示几行；由 `materialize()` 按当天打卡项数量填，模板里不存。 */
+  rows?: number;
 }
 
-/** 打卡行最多显示几个；再多就截断（纸面一行放不下，硬塞会看不清）。 */
+/** 打卡行每行最多显示几个；再多就换行（再挤名字会看不清）。 */
 export const HABIT_ROW_MAX = 6;
+
+/** 打卡行的实际行数；空状态也占一行（渲染「还没有打卡项」）。 */
+export function habitRowRows(block: HabitRowBlock): number {
+  return Math.max(1, block.rows ?? 1);
+}
+
+/**
+ * 把 `count` 个打卡项尽量均分到最少的行里。
+ *
+ * 行数 = `ceil(count / HABIT_ROW_MAX)`，各行数量最多相差 1：
+ * 7 项 → 4+3，13 项 → 5+4+4。渲染与扫描清单共用这一个函数，
+ * 否则两边行数/列宽不一致，采样窗会整体错位。
+ */
+export function habitRowLayout(count: number): number[] {
+  if (count <= 0) return [];
+  const rows = Math.ceil(count / HABIT_ROW_MAX);
+  const base = Math.floor(count / rows);
+  const extra = count % rows;
+  return Array.from({ length: rows }, (_, index) => base + (index < extra ? 1 : 0));
+}
 
 export interface ProgressDotsBlock extends BlockBase {
   kind: 'progressDots';
@@ -222,8 +253,9 @@ export function blockHeightMm(block: Block): number {
     case 'qrcode':
       return block.sizeMm;
     case 'habitRow':
-      // 一行 7mm：与 checkboxList 的行高一致，勾选框有足够书写空间。
-      return ROW_HEIGHT_MM;
+      // 每行 7mm：与 checkboxList 的行高一致，勾选框有足够书写空间；
+      // 打卡项多时按行堆叠（rows 由 materialize 按当天数据算好）。
+      return habitRowRows(block) * ROW_HEIGHT_MM;
     case 'checkboxList':
       return BLOCK_PADDING_MM + block.rows * ROW_HEIGHT_MM;
     case 'timeLog':

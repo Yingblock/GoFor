@@ -3,6 +3,10 @@ import {
   BLOCK_KINDS,
   blockHeightMm,
   type CheckboxGridBlock,
+  HABIT_ROW_MAX,
+  type HabitRowBlock,
+  habitRowLayout,
+  habitRowRows,
   type RatingGridBlock,
   validateBlock,
 } from './blocks.ts';
@@ -44,5 +48,34 @@ describe('区块：ratingGrid', () => {
     const noRows = validateBlock({ ...rating, labels: [] });
     expect(noRows).toHaveLength(1);
     expect(noRows[0]).toContain('至少需要一行');
+  });
+});
+
+describe('区块：habitRow 多行', () => {
+  const habitRow: HabitRowBlock = { id: 'habits', kind: 'habitRow', span: 12 };
+
+  it('每行最多 6 个，超过就换行', () => {
+    expect(habitRowLayout(0)).toEqual([]);
+    expect(habitRowLayout(1)).toEqual([1]);
+    expect(habitRowLayout(6)).toEqual([6]);
+    expect(habitRowLayout(7)).toEqual([4, 3]);
+  });
+
+  it('各行数量最多相差 1（尽量均分）', () => {
+    expect(habitRowLayout(13)).toEqual([5, 4, 4]);
+    expect(habitRowLayout(8)).toEqual([4, 4]);
+    expect(habitRowLayout(20)).toEqual([5, 5, 5, 5]);
+    for (const count of [1, 2, 5, 7, 9, 13, 17, 31, 60]) {
+      const rows = habitRowLayout(count);
+      expect(rows.reduce((sum, size) => sum + size, 0)).toBe(count);
+      expect(Math.max(...rows) - Math.min(...rows)).toBeLessThanOrEqual(1);
+      expect(Math.max(...rows)).toBeLessThanOrEqual(HABIT_ROW_MAX);
+    }
+  });
+
+  it('高度 = 行数 × 7mm；没填 rows 时按 1 行', () => {
+    expect(habitRowRows(habitRow)).toBe(1);
+    expect(blockHeightMm(habitRow)).toBe(7);
+    expect(blockHeightMm({ ...habitRow, rows: 3 })).toBe(21);
   });
 });

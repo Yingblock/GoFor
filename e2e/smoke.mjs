@@ -442,6 +442,20 @@ try {
   }
   check('首页课表行可写备注', noteWritten, noteWritten ? '' : '今天没有课，跳过');
 
+  /*
+   * 打卡行要能装下全部打卡项：建够 7 个（每行上限 6），验证是换行而不是截断成「+n」。
+   * 今日打卡页已经验证过新建流程，这里只是把数量凑过阈值。
+   */
+  await openGroup(page, '记录');
+  await clickItem(page, '每日打卡');
+  await page.waitForSelector('text=新建打卡项', { timeout: 8000 });
+  for (const name of ['早读', '错题', '跑步', '练字', '日记', '复盘']) {
+    await page.getByRole('button', { name: '新建打卡项' }).first().click();
+    await page.fill('input[placeholder="打卡项名称，如：背单词"]', name);
+    await page.getByRole('button', { name: '保存', exact: true }).click();
+    await page.waitForSelector(`input[aria-label="完成 ${name}"]`, { timeout: 5000 });
+  }
+
   /* ------------------------------------------------------------ 打印 */
 
   await openGroup(page, '导出');
@@ -484,8 +498,26 @@ try {
   await rangePreview.waitFor({ timeout: 5000 });
   const rangePreviewHeader = await rangePreview.locator('header').innerText();
   check('打印预览覆盖整个日期范围', rangePreviewHeader.includes('2 天'), rangePreviewHeader);
-  await page.keyboard.press('Escape');
-  await sleep(200);
+
+  // 「继续打印」以前直接 window.print()，打的还是队列里那 1 天。
+  // 把 window.print 换成计数器，直接验证它确实把整个范围交给打印层。
+  // 期望页数不写死：等于预览里各天页数之和（换模板/纸张时也不会误报）。
+  const previewPageCount = await page.locator('[data-print-preview-date] .print-page').count();
+  await page.evaluate(() => {
+    window.__goforPrintCalls = 0;
+    window.print = () => {
+      window.__goforPrintCalls = (window.__goforPrintCalls ?? 0) + 1;
+    };
+  });
+  await rangePreview.getByRole('button', { name: '继续打印' }).click();
+  await page.waitForFunction(() => (window.__goforPrintCalls ?? 0) > 0, { timeout: 10000 });
+  await sleep(300);
+  const printedPages = await page.locator('.print-root .print-page').count();
+  check(
+    '预览里继续打印会打整个范围',
+    printedPages === previewPageCount && printedPages > 1,
+    `${printedPages} 页 / 预览 ${previewPageCount} 页`,
+  );
 
   await page.getByLabel('范围结束').fill(todayKey);
   await printDateInput.fill(todayKey);
@@ -502,10 +534,27 @@ try {
   // P2-2.17：每页四角印 3mm 定位块，扫描端据此自动框选。
   const fiducials = await page.locator('.print-page').first().locator('[data-fiducial]').count();
   check('纸面四角有定位块', fiducials === 4, `${fiducials} 个`);
+  // 定位点必须是矢量：浏览器打印默认不印背景色，div + background 只会在预览里有。
+  const vectorFiducials = await page
+    .locator('.print-page')
+    .first()
+    .locator('svg [data-fiducial]')
+    .count();
+  check('定位点是矢量图形（不靠背景色打印）', vectorFiducials === 4, `${vectorFiducials} 个`);
 
   // 打卡行（P2-2.13）：e2e 前面已经建了「背单词」，默认 A4 模板要把它印出来。
   const printedHabit = await page.locator('.print-page').first().getByText('背单词').count();
   check('纸面包含打卡行', printedHabit > 0);
+
+  // 7 个打卡项超过每行 6 个的上限：必须换行，且最后一个也不能被截掉。
+  const habitRows = await page.locator('.print-page').first().locator('[data-habit-row]').count();
+  check('打卡项超过 6 个会换行显示', habitRows === 2, `${habitRows} 行`);
+  const printedHabitNames = await page
+    .locator('.print-page')
+    .first()
+    .locator('[data-habit-name]')
+    .count();
+  check('打卡行显示全部打卡项（不截断）', printedHabitNames === 7, `${printedHabitNames} 项`);
 
   if (noteWritten) {
     const printedNote = await page.locator('.print-page').first().getByText('带错题本').count();

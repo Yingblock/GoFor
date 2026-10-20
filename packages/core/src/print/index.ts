@@ -14,6 +14,8 @@ export {
   HABIT_ROW_MAX,
   type HabitRowBlock,
   type HintLineBlock,
+  habitRowLayout,
+  habitRowRows,
   type LinedBoxBlock,
   type PageBreakBlock,
   type ProgressDotsBlock,

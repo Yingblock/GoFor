@@ -213,6 +213,12 @@ export function PrintScreen({
     paper,
     templateName,
     onClose: () => setPreviewOpen(false),
+    // 「继续打印」必须让 App 把整个范围换进打印队列并逐日固化清单，
+    // 直接 `window.print()` 只会打当前队列里的那 1 天。
+    onPrint: () => {
+      setPreviewOpen(false);
+      void printAll();
+    },
   };
 
   return (

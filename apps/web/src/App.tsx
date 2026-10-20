@@ -258,12 +258,14 @@ export function App() {
    */
   const buildSheetForDate = useCallback(
     (date: string) => {
+      const sheetTasks = tasksForDate(date);
+      const sheetHabits = habitsForDate(date);
       const sheetBlocks = materialize(printTemplate, {
         date,
         dateLabel: todayLabel(date),
+        // 打卡项多的日子要换行显示（不是截断），行数必须在排版前算好。
+        habitCount: sheetHabits.length,
       });
-      const sheetTasks = tasksForDate(date);
-      const sheetHabits = habitsForDate(date);
       const data = buildSheetData(date, printTemplate.id);
       return { date, blocks: sheetBlocks, data, tasks: sheetTasks, habits: sheetHabits };
     },

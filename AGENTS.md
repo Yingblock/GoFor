@@ -203,6 +203,9 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
   `FIDUCIAL_OFFSET_MM` / `FIDUCIAL_INSET_MM` 在 `core/print/blocks.ts`，打印在
   `PrintSheet`、检测在 `vision/fiducial.ts`、外扩在 `scan/pipeline.ts`。改任何一处
   都要同时改另外两个，否则自动框选会整体偏移。
+- **纸面需要实心墨块时一律用 SVG 矢量填充，不要用 `background`**：浏览器打印默认不印
+  「背景图形」，`div + background` 只在预览里出现、纸上没有（定位点就踩过）。同理，
+  e2e 要断言 `svg [data-fiducial]` 而不只是 `[data-fiducial]`。
 - **`checkboxList` 的采样窗只覆盖勾选框（5mm）**，不要扩到整行：行里的印刷标题是墨迹，
   会把"没勾"读成"勾了"。`manifest.ts` 与 `PrintSheet` 的勾选框位置必须同时改。
 - **二维码 ≥ 16mm**。12mm 在 300dpi 下每模块约 0.3mm，手机经常扫不出；
@@ -219,6 +222,8 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
   e2e 的"隐藏二维码只靠条码"用例会兜住。
 - **打卡行（habitRow）的采样窗只覆盖勾选框**：习惯名是印刷字，采样窗套住名字会把"没勾"读成有墨。
   `manifest.ts` 的 `habitRowTargets` 与 `PrintSheet` 的 `HabitRowView` 必须同时改（窗宽 5mm/行高 7mm）。
+  打卡项超过 6 个会换行：行数由 `materialize()` 按当天打卡项数量算好（`habitRowLayout` 均分、差 ≤1），
+  渲染与切分**共用同一个布局函数**，改一边必须同步另一边；名字过长用省略号，不能溢出到相邻格子。
   A5 等高度 <230mm 的小纸会自动不印这一行，别为了"都能印"把整页顶成两页。
 - **手写内容不做识别**：时间登记、`slots` 手写格需要 OCR，P2 明确不做；
   要回填的数值请用 `ratingGrid`（印成勾选格）。
@@ -240,9 +245,12 @@ e2e 是真实浏览器冒烟，会自己起 `127.0.0.1:4173` 的 preview 服务�
 
 ## 打包策略
 
-- **只打 Windows 包**（`bash tools/package-windows/build.sh` → `release/GoFor-win-x64.zip`）。
-  Android（Capacitor + gradle）**暂时不打**，等后期适配；不要因为"顺手"又去 `cap sync` / `assembleDebug`。
-- 打包产物不进 git（`release/` 已 ignore）；**发布 GitHub Release 必须用户明确要求**，默认只本地构建。
+- **不再构建 Windows 包**（用户 2026-10-20 决定）：`tools/package-windows/build.sh` 与
+  `release/GoFor-win-x64.zip` 不再是交付物，`release/` 里的旧包只作历史，**不要重建、不要更新校验值**。
+- **验收一律在网页上进行**：改完 `pnpm build`（或 `pnpm verify` 里的 build）让 4173 的
+  `vite preview` 读到新 `dist`，在 `http://127.0.0.1:4173/` 上点一遍验收；需要自动化时用 e2e。
+- Android（Capacitor + gradle）同样不打，等后期适配。
+- `release/` 仍不进 git（已 ignore）；**发布 GitHub Release 必须用户明确要求**，默认什么包都不构建。
 - **4173 由 systemd 用户服务托管，不要再用 `pnpm preview &` / `nohup` 临时起**：
   `~/.config/systemd/user/gofor-preview.service`（`Restart=always`、已 `enable`，
   用户 `Linger=yes`，所以关终端/WSL 会话结束都不影响）。
