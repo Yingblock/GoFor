@@ -1,6 +1,6 @@
 # GoFor 设计系统（Tailwind v4 CSS-first）
 
-> 状态：第一阶段（token + `@gofor/ui` + 共享组件/首页迁移）。
+> 状态：token + `@gofor/ui`（19 个组件）+ 主要屏幕已迁移；Pomodoro/Timetable/TemplateEditor/Diary/Report/Toolbox 仍直接使用 token 类名。
 > 后续屏幕迁移时先读这份文档；规则与 `AGENTS.md` 硬性规则 11 配套。
 
 ## 1. 为什么没有 `tailwind.config.js`

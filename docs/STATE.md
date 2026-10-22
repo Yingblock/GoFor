@@ -5,7 +5,7 @@
 
 ## 现在在哪
 
-**P1 + P2 完成。离线闭环已经能「打印 → 手写 → 拍照扫回来」：作业/课表/打卡/番茄，纸上有二维码 + 页尾条码，扫描后逐条确认再写库。深色主题已加（P2-2.16）。**
+**P0 + P1 + P2 完成。离线闭环已经能「打印 → 手写 → 拍照扫回来」：作业/课表/打卡/番茄，纸上有二维码 + 页尾条码 + 四角定位块 + 区块小定位点；支持指定日期/范围批量打印、深色主题、课表换课、打卡行换行。扫描后逐条确认再写库。**
 
 GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 里程碑 P0–P8 已建；P1 已拆成 issues #8–#23，挂在 `P1 离线核心` 下。P2–P8 的
@@ -13,16 +13,17 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 114 项浏览器 e2e）：
 
-- ✅ monorepo：`apps/web`、`packages/core`、`packages/store`
-- ✅ TypeScript 7.0.2 strict
+- ✅ monorepo：`apps/web`、`packages/core`、`packages/store`、`packages/ui`、`packages/vision`
+- ✅ TypeScript strict；Biome；Vitest + Playwright；CI `pnpm verify`
 - ✅ **`Clock` 抽象**（系统/手动时钟）—— 领域层禁止直接 `Date.now()`
-- ✅ **配置层**：zod schema、默认值、深合并、课时从作息表推导（中位数）、专注格换算
+- ✅ **配置层**：zod schema、默认值、深合并、课时从作息表推导（中位数）
 - ✅ **纸面时间解析**：`19:30` / `1930` / `19点30分` / 跨零点；歧义靠分栏消除
-- ✅ **打印版式引擎**：mm 单位、12 列网格、固定高度、自动分页、归一化坐标
-- ✅ **Dexie 数据层**：config / subjects / tags / tasks / sessions / timetable / templates / habits / habitLogs；v1→v4 三次迁移各有测试
+- ✅ **打印版式引擎**：mm 单位、12 列网格、固定高度、自动分页、归一化坐标；四角定位块 + 区块小定位点
+- ✅ **Dexie 数据层**：config / subjects / tags / tasks / sessions / timetable / templates / habits / habitLogs / checklists / checklistLogs / sheetManifests / courseNotes；v1→v7 迁移各有测试
 - ✅ **PWA**：manifest + service worker + 图标，可安装、离线可用
 - ✅ **命令面板**（⌘K）：打印 / 切纸张 / 导出 / 导入
 - ✅ **首张可打印的纸**：`pnpm build && pnpm e2e` 会生成 `e2e/out/day-sheet.pdf`
+- ✅ **P2 回流**：二维码 + 条码兜底 + 自动找四角 + 区块级局部校正；指定日期/范围打印；深色主题
 
 ## 打包产物（一次性，见 DECISIONS/0002）
 
@@ -32,8 +33,8 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | `release/GoFor-debug.apk` | ⏸ 不再打（Android 后期适配） | 4.6 MB（4,622,941 B），`app.gofor.study` v1.0，minSdk 24 / targetSdk 36；纯 WebView 壳 |
 | `release/README.md` | ✅ | 安装说明与已知限制 |
 
-两者都只是"看一眼"，不是发布形态。正式渠道仍是 PWA。
-包内 JS 已核对含「拍照录入」「离线·M2」、不含「专注格」。
+两个包都只是"看一眼"的历史产物，**不再是交付形态**；正式渠道是 PWA，
+验收在 `http://127.0.0.1:4173/` 网页上进行。
 
 ## P1 进度：已完成
 
@@ -109,7 +110,7 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 系统打印框之前没有预览 | 应用内 `PrintPreviewDialog`：与真实打印**同一份** blocks/paper/data，多页翻页，底部提示选纸/100%/关页眉页脚/背景图形 |
 | 改纸张只改了 UI，实际仍按 A4 打 | 根因不是 `@page`（内联 `@page` 实测会变），而是**选择只活在本地 state、没进 config**；修好后 PDF 实测：A4 594.96×841.92pt、A5 420×594.96pt、A6 298.08×420pt |
 | 拍照识别是否真能读出内容 | e2e 新增断言：解析出的**日期**等于纸面日期；识别出**作业行内容**（按打印时固化的 label）与**三格自评区块**；A5 纸张同样按坐标采样 |
-| 需要统一的样式体系 | Tailwind v4 **CSS-first** `@theme` token（颜色/圆角/阴影/字号/间距/动效 + `prefers-reduced-motion`）+ 新建 `packages/ui` 18 个组件；共享组件与屏幕逐步迁移；规则写进 AGENTS 第 11 条 |
+| 需要统一的样式体系 | Tailwind v4 **CSS-first** `@theme` token（颜色/圆角/阴影/字号/间距/动效 + `prefers-reduced-motion`）+ 新建 `packages/ui` 19 个组件（含 Slider）；共享组件与屏幕逐步迁移；规则写进 AGENTS 第 11 条 |
 
 ### 设计系统（2026-xx）
 
@@ -117,12 +118,11 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
   圆角（sm/md/lg/xl/2xl/full）、阴影（card/pop）、字号（title/section/body/small/caption/micro/metric）、
   间距语义、动效（duration-fast/base/slow + ease-standard/enter/exit + fade-in/pop-in），
   并有 `prefers-reduced-motion` 归零。
-- `packages/ui`：18 个组件（Button/IconButton/Card/Section/Field/Input/Select/Textarea/Checkbox/
-  Badge/Chip/StatCard/Modal/ProgressBar/EmptyState/Divider + cn/focusRing），零第三方依赖。
+- `packages/ui`：19 个组件（Button/IconButton/Card/Section/Field/Input/Select/Textarea/Checkbox/
+  Slider/Badge/Chip/StatCard/Modal/ProgressBar/EmptyState/Divider + cn/focusRing），零第三方依赖。
 - 已迁移：Sidebar / BackupBanner / ErrorBoundary / CommandPalette / Home / Tasks / Checkin /
-  Checklist / DataScreen / Scan / scan 三个组件 / ComingSoon / DebugPanel；Pomodoro/Timetable/
-  PrintScreen/TemplateEditor 自身用 token 类名。
-- **未迁（下一批）**：Diary / Mood / Report / Toolbox（这四屏仍用旧的自定义 Tailwind 类）。
+  Checklist / DataScreen / Mood / PrintScreen / Scan / scan 三个组件 / ComingSoon / DebugPanel。
+- **未迁（下一批）**：Pomodoro / Timetable / TemplateEditor / Diary / Report / Toolbox（这些屏幕直接使用 token 类名，未改用 `@gofor/ui` 组件）。
 - 规则写进 `AGENTS.md` 第 11 条与 `docs/DESIGN-SYSTEM.md`：新代码一律 `@gofor/ui` + token 类名，
   禁止 `text-[Npx]` / `border-black/[0.0x]` / `shadow-2xl` / 裸色值；Tailwind v4 是 CSS-first，
   **没有也不该有 `tailwind.config.js`**。
@@ -132,9 +132,9 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 块 | 落地位置 | 说明 |
 |---|---|---|
 | 二维码 + 深链 | `core/scan/deeplink.ts`、`qr.ts` | `gofor://fill?v=1&t=day&d=YYYY-MM-DD&p=A4`；纸面右上 16mm |
-| 扫描端 | `screens/Scan.tsx` + `screens/scan/*` | 选照片/摄像头帧 → 手动四角（主路径）→ 单应矫正 → Otsu 二值化 → 解二维码 |
+| 扫描端 | `screens/Scan.tsx` + `screens/scan/*` | 选照片/摄像头帧 → **四角定位块自动找纸（主路径，手动四角兜底）** → 单应矫正 → Otsu 二值化 → 解二维码；条码兜底；区块小定位点做局部校正 |
 | 坐标注册表 | `core/scan/manifest.ts` + `sheetManifests` 表 | **打印页进入时就固化**，键是「模板@日期@纸张」 |
-| 笔迹检测 | `packages/vision` | `toGray`/`otsuThreshold`/`binarize`/`warpQuad`/`inkRatio`；38 测试 |
+| 笔迹检测 | `packages/vision` | `toGray`/`otsuThreshold`/`binarize`/`warpQuad`/`inkRatio`/`findFiducialQuad`/`findMarkNear`；46 测试 |
 | 回填确认 | `screens/scan/ScanReview.tsx` + `applyScanResults` | 默认全选、逐条可取消；只写这张纸的日期；应用/丢弃都留记录 |
 | 环境清单 | `screens/Checklist.tsx` | 可编辑清单 + 今日勾选 + 近似历史完成率 |
 | 三滑块 + 纸上回流 | `screens/Mood.tsx` + `ratingGrid` 区块 | 纸上印成 1–5 勾选格（手写数字读不回来）；扫回来的数值写 `moodLogs` |
@@ -142,6 +142,12 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 | 情绪日记 | `screens/Diary.tsx` | 本地、标签、心情 1–5；趋势图未做（LATER） |
 | 自我周报 | `screens/Report.tsx` | 本周学习分钟、科目 Top、打卡率、三滑块均值、练习次数、分心次数；复习完成度标「P4 接入」 |
 | 数据与备份 | `screens/DataScreen.tsx` | 导出/导入、存储是否被承诺保留、上次备份时间；横幅上也直接给「从备份导入」 |
+| 指定日期 / 范围打印 | `screens/PrintScreen.tsx` + App `buildSheetForDate` | 默认明天；开始/结束/天数滑动条联动；每天独立预览（懒加载 100 天）；打印前逐日固化清单 |
+| 应用内打印预览 | `PrintPreviewDialog` | 覆盖整个范围、逐页翻；「继续打印」按整段范围打印 |
+| 深色主题 | `apps/web/src/theme.ts` + `ThemeToggle` | system / light / dark 三态；只覆盖 token，纸面固定白底黑字 |
+| 课表换课 | `WeekSection` + `core/timetable/edit.replaceCourseForBlock` | 编辑模式点课程块 → 列出科目 → 点一门替换（规则级，连堂块一起换） |
+| 打卡行多行 | `blocks.habitRowLayout` + `manifest.habitRowTargets` | 全部打卡项、每行 ≤6、各行均分；名字过长用省略号 |
+| 四角定位 + 区块定位点 | `blocks` / `PrintSheet` / `vision` / `scan/pipeline` | 页面定位点跟条码走但不越过安全线；每块两个对角十字做局部平移/缩放校正 |
 
 **布局（同期修复）**：桌面侧栏可折叠成图标列（`localStorage` + `Ctrl/⌘+B`），窄屏保持抽屉；
 打印预览按容器缩放（**只缩屏幕预览，打印尺寸不动**）；360px 下九屏无横向溢出（e2e 逐页量）。
@@ -162,14 +168,15 @@ GitHub 仓库：<https://github.com/Yingblock/GoFor>（private）。
 
 ### P1 期间的已知简化（写进 LATER，不是缺陷）
 
-- 课表调课只做「停课一次」，`move` / `replace` 未接 UI
-- 校准页是近似刻度，无 1mm 尺、无四角裁切标记
+- 课表调课：「停课一次」已接；「换课」用规则替换实现（P2-2.19）；`move`（挪到别的节次）的 UI 仍未接
+- 校准页是近似刻度，无 1mm 尺；四角定位块已实现，但校准页没有裁切标记
 - 模板编辑器不支持自由定位，只做列表式编辑
 - 作业排序是上下移，不是拖拽
 - **调试时钟（临时）**：宿主层 `appClock` 可前后拨「现在」（localStorage 持久化），上线前删除；
   见 `docs/LATER.md` →「待删除：调试时钟」，代码里有 `TODO(debug-clock)` 标记
 - **纸条回流的手写区仍读不了**：时间登记、`slots` 手写格需要 OCR；三格自评改用 `ratingGrid` 勾选格
-- **自动找纸不可靠**：`detectPageQuad` 遇到桌面/阴影会选错连通域，手动四角才是主路径
+- **自动找纸**：优先用四角定位块（不受背景/阴影影响）；找不到时退回 `detectPageQuad`，再不行就是手动四角
+- **区块局部校正只做平移 + 等比缩放（含小幅旋转）**：不做块内完整单应；小十字在真实照片里糊掉/被裁时该块退回页面坐标（不报错），真机精度还需继续验证
 - **无光照均衡、无实时取景框**：靠"重拍一张"和选照片绕过去
 - **情绪日记没有趋势图**：只有列表（见 LATER）
 

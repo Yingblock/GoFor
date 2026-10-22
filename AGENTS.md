@@ -105,8 +105,8 @@ apps/web          PWA 宿主（Vite + React）
 packages/core     纯领域逻辑：零 UI、零平台 API、零副作用
                   子路径：./config（配置+zod）、./print（版式）、./paper（时间解析）、./domain
 packages/store    Dexie 实现（浏览器专用），实现了 core 里的仓储接口
-packages/ui       跨宿主组件（暂空）
-packages/vision   纯图像算法：灰度/Otsu/二值化/单应透视矫正/墨迹占比/找纸（零依赖，38 测试）
+packages/ui       跨宿主组件（token 样式，19 个组件）
+packages/vision   纯图像算法：灰度/Otsu/二值化/单应透视矫正/墨迹占比/找纸/定位点（零依赖，46 测试）
 packages/plugin-api  插件契约（暂空）
 e2e/              真实浏览器冒烟（Playwright），产物在 e2e/out/（已 ignore）
 docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS
@@ -123,7 +123,7 @@ docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS
    能从作息表/课表推导的，绝不让用户手填。
 4. **不要引入新依赖而不说明理由。** 优先用已有依赖或平台能力。
    新增**运行时**依赖必须同步写进 `apps/web/public/THIRD-PARTY-NOTICES.txt`
-   （组件、版本、许可证、用途 + 许可证全文），并随 `dist/` 与 Windows 包一起分发；
+   （组件、版本、许可证、用途 + 许可证全文），并随 `dist/` 一起分发；
    只写在 README 里不算履约。
 5. **每个 PR/提交都必须让 `pnpm test` 和 `pnpm typecheck` 通过。**
 6. **不做门禁式功能**（"必须先写思路才能看解析"这类）。工具是降摩擦的。
