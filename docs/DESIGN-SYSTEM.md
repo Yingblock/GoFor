@@ -1,7 +1,7 @@
 # GoFor 设计系统（Tailwind v4 CSS-first）
 
-> 状态：token + `@gofor/ui`（19 个组件）+ 主要屏幕已迁移；Pomodoro/Timetable/TemplateEditor/Diary/Report/Toolbox 仍直接使用 token 类名。
-> 后续屏幕迁移时先读这份文档；规则与 `AGENTS.md` 硬性规则 11 配套。
+> token 全在 `apps/web/src/styles.css` 的 `@theme`，组件全在 `@gofor/ui`。
+> 与 `docs/STANDARD.md` 规则 8 配套；改 UI 前先读这份。
 
 ## 1. 为什么没有 `tailwind.config.js`
 
@@ -9,16 +9,14 @@
 
 - 设计 token 全部写在 `apps/web/src/styles.css` 的 `@theme` 块里；
 - v4 **不会读取** `tailwind.config.js`（JS 配置是 v3 的机制），新建它等于写了一份被忽略的文件；
-- 需要扩展扫描范围时用 `@source` 指令（见 §2.3），不是 `content` 数组；
+- 需要扩展扫描范围时用 `@source` 指令（见 §4 规则 6），不是 `content` 数组；
 - 自定义动画 keyframes 也写在 `@theme` 里。
 
-所以「严格配置」这件事在本仓库的落点是：**`styles.css` 的 `@theme` + `@gofor/ui` 组件**，
-不是一份 JS 配置文件。
+所以「严格配置」在本仓库的落点是 **`styles.css` 的 `@theme` + `@gofor/ui` 组件**，不是一份 JS 配置文件。
 
 ## 2. Token 清单（`apps/web/src/styles.css`）
 
-所有 token 都由 `@theme` 生成同名工具类，例如 `--radius-lg` → `rounded-lg`，
-`--shadow-card` → `shadow-card`，`--duration-fast` → `duration-fast`。
+所有 token 由 `@theme` 生成同名工具类：`--radius-lg` → `rounded-lg`，`--shadow-card` → `shadow-card`，`--duration-fast` → `duration-fast`。
 
 ### 2.1 颜色
 
@@ -33,11 +31,11 @@
 | `--color-ok` | `oklch(0.58 0.13 155)` | 成功、已完成（`text-ok`） |
 | `--color-warn` | `oklch(0.68 0.14 75)` | 提醒（`text-warn`） |
 
-透明度用 Tailwind 的修饰符：`bg-danger/10`、`hover:bg-ink/90`。
+透明度用 Tailwind 修饰符：`bg-danger/10`、`hover:bg-ink/90`。
 
 ### 2.2 圆角
 
-只保留 4 档实际使用 + `full`。旧代码里的 `rounded` / `rounded-lg` / `rounded-xl` 统一到：
+只保留 4 档实际使用 + `full`；旧代码里的 `rounded` / `rounded-lg` / `rounded-xl` 统一到这张表：
 
 | Token | 值 | 用途 |
 |---|---|---|
@@ -56,7 +54,7 @@
 | `--shadow-pop` | `0 12px 32px … / 0.14, 0 2px 8px … / 0.06` | 浮层、模态、命令面板 |
 | `--shadow-none` | `0 0 #0000` | 明确去掉阴影 |
 
-**不要再用** `shadow-sm/md/lg/2xl`（Tailwind 默认那套对纸感界面太重）。
+**不要再用** `shadow-sm/md/lg/2xl`：Tailwind 默认那套对纸感界面太重。
 
 ### 2.4 动效
 
@@ -69,13 +67,11 @@
 | `--ease-enter` | `cubic-bezier(0.16, 1, 0.3, 1)` |
 | `--ease-exit` | `cubic-bezier(0.4, 0, 1, 1)` |
 
-`duration-*` 工具类实际读取 `--transition-duration-fast/base/slow`，已转接到上面的
-`--duration-*`（所以 `duration-fast` 可用，语义仍只有一份）。
+`duration-*` 工具类读 `--transition-duration-fast/base/slow`，已转接到上面的 `--duration-*`（`duration-fast` 可用，语义只有一份）。
 
 进场动画：`animate-fade-in`（遮罩）、`animate-pop-in`（浮层/模态）。
 
-**`prefers-reduced-motion: reduce`**：`styles.css` 里统一把过渡/动画时长压到
-`0.01ms`、`scroll-behavior: auto`，并把 `--duration-*` 归零。组件不需要各自写降级。
+**`prefers-reduced-motion: reduce`**：`styles.css` 统一把过渡/动画时长压到 `0.01ms`、`scroll-behavior: auto`，并把 `--duration-*` 归零；组件不需要各自写降级。
 
 ### 2.5 字号
 
@@ -100,13 +96,11 @@
 | `--spacing-card-x` | `1rem` | 卡片水平内边距 |
 | `--spacing-card-y` | `0.75rem` | 卡片垂直内边距 |
 
-说明：v4 的 `p-*`/`gap-*` 仍按 `--spacing` 的 4px 刻度生成，语义间距 token 用于
-自定义 CSS / 文档约定；常规布局继续用 `p-3`、`gap-3` 这种刻度。
+v4 的 `p-*`/`gap-*` 仍按 `--spacing` 的 4px 刻度生成；语义间距 token 用于自定义 CSS 与文档约定，常规布局继续用 `p-3`、`gap-3`。
 
 ## 3. `@gofor/ui` 组件清单
 
-包位置：`packages/ui`（`workspace:*`，入口 `packages/ui/src/index.ts`）。
-一律从包根导入：
+包位置 `packages/ui`（`workspace:*`，入口 `packages/ui/src/index.ts`），一律从包根导入：
 
 ```ts
 import { Button, Card, Section, StatCard } from '@gofor/ui';
@@ -123,7 +117,7 @@ import { Button, Card, Section, StatCard } from '@gofor/ui';
 | `select.tsx` | `Select` | 原生 select + `invalid`、`ref` |
 | `textarea.tsx` | `Textarea` | 原生 textarea + `invalid`、`ref` |
 | `checkbox.tsx` | `Checkbox` | 原生 checkbox + `invalid`；必须有 `aria-label` 或 `Field` label |
-| `slider.tsx` | `Slider` | `value`/`min`/`max`/`step`、`onValueChange`；原生 range + token 配色（**已选段 strong、未选段 line-strong**，与按钮/描边同一套色），必须给 `aria-label` 或包在带 `htmlFor` 的 label 里 |
+| `slider.tsx` | `Slider` | `value`/`min`/`max`/`step`、`onValueChange`；原生 range + token 配色（已选段 strong、未选段 line-strong），必须给 `aria-label` 或包在带 `htmlFor` 的 label 里 |
 | `badge.tsx` | `Badge` | `tone: neutral/ok/warn/danger`，只读状态 |
 | `chip.tsx` | `Chip` | `onClick`（可点，带 `aria-pressed`）、`onRemove`（可移除）、`active`、`disabled` |
 | `stat-card.tsx` | `StatCard` | `label` / `value` / `note` |
@@ -143,15 +137,11 @@ import { Button, Card, Section, StatCard } from '@gofor/ui';
    - 字号只用 §2.5 的 `text-*`
    - 动效 `transition duration-fast ease-standard`（或 `duration-base`）
    - 焦点环复用 `focusRing`
-3. **禁止**：`text-[Npx]`、`border-black/[0.0x]`、`shadow-2xl`、裸 `#hex`/`oklch(...)`
-   写进 `className`（token 已经覆盖）。
+3. **禁止**：`text-[Npx]`、`border-black/[0.0x]`、`shadow-2xl`、裸 `#hex`/`oklch(...)` 写进 `className`（token 已经覆盖）。
 4. 需要新 token 时改 `apps/web/src/styles.css` 的 `@theme`，并在本文档补一行。
-5. **不要动 e2e 依赖的文本/aria-label**（「拍照录入」「打印 checklist」「数据只在这台设备上」
-   「立即备份」「从备份导入」「今日课表」「打卡提示」「完成 xxx」等）。迁移只换样式类。
-6. 组件位于 `packages/ui` 时，Tailwind 扫描不到 pnpm 软链接包 → 已在 `styles.css` 用
-   `@source "../../../packages/ui/src"` 显式纳入；新增 UI 包位置时同样要加 `@source`。
-
-### 迁移示例
+5. **不要动 e2e 依赖的文本/aria-label**（「拍照录入」「打印 checklist」「数据只在这台设备上」「立即备份」「从备份导入」「今日课表」「打卡提示」「完成 xxx」等）；迁移只换样式类。
+6. 组件位于 `packages/ui` 时 Tailwind 扫描不到 pnpm 软链接包 → 已在 `styles.css` 用 `@source "../../../packages/ui/src"` 显式纳入；新增 UI 包位置时同样要加 `@source`。
+7. **不要再直接写 `<input type="range">`**：滑块一律用 `Slider`（原生 range + token 配色，键盘/读屏/触屏行为来自浏览器），特殊宽度用 `className` 覆盖。
 
 ```tsx
 // 旧：每处手写一套
@@ -168,40 +158,22 @@ import { Button, Card, Section, StatCard } from '@gofor/ui';
 </Section>
 ```
 
-## 5. 当前迁移状态
+## 5. 深色主题（P2-2.16）
 
-**全部迁移完成（2026-10-20）**：`apps/web/src` 与 `packages/ui/src` 不再用
-`bg-white*` / `border-black*` / `text-black` 这类原生色；统一走 `@theme` token
-（`bg-card` / `bg-card-soft` / `border-line` / `bg-overlay` / `bg-strong` / `text-on-strong` / `bg-scrim`）。
-新增页面照抄现有组件即可，不需要再逐个迁移。
-
-## 5.1 滑块（Slider）
-
-`@gofor/ui` 新增 `Slider`：原生 `input[type=range]` + token 配色（`bg-overlay` 轨道、
-`bg-strong` 圆点、accent 强调），键盘/读屏/触屏行为全部来自浏览器。用法：
-
-```tsx
-<Slider value={days} min={1} max={31} onValueChange={setDays} aria-label="范围天数滑动条" />
-```
-
-不要再直接写 `<input type="range" className="accent-...">`；需要特殊宽度用 `className`。
-
-## 6. 深色主题（P2-2.16）
-
-- 三态：跟随系统 / 浅色 / 深色；存在 `localStorage['gofor.ui.theme']`，
-  入口在侧栏底部（折叠态只留图标）。
-- 实现只改 `<html data-theme="light|dark">`，颜色全在 `styles.css`：
-  `:root[data-theme="dark"]` 覆盖同一批 `--color-*` 变量；组件不感知主题。
+- 三态：跟随系统 / 浅色 / 深色；存在 `localStorage['gofor.ui.theme']`，入口在侧栏底部（折叠态只留图标）。
+- 实现只改 `<html data-theme="light|dark">`，颜色全在 `styles.css`：`:root[data-theme="dark"]` 覆盖同一批 `--color-*` 变量；组件不感知主题。
 - 新增颜色时**先加 token**，再在浅色与深色两处各写一次，禁止在组件里写死颜色。
-- 语义色约定：
-  | token | 用途 |
-  |---|---|
-  | `ink` / `paper` | 正文前景 / 应用背景 |
-  | `card` / `card-soft` / `card-faint` | 实心卡片 / 半透明卡片 / 更淡的底 |
-  | `line` / `line-strong` | 描边 / 选中描边 |
-  | `strong` / `on-strong` | 实心按钮背景 / 其上的文字 |
-  | `overlay` | 悬停、表头等淡底 |
-  | `scrim` | 模态/抽屉遮罩 |
-- **纸面不跟主题**：`.print-root` / `.print-page` 固定 `color:#111`，背景仍为白；
-  深色下打印预览看起来仍是白纸黑字。
+
+语义色约定：
+
+| token | 用途 |
+|---|---|
+| `ink` / `paper` | 正文前景 / 应用背景 |
+| `card` / `card-soft` / `card-faint` | 实心卡片 / 半透明卡片 / 更淡的底 |
+| `line` / `line-strong` | 描边 / 选中描边 |
+| `strong` / `on-strong` | 实心按钮背景 / 其上的文字 |
+| `overlay` | 悬停、表头等淡底 |
+| `scrim` | 模态/抽屉遮罩 |
+
+- **纸面不跟主题**：`.print-root` / `.print-page` 固定 `color:#111`，背景仍为白；深色下打印预览看起来仍是白纸黑字。
 - 首屏在 `index.html` 内联脚本里先设好 `data-theme`，避免深色启动闪白。

@@ -2,13 +2,13 @@
 
 日期：2026-xx
 状态：**临时偏离已记录**（不是架构决定，用完即弃）
-相关：`docs/DESIGN.md` §7.4「不做 Electron」、`docs/ROADMAP.md` P6「Android 原生」
+相关：`docs/DESIGN.md` §10「不做 Electron」、`docs/ROADMAP.md` P6「Android 原生」
 
 ## 背景
 
 用户要求"把现在的安卓和 windows 应用打包出来看一下"，而当时的产物只有 PWA。
 
-按 DESIGN §7 的原定方案：
+按 DESIGN §10 的原定方案：
 
 - Windows → PWA（Edge/Chrome「安装此应用」），**不做 Electron**
 - Android → PWA 先行，原生能力（Capacitor + Kotlin）排到 P6

@@ -5,7 +5,7 @@
 
 ## 现在到哪了
 
-**P0、P1、P2 已完成。** 离线闭环已经能完整跑通：
+**P0、P1、P2、P3、P3.5、P3.6 已完成。** 离线闭环已经能完整跑通：
 
 > 在 App 里记作业 / 排课表 / 建打卡 → 打印「我的一天」→ 纸上手写打勾 →
 > 拍照扫回来 → 逐条确认 → 写回本地数据库
@@ -30,9 +30,20 @@
   环境清单、自助工具箱、情绪日记、自我周报
 - **深色主题**：跟随系统 / 浅色 / 深色三态，全部走 token；纸面固定白底黑字
 - **数据与备份**：JSON 全量导出/导入、备份提醒、存储持久化申请
-- **PWA**：可安装、离线打开；`Ctrl/⌘+K` 命令面板
+- **插件化（P3–P3.6）**：`packages/plugin-api` 契约 + 宿主注册表；**除打印与基础设施外，
+  所有功能页都是插件**——番茄钟 / 作业 / 课表 / 打卡 / 扫描 / 环境清单 / 三格自评 /
+  自我周报 / 情绪日记 / 自助工具箱 / **单词库**；`#/s/<id>` 深链（刷新保持、后退）；
+  插件是 **npm 包**（`@gofor/plugins`，随应用构建；无运行时单文件加载/`GoForSDK`）；
+  插件互访走数据契约（缺失显示「未安装」，不显示 0）；主题 token / 命名插槽 + shell 变体 /
+  作用域 CSS 三档 UI 扩展，**不给任意 DOM**；插件数据进 Dexie v8 + 备份切片注册表。
+  **打印区块也有 owner**：插件禁用后区块静默跳过，预览下方提示「缺失 XX 插件」；
+  模板「加区块」只列当前可用项；**扫描识别结果按 owner 交给对应插件处理**，缺插件不写库。
+  打印/模板/校准、数据与备份、插件管理保留 core（纸面契约 + 引导悖论，见 `docs/DECISIONS/0006`）。
+- **PWA**：可安装、离线打开；`Ctrl/⌘+K` 命令面板（内核 + 插件命令同一注册表）
 
-还没做：错题本 / SRS、笔记 / 画板、Android 原生能力、同步、AI。完整阶段见
+还没做：错题本 / SRS、笔记 / 画板、Android 原生能力、同步、AI。
+插件是**构建期受信代码**，随应用构建、没有运行时安装与沙箱隔离；`notebook` / `file-view`
+只有契约、没有 UI（P4/P5），转换器只有 Worker 白名单任务（本机 Office 转换属 P5）。完整阶段见
 [`docs/ROADMAP.md`](docs/ROADMAP.md)，当前状态见 [`docs/STATE.md`](docs/STATE.md)。
 
 ## 快速开始
@@ -51,7 +62,7 @@ pnpm e2e         # 真实浏览器冒烟，需先 build；生成 e2e/out/day-she
 pnpm verify      # typecheck + test + build + e2e（提交前必须全绿）
 ```
 
-单测当前规模：**459 条**（core 371、store 42、vision 46）；e2e 约 **114 项**浏览器断言
+单测当前规模：**545 条**（core 451、store 48、vision 46）；e2e 约 **150 项**（`check()` 断言）
 （条数会随当天数据的分支略有浮动）。
 
 打印时请确认：**缩放 100% · 关闭页眉页脚 · 勾选「背景图形」**。
@@ -61,12 +72,15 @@ pnpm verify      # typecheck + test + build + e2e（提交前必须全绿）
 
 ```
 apps/web           PWA 宿主（Vite + React + Tailwind v4）
-packages/core      纯领域逻辑：Clock / 配置 / 纸面时间解析 / 打印版式 / 课表 / 扫描几何
-packages/store     Dexie 实现（浏览器专用，v1→v7 迁移）
+packages/core      纯领域逻辑：Clock / 配置 / 纸面时间解析 / 打印版式 / 课表 / 扫描几何 / 插件依赖与数据解析 / 词表解析
+packages/store     Dexie 实现（浏览器专用，v1→v8 迁移）+ 内置数据 provider + 备份切片
+packages/plugin-api 插件契约（零 React 依赖）
+packages/plugin-kit 插件/宿主共享时钟、打印模板解析、useHostData
+packages/plugins 全部功能插件与视图（@gofor/plugins）
 packages/ui        跨宿主组件（Button / Card / Modal / Slider …）+ token 样式
 packages/vision    纯图像算法：灰度 / Otsu / 二值化 / 单应矫正 / 找纸 / 定位点 / 墨迹占比
 e2e                Playwright 真实浏览器冒烟
-docs               STATE / ROADMAP / DESIGN / WORKFLOW / LATER / DECISIONS
+docs               STATE / STANDARD / ROADMAP / DESIGN / DESIGN-SYSTEM / WORKFLOW / PLUGINS / LATER / DECISIONS / Phase-note
 tools              一次性打包实验（已停用，见「平台策略」）
 ```
 
@@ -85,8 +99,12 @@ React + Vite + Tailwind（CSS-first `@theme`）、Dexie、Vitest + Playwright、
 | 文档 | 用途 |
 |---|---|
 | [`docs/STATE.md`](docs/STATE.md) | 唯一真相源：现在在哪、下一步做什么 |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | P0–P8 阶段、工时、验收标准 |
+| [`docs/STANDARD.md`](docs/STANDARD.md) | 开发规范与硬性规则 |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | 阶段、轮数、验收标准 |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | 产品与技术设计、纸张优先设计律 |
+| [`docs/DESIGN-SYSTEM.md`](docs/DESIGN-SYSTEM.md) | 设计 token 与 `@gofor/ui` |
+| [`docs/Phase-note/`](docs/Phase-note/) | 各阶段引入的特性与规则笔记 |
 | [`docs/WORKFLOW.md`](docs/WORKFLOW.md) | Issue / Milestone / 每周复盘纪律 |
 | [`docs/LATER.md`](docs/LATER.md) | 想法停车场：新想法先写这里 |
+| [`docs/PLUGINS.md`](docs/PLUGINS.md) | 插件开发指南：manifest / 能力 / 数据 / 分发 |
 | [`docs/DECISIONS/`](docs/DECISIONS/) | 架构决策记录（ADR） |
