@@ -1,0 +1,22 @@
+{
+  "name": "@gofor/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./timetable": "./src/timetable/index.ts",
+    "./stats": "./src/stats/index.ts",
+    "./habits": "./src/habits/index.ts",
+    "./pomodoro": "./src/pomodoro/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@gofor/core": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5"
+  }
+}

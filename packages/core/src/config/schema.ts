@@ -71,6 +71,22 @@ export const backupSchema = z.object({
   reminderDays: z.number().int().min(1).max(365).default(DEFAULT_BACKUP_REMINDER_DAYS),
 });
 
+/**
+ * 插件配置命名空间（P3-3.12）：`plugins.<pluginId>.settings`。
+ *
+ * 为什么给插件留配置而不是让它自己往 localStorage 写：
+ * - 配置会随 JSON 备份一起走；插件被卸载再装回来，设置还在；
+ * - 插件没有第二条持久化通道（localStorage 按 origin、不备份）。
+ *
+ * 这里**不**存"是否启用"：启用状态在 Dexie 的 `plugins` 表（3.5 安装页要展示，
+ * 而且禁用插件时不能依赖配置读取成功）。一处状态只能有一个真相。
+ */
+export const pluginSettingsSchema = z.object({
+  settings: z.record(z.string(), z.unknown()).default({}),
+});
+
+export const pluginsSchema = z.record(z.string(), pluginSettingsSchema).default({});
+
 export const appConfigSchema = z.object({
   schemaVersion: z.number().int().positive(),
   /** 作息表。所有「课时长度」都从这里推导，不在代码里写死。 */
@@ -85,6 +101,8 @@ export const appConfigSchema = z.object({
   scan: scanSchema,
   /** 备份提醒。旧配置没有这一节时由这里的 default 补出，见 backupSchema。 */
   backup: backupSchema.default({ reminderDays: DEFAULT_BACKUP_REMINDER_DAYS }),
+  /** 插件设置命名空间（P3）。旧配置没有这一节时由 default 补成空对象。 */
+  plugins: pluginsSchema,
 });
 
 export type AppConfig = z.infer<typeof appConfigSchema>;

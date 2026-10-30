@@ -231,3 +231,31 @@ describe('配置：打印模板预设', () => {
     expect(() => mergeConfig(DEFAULT_APP_CONFIG, { print: { template: '' } })).toThrow();
   });
 });
+
+describe('配置：插件设置命名空间（P3-3.12）', () => {
+  it('旧配置没有 plugins 时补空对象，而不是整份回退', () => {
+    const oldConfig = structuredClone(DEFAULT_APP_CONFIG) as unknown as Record<string, unknown>;
+    delete oldConfig.plugins;
+    const parsed = parseConfig(oldConfig);
+    expect(parsed.plugins).toEqual({});
+    // 其它字段仍在，说明不是退回了出厂默认
+    expect(parsed.print.paper).toBe(DEFAULT_APP_CONFIG.print.paper);
+
+    const migrated = migrateConfig(oldConfig);
+    expect(migrated.fellBack).toBe(false);
+    expect(migrated.config.plugins).toEqual({});
+  });
+
+  it('plugins.<id>.settings 会深合并并保留未知设置', () => {
+    const merged = mergeConfig(DEFAULT_APP_CONFIG, {
+      plugins: { 'demo.plugin': { settings: { level: 2, tag: 'x' } } },
+    });
+    expect(merged.plugins['demo.plugin']?.settings).toEqual({ level: 2, tag: 'x' });
+    // 合并不能丢掉其它插件
+    const second = mergeConfig(merged, {
+      plugins: { 'other.plugin': { settings: { enabled: true } } },
+    });
+    expect(second.plugins['demo.plugin']?.settings).toEqual({ level: 2, tag: 'x' });
+    expect(second.plugins['other.plugin']?.settings).toEqual({ enabled: true });
+  });
+});

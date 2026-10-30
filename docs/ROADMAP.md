@@ -60,6 +60,8 @@
 | **P2 纸的回流 + 行为层** | 已完成 | 扫码回填 + 三滑块 + 工具箱 + 情绪日记 | 星期五晚上能把一周的纸一次扫完 |
 | **P3 插件化重构** | **30**（P3a 16 + P3b 14，✅ 已完成） | 前两阶段全部变成插件 + 插件互访 / 独占页面 / UI 扩展 | **加一个新插件，核心代码零改动**；装/卸插件时消费方不崩、不静默显示 0 |
 | **P3.5 全功能插件化** | — | 除打印外的功能页全部插件化 | 禁用任一插件不崩、打印不受影响 |
+| **P3.7 运行时插件** | — | 主进程从 `userData/plugins` 动态加载、CLI、13 包拆分、Electron 宿主骨架 | 示例插件能装/能 reload/单插件失败隔离；web bundle 不变 |
+| **P3.8 分层清理** | — | core 只留原语/纸面契约，共享领域进 `@gofor/domain`，单插件逻辑进插件包 | core 只剩 6 个基础设施目录；单测/构建/e2e 全绿 |
 | **P4 错题本 + SRS** | 42 | 块文档 + 扫描/混排错题本、复习队列、套卷、密度视图 | 一周的错题能自动排进复习，且你确实在刷 |
 | **P5 笔记 + 画板** | 25 | Markdown/LaTeX 笔记、Excalidraw、导出（**复用 P4 块编辑器**） | 能用它写完一整章笔记并导出 PDF |
 | **P6 Android 原生** | 21 | UsageStats、前台服务、Widget、专注遮罩 | 能出一周真实的屏幕时长报告 |
@@ -275,6 +277,49 @@ P3a 做完就能验"加插件不改核心"；P3b 风险高得多，不该和后�
 `GoForSDK` 断言，功能插件、缺失插件警告、扫描回填、打印链路保持通过。
 
 **明确不做**：每个插件独立 npm 发布、registry/签名、service facade、第三方写 core 数据。
+
+### P3.7 — 运行时插件系统（2026-10-30 用户确认，✅ 已实现）
+
+> 决策与边界见 `DECISIONS/0008`；操作手册见 `docs/PLUGIN-RUNTIME.md`。
+> 与 P3.6 的关系：P3.6 的 13 个构建期 UI 插件**继续存在**（拆成独立 workspace 包）；
+> P3.7 新增的是**主进程运行时插件平面**，两者 API 不同、不能互换。
+
+| # | 任务 | 状态 | 说明 |
+|---|---|---|---|
+| 3.7.1 | `@gofor/contracts`：`GoForPluginAPI` / `PluginManifest` / `PluginStatus` | ✅ | 五方法；`apiVersion: "1"`；零依赖 |
+| 3.7.2 | `@gofor/plugin-runtime`：扫描/加载/卸载/错误隔离/重载/日志 | ✅ | `createRequire(userData/plugins/package.json)`；5s 超时；`plugins.log`；注入 `TaskStore` |
+| 3.7.3 | `@gofor/plugin-cli`：`gofor plugin add/remove/list` | ✅ | 在 plugins 目录跑 `pnpm add/remove`，维护 `enabled`；只接受 `gofor-plugin-*` |
+| 3.7.4 | 现有 13 个插件拆成 `gofor-plugin-*` workspace 包 | ✅ | `plugins/<name>/` 各自 `package.json`；`@gofor/plugins` 聚合，`apps/web` 不改 |
+| 3.7.5 | 示例插件 `gofor-plugin-hello`（独立目录） | ✅ | 不在 workspace；`activate` 注册命令 + 视图插槽；CJS 入口 + ESM renderer |
+| 3.7.6 | `apps/desktop` 最小 Electron 宿主 + IPC/协议 | ✅ | 固定 47821、`gofor-plugin://`、任务桥 preload 白名单；electron 不进依赖 |
+| 3.7.7 | 单测与文档 | ✅ | runtime 17 + CLI 12；`docs/PLUGIN-RUNTIME.md`、`DECISIONS/0008`、PLUGINS §9 |
+
+**验收**：`gofor-plugin-hello` 装上后 `activate` 成功、命令可 `runCommand`、插槽元数据经 IPC 可见；
+坏插件/超时插件不影响好插件；`reloadPlugins()` 触发 `deactivate` → 重新激活；日志落
+`userData/logs/plugins.log`。`pnpm -r typecheck` 与 `pnpm --filter @gofor/web build` 通过，
+web 产物仍约 756KB 主包 + 423KB 扫描 chunk。
+
+**明确不做**：渲染进程插件列表 UI、13 个构建期插件的运行时迁移、签名/registry/版本范围/
+依赖解析/service facade/沙箱。运行时插件是受信 Node 代码，`require` 即完全执行。
+
+### P3.8 — core / domain 分层清理（2026-10-31 用户确认，✅ 已实现）
+
+> 决策见 `DECISIONS/0009`。起因：P3.6 把功能页插件化后，core 仍留 6 个功能域，
+> 用户指出「core 不干净」。目标：core 只留原语与纸面契约。
+
+| # | 任务 | 状态 | 说明 |
+|---|---|---|---|
+| 3.8.1 | 新增 `@gofor/domain`：timetable / stats / habits / PomodoroRun 类型 | ✅ | 只依赖 `@gofor/core`；store/app/插件改从这里取共享领域 |
+| 3.8.2 | 单插件逻辑下沉：pomodoro machine / toolbox wellbeing / wordbook 解析 | ✅ | 代码与单测跟包走；插件包加 `test` + vitest |
+| 3.8.3 | `plugin-kit` 纯函数拆出：todayLabel / 打印模板解析进 `core/print` | ✅ | kit 只剩调试时钟 + `useHostData` |
+| 3.8.4 | core 导出收缩与测试重新分布 | ✅ | 移除 `./pomodoro` `./timetable` `./stats` `./habits` `./wellbeing` `./content` |
+| 3.8.5 | 文档与验收 | ✅ | `DECISIONS/0009`；单测 574 重新分布；web 尺寸不变 |
+
+**验收**：`packages/core/src` 只剩 `config` / `domain` / `paper` / `plugin` / `print` / `scan`；
+`pnpm -r typecheck`、`pnpm -r test`（574）、`pnpm build`、`pnpm e2e` 全绿；4173 产物与本地 dist 一致。
+
+**明确不做**：删除调试时钟与 `plugin-kit`（等 `TODO(debug-clock)` 下线）；
+把 `core/domain` 实体整体迁到 domain 包（会牵动 40+ import，收益低）。
 
 ### P4 — 错题本 + SRS（约 42 轮）
 

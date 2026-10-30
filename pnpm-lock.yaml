@@ -169,12 +169,21 @@ importers:
       '@biomejs/biome':
         specifier: ^2.5.15
         version: 2.5.15
+      '@gofor/plugin-cli':
+        specifier: workspace:*
+        version: link:packages/plugin-cli
       playwright:
         specifier: ^1.64.1
         version: 1.64.1
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+
+  apps/desktop:
+    dependencies:
+      '@gofor/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../packages/plugin-runtime
 
   apps/web:
     dependencies:
@@ -187,6 +196,18 @@ importers:
       '@gofor/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@gofor/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/plugin-kit':
+        specifier: workspace:*
+        version: link:../../packages/plugin-kit
+      '@gofor/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
       '@gofor/store':
         specifier: workspace:*
         version: link:../../packages/store
@@ -199,6 +220,9 @@ importers:
       '@zxing/library':
         specifier: ^0.21.3
         version: 0.21.3
+      dexie:
+        specifier: ^4.2.1
+        version: 4.4.6
       dexie-react-hooks:
         specifier: ^4.4.0
         version: 4.4.0(dexie@4.4.6)(react@19.3.1)
@@ -234,8 +258,13 @@ importers:
         specifier: ^7.1.9
         version: 7.3.7(@types/node@26.6.5)(jiti@2.7.0)(lightningcss@1.32.0)
 
+  packages/contracts: {}
+
   packages/core:
     dependencies:
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       jsqr:
         specifier: ^1.4.0
         version: 1.4.0
@@ -253,11 +282,115 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@26.6.5)(vite@7.3.7(@types/node@26.6.5))
 
+  packages/domain:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@7.3.7(@types/node@26.6.5))
+
+  packages/plugin-api: {}
+
+  packages/plugin-cli:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@7.3.7(@types/node@26.6.5))
+
+  packages/plugin-kit:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../core
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+
+  packages/plugin-runtime:
+    dependencies:
+      '@gofor/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@7.3.7(@types/node@26.6.5))
+
+  packages/plugins:
+    dependencies:
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
+      gofor-plugin-checkin:
+        specifier: workspace:*
+        version: link:../../plugins/checkin
+      gofor-plugin-checklist:
+        specifier: workspace:*
+        version: link:../../plugins/checklist
+      gofor-plugin-converter:
+        specifier: workspace:*
+        version: link:../../plugins/converter
+      gofor-plugin-diary:
+        specifier: workspace:*
+        version: link:../../plugins/diary
+      gofor-plugin-mood:
+        specifier: workspace:*
+        version: link:../../plugins/mood
+      gofor-plugin-pomodoro:
+        specifier: workspace:*
+        version: link:../../plugins/pomodoro
+      gofor-plugin-report:
+        specifier: workspace:*
+        version: link:../../plugins/report
+      gofor-plugin-scan:
+        specifier: workspace:*
+        version: link:../../plugins/scan
+      gofor-plugin-tasks:
+        specifier: workspace:*
+        version: link:../../plugins/tasks
+      gofor-plugin-theme:
+        specifier: workspace:*
+        version: link:../../plugins/theme
+      gofor-plugin-timetable:
+        specifier: workspace:*
+        version: link:../../plugins/timetable
+      gofor-plugin-toolbox:
+        specifier: workspace:*
+        version: link:../../plugins/toolbox
+      gofor-plugin-wordbook:
+        specifier: workspace:*
+        version: link:../../plugins/wordbook
+
   packages/store:
     dependencies:
       '@gofor/core':
         specifier: workspace:*
         version: link:../core
+      '@gofor/domain':
+        specifier: workspace:*
+        version: link:../domain
       dexie:
         specifier: ^4.2.1
         version: 4.4.6
@@ -280,6 +413,321 @@ importers:
 
   packages/vision:
     devDependencies:
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@7.3.7(@types/node@26.6.5))
+
+  plugins/checkin:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gofor/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/plugin-kit':
+        specifier: workspace:*
+        version: link:../../packages/plugin-kit
+      '@gofor/store':
+        specifier: workspace:*
+        version: link:../../packages/store
+      '@gofor/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      dexie-react-hooks:
+        specifier: ^4.4.0
+        version: 4.4.0(dexie@4.4.6)(react@19.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+
+  plugins/checklist:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gofor/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/plugin-kit':
+        specifier: workspace:*
+        version: link:../../packages/plugin-kit
+      '@gofor/store':
+        specifier: workspace:*
+        version: link:../../packages/store
+      '@gofor/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      dexie-react-hooks:
+        specifier: ^4.4.0
+        version: 4.4.0(dexie@4.4.6)(react@19.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+
+  plugins/converter:
+    dependencies:
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+
+  plugins/diary:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gofor/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/plugin-kit':
+        specifier: workspace:*
+        version: link:../../packages/plugin-kit
+      '@gofor/store':
+        specifier: workspace:*
+        version: link:../../packages/store
+      dexie-react-hooks:
+        specifier: ^4.4.0
+        version: 4.4.0(dexie@4.4.6)(react@19.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+
+  plugins/mood:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gofor/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/plugin-kit':
+        specifier: workspace:*
+        version: link:../../packages/plugin-kit
+      '@gofor/store':
+        specifier: workspace:*
+        version: link:../../packages/store
+      '@gofor/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      dexie-react-hooks:
+        specifier: ^4.4.0
+        version: 4.4.0(dexie@4.4.6)(react@19.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+
+  plugins/pomodoro:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gofor/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/plugin-kit':
+        specifier: workspace:*
+        version: link:../../packages/plugin-kit
+      '@gofor/store':
+        specifier: workspace:*
+        version: link:../../packages/store
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@7.3.7(@types/node@26.6.5))
+
+  plugins/report:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gofor/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/plugin-kit':
+        specifier: workspace:*
+        version: link:../../packages/plugin-kit
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+
+  plugins/scan:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/plugin-kit':
+        specifier: workspace:*
+        version: link:../../packages/plugin-kit
+      '@gofor/store':
+        specifier: workspace:*
+        version: link:../../packages/store
+      '@gofor/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@gofor/vision':
+        specifier: workspace:*
+        version: link:../../packages/vision
+      '@zxing/library':
+        specifier: ^0.21.3
+        version: 0.21.3
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+
+  plugins/tasks:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/store':
+        specifier: workspace:*
+        version: link:../../packages/store
+      '@gofor/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      dexie-react-hooks:
+        specifier: ^4.4.0
+        version: 4.4.0(dexie@4.4.6)(react@19.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+
+  plugins/theme:
+    dependencies:
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+
+  plugins/timetable:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gofor/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/plugin-kit':
+        specifier: workspace:*
+        version: link:../../packages/plugin-kit
+      '@gofor/store':
+        specifier: workspace:*
+        version: link:../../packages/store
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+
+  plugins/toolbox:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/plugin-kit':
+        specifier: workspace:*
+        version: link:../../packages/plugin-kit
+      '@gofor/store':
+        specifier: workspace:*
+        version: link:../../packages/store
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@7.3.7(@types/node@26.6.5))
+
+  plugins/wordbook:
+    dependencies:
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+      '@gofor/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
       vitest:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@26.6.5)(vite@7.3.7(@types/node@26.6.5))

@@ -4,6 +4,7 @@ import {
   type Block,
   BUILTIN_TEMPLATES,
   CALIBRATION_TEMPLATE,
+  isPrintBlockKindAvailable,
   layout,
   materialize,
   PAPER_IDS,
@@ -11,12 +12,16 @@ import {
   type PaperId,
   type PrintTemplate,
   paperFor,
+  resolvePrintBlocks,
 } from '@gofor/core/print';
 import { db, listTemplates, putTemplate } from '@gofor/store';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '../clock.ts';
+import { todayLabel } from '../format.ts';
+import { usePluginHost } from '../plugins/host.tsx';
+import { BlockWarnings } from '../print/BlockWarnings.tsx';
 import { PrintPreview, type SheetData } from '../print/PrintSheet.tsx';
 import {
   CUSTOM_TEMPLATE_PREFIX,
@@ -67,7 +72,7 @@ const BLOCK_PRESETS: Record<string, () => Block> = {
   qrcode: () => ({ id: newId(), kind: 'qrcode', span: 3, sizeMm: 12 }),
   // 打卡行：一行并排当天该做的习惯，扫描按 habit id 回填（P2-2.13）。
   habitRow: () => ({ id: newId(), kind: 'habitRow', span: 12 }),
-  // 三格自评：印成 1–5 的勾选格，扫描能读回数值（手写数字读不了，见 DESIGN §16.3）。
+  // 三格自评：印成 1–5 的勾选格，扫描能读回数值（手写数字读不了，见 docs/Phase-note/P2/paper-loop.md）。
   ratingGrid: () => ({
     id: newId(),
     kind: 'ratingGrid',
@@ -77,11 +82,6 @@ const BLOCK_PRESETS: Record<string, () => Block> = {
     scale: 5,
   }),
 };
-
-function todayLabel(date: string): string {
-  const [year, month, day] = date.split('-');
-  return `${year} 年 ${Number(month)} 月 ${Number(day)} 日`;
-}
 
 /** `YYYY-MM-DD` 加天数；只处理合法输入。 */
 function addDays(date: string, days: number): string {
@@ -398,6 +398,7 @@ export function TemplateEditorScreen({
   onPrint,
 }: TemplateEditorScreenProps) {
   const today = dateKey(appClock);
+  const host = usePluginHost();
   const [previewDate, setPreviewDate] = useState<string>(() => addDays(today, 1));
   const [selectedId, setSelectedId] = useState<string>(() => editorSelectionId(initialTemplateId));
   const [paper, setPaper] = useState<PaperId>(initialPaper);
@@ -453,7 +454,7 @@ export function TemplateEditorScreen({
     [buildSheetData, currentTemplate.id, previewDate],
   );
 
-  const blocks = useMemo(
+  const rawBlocks = useMemo(
     () =>
       materialize(currentTemplate, {
         date: previewDate,
@@ -461,6 +462,21 @@ export function TemplateEditorScreen({
         habitCount: previewData.habits?.length ?? 0,
       }),
     [currentTemplate, previewData.habits, previewDate],
+  );
+
+  // 插件禁用/卸载后，它拥有的区块静默跳过；警告显示在预览下方。
+  const availability = useMemo(
+    () => resolvePrintBlocks(rawBlocks, host.printBlockOwners),
+    [host.printBlockOwners, rawBlocks],
+  );
+  const blocks = availability.blocks;
+  /** 加区块只列当前可用的：插件禁用后它拥有的区块不再出现。 */
+  const availablePresets = useMemo(
+    () =>
+      Object.keys(BLOCK_PRESETS).filter((kind) =>
+        isPrintBlockKindAvailable(kind, host.printBlockOwners),
+      ),
+    [host.printBlockOwners],
   );
 
   const pageCount = layout(blocks, { paper: currentTemplate.paper }).pages.length;
@@ -748,7 +764,7 @@ export function TemplateEditorScreen({
         {draft ? (
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="opacity-60">加区块</span>
-            {Object.keys(BLOCK_PRESETS).map((kind) => (
+            {availablePresets.map((kind) => (
               <button
                 key={kind}
                 type="button"
@@ -762,6 +778,9 @@ export function TemplateEditorScreen({
                 {kind}
               </button>
             ))}
+            {availablePresets.length === 0 ? (
+              <span className="text-micro opacity-35">没有可加的区块</span>
+            ) : null}
           </div>
         ) : (
           <p className="text-caption opacity-40">
@@ -774,6 +793,7 @@ export function TemplateEditorScreen({
       <div className="min-w-0 space-y-2">
         <h2 className="text-xs font-medium opacity-50">预览</h2>
         <PrintPreview blocks={blocks} paper={currentTemplate.paper} data={previewData} />
+        <BlockWarnings warnings={availability.warnings} />
         <label className="flex items-center gap-2 text-caption opacity-60">
           <span>预览日期</span>
           <input

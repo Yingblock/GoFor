@@ -41,4 +41,6 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     // 每周提醒一次：一个学期大约 20 周，7 天既能提醒到又不至于天天烦人。
     reminderDays: DEFAULT_BACKUP_REMINDER_DAYS,
   },
+  // 插件设置：出厂没有任何插件覆盖，全部走默认值。
+  plugins: {},
 };

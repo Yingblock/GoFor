@@ -54,15 +54,20 @@
 pnpm install
 
 pnpm dev         # 开发服务器（默认 http://localhost:5173）
-pnpm build       # 构建 PWA 产物到 apps/web/dist
-pnpm test        # 单测（core + store + vision）
+pnpm build       # 构建 PWA 产物到 apps/web/dist（保留旧 assets；干净构建先 rm -rf apps/web/dist）
+pnpm test        # 单测（core + store + vision + plugin-runtime + plugin-cli）
 pnpm typecheck   # 全量类型检查
 pnpm check       # Biome 自动修复
 pnpm e2e         # 真实浏览器冒烟，需先 build；生成 e2e/out/day-sheet.pdf
 pnpm verify      # typecheck + test + build + e2e（提交前必须全绿）
+
+# 运行时插件（P3.7，见 docs/PLUGIN-RUNTIME.md）
+pnpm --filter @gofor/plugin-runtime build
+pnpm --filter @gofor/plugin-cli build
+pnpm exec gofor plugin list --user-data /tmp/gofor-user
 ```
 
-单测当前规模：**545 条**（core 451、store 48、vision 46）；e2e 约 **150 项**（`check()` 断言）
+单测当前规模：**574 条**（core 253、domain 140、store 48、vision 46、plugin-runtime 17、plugin-cli 12、插件包 58）；e2e 约 **150 项**（`check()` 断言）
 （条数会随当天数据的分支略有浮动）。
 
 打印时请确认：**缩放 100% · 关闭页眉页脚 · 勾选「背景图形」**。
@@ -72,20 +77,39 @@ pnpm verify      # typecheck + test + build + e2e（提交前必须全绿）
 
 ```
 apps/web           PWA 宿主（Vite + React + Tailwind v4）
-packages/core      纯领域逻辑：Clock / 配置 / 纸面时间解析 / 打印版式 / 课表 / 扫描几何 / 插件依赖与数据解析 / 词表解析
+packages/core      纯原语 + 纸面契约：Clock / 配置 / 纸面时间解析 / 打印版式 / 扫描几何 / 插件解析
+packages/domain    共享产品领域：课表 / 统计 / 打卡 / 番茄运行态类型（只依赖 core）
 packages/store     Dexie 实现（浏览器专用，v1→v8 迁移）+ 内置数据 provider + 备份切片
 packages/plugin-api 插件契约（零 React 依赖）
-packages/plugin-kit 插件/宿主共享时钟、打印模板解析、useHostData
-packages/plugins 全部功能插件与视图（@gofor/plugins）
+packages/plugin-kit 插件/宿主共享调试时钟、useHostData（打印模板解析/日期已进 core/print）
+packages/plugins  聚合层（@gofor/plugins）：只汇总 13 个构建期插件
+plugins/*         13 个独立构建期插件包（gofor-plugin-*，各自 package.json）
+packages/contracts 运行时插件契约（GoForPluginAPI / PluginManifest / PluginStatus，零依赖）
+packages/plugin-runtime 主进程运行时加载器（userData/plugins、超时、隔离、日志、IPC）
+packages/plugin-cli    `gofor plugin add/remove/list`
+apps/desktop      最小 Electron 主进程（运行时插件宿主；PWA 仍是主渠道）
+examples/gofor-plugin-hello 独立示例插件（不在 workspace）
 packages/ui        跨宿主组件（Button / Card / Modal / Slider …）+ token 样式
 packages/vision    纯图像算法：灰度 / Otsu / 二值化 / 单应矫正 / 找纸 / 定位点 / 墨迹占比
 e2e                Playwright 真实浏览器冒烟
-docs               STATE / STANDARD / ROADMAP / DESIGN / DESIGN-SYSTEM / WORKFLOW / PLUGINS / LATER / DECISIONS / Phase-note
+docs               STATE / STANDARD / ROADMAP / DESIGN / DESIGN-SYSTEM / WORKFLOW / PLUGINS / PLUGIN-RUNTIME / LATER / DECISIONS / Phase-note
 tools              一次性打包实验（已停用，见「平台策略」）
 ```
 
 技术栈与硬性约定见 [`AGENTS.md`](AGENTS.md)：TypeScript strict、pnpm workspaces、
 React + Vite + Tailwind（CSS-first `@theme`）、Dexie、Vitest + Playwright、Biome。
+
+## 删除任意插件后的测试
+
+```bash
+pnpm install                 # 完整目录时先装
+rm -rf plugins/checkin       # 删任意一个插件目录
+./plugin-test.sh             # Windows: plugin-test.cmd
+PORT=4174 ./plugin-test.sh --preview
+```
+
+不要直接 `pnpm build`：pnpm 会先校验缺失的 workspace 包。细节见
+[`docs/PLUGIN-TEST.md`](docs/PLUGIN-TEST.md)。
 
 ## 平台策略
 

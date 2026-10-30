@@ -1,7 +1,7 @@
 /**
  * 模板坐标注册表（P2-2.3）：把"纸上印了什么"变成"扫回来去哪儿采样"。
  *
- * 核心洞察（DESIGN §3.1）：模板是我们自己生成的，所以**每个格子的坐标已知**。
+ * 核心洞察（DESIGN §5）：模板是我们自己生成的，所以**每个格子的坐标已知**。
  * 于是识别问题从"认出手写勾"降级为"在已知小矩形里判断有没有墨迹"，
  * 不需要 OCR，也不需要分类器。
  *
@@ -51,6 +51,13 @@ export interface ScanTarget {
   applyPayload?: string | null;
   /** 这一格属于哪个区块：扫描时按区块小定位点做局部校正（见 `blocks`）。 */
   blockId?: string;
+  /**
+   * 这一格归哪个插件处理（P3.5）。
+   *
+   * 旧纸没有该字段：扫描端按 `payload` 前缀回退（见 `scanResultOwner`）。
+   * 区块被插件拥有且插件禁用时，打印端会直接跳过该区块，不会产生 target。
+   */
+  owner?: string;
 }
 
 /**
@@ -103,6 +110,8 @@ export interface ManifestInput {
   bindings?: Record<string, string[]>;
   /** 行标签来源，例如 checkboxList 的第 i 行显示什么。 */
   labels?: Record<string, string[]>;
+  /** block.id → owner pluginId；由打印端按插件归属算好，扫描端原样路由。 */
+  blockOwners?: Record<string, string>;
 }
 
 /**
@@ -146,12 +155,14 @@ export function buildSheetManifest(input: ManifestInput): SheetManifest {
         heightMm: page.heightMm,
         blocks,
         fiducialBottomTopMm: fiducialBottomTopMm(contentBottomMm, page.heightMm),
-        targets: page.placements.flatMap((placement) =>
-          buildTargets(placement, page, input).map((target) => ({
+        targets: page.placements.flatMap((placement) => {
+          const owner = input.blockOwners?.[placement.block.id];
+          return buildTargets(placement, page, input).map((target) => ({
             ...target,
             blockId: placement.block.id,
-          })),
-        ),
+            ...(owner === undefined ? {} : { owner }),
+          }));
+        }),
       };
     }),
   };

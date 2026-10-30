@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@gofor/core": "workspace:*",
+    "@gofor/domain": "workspace:*",
     "dexie": "^4.2.1"
   },
   "devDependencies": {

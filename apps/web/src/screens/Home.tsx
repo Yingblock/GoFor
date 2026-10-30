@@ -5,8 +5,8 @@ import {
   type Subject,
   type Task,
 } from '@gofor/core/domain';
-import { type Habit, isHabitActiveOn } from '@gofor/core/habits';
-import { dayTotal, minutesOf, streakDays } from '@gofor/core/stats';
+import { type Habit, isHabitActiveOn } from '@gofor/domain/habits';
+import { dayTotal, minutesOf, streakDays } from '@gofor/domain/stats';
 import {
   db,
   listHabitLogs,
@@ -20,9 +20,16 @@ import { Card, Checkbox, EmptyState, Section, StatCard } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useState } from 'react';
 import { appClock } from '../clock.ts';
+import { PluginSlot } from '../plugins/components.tsx';
 
 /** 首页要能跳到打卡页和课表页，所以这两个 id 也进联合类型。 */
-type HomeTarget = 'capture' | 'print' | 'pomodoro' | 'tasks' | 'checkin' | 'timetable';
+type HomeTarget =
+  | 'print'
+  | 'gofor.scan/screen'
+  | 'gofor.pomodoro/screen'
+  | 'gofor.tasks/screen'
+  | 'gofor.checkin/screen'
+  | 'gofor.timetable/screen';
 
 /** 当日课表的一行：起止时间 + 科目名，由 App 从真实课表算好后传进来。 */
 export interface HomeScheduleEntry {
@@ -102,7 +109,7 @@ function shiftDate(date: string, days: number): string {
 /**
  * 首页。
  *
- * 结构由用户规定（DESIGN §13.3）：顶部两个主行动 → 统计 → 任务提示。
+ * 结构由用户规定（DESIGN §2）：顶部两个主行动 → 统计 → 任务提示。
  * 统计全部来自真实数据；没有数据就显示 0 并注明原因，不编数字。
  */
 export function Home({ tasks, schedule, onNavigate }: HomeProps) {
@@ -155,7 +162,7 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
       <div className="grid gap-3 sm:grid-cols-2">
         <button
           type="button"
-          onClick={() => onNavigate('capture')}
+          onClick={() => onNavigate('gofor.scan/screen')}
           className="flex items-center gap-3 rounded-lg border border-line bg-card-soft px-4 py-4 text-left shadow-card transition duration-base ease-standard hover:bg-card"
         >
           <span className="text-2xl">📷</span>
@@ -182,7 +189,11 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
       <Section
         title="今日课表"
         actions={
-          <button type="button" onClick={() => onNavigate('timetable')} className={LINK_ACTION}>
+          <button
+            type="button"
+            onClick={() => onNavigate('gofor.timetable/screen')}
+            className={LINK_ACTION}
+          >
             去排课表 →
           </button>
         }
@@ -211,7 +222,7 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
         )}
       </Section>
 
-      {/* 打卡提示：与番茄钟无关，数据只来自 habitLogs（见 DESIGN §4.2.1） */}
+      {/* 打卡提示：与番茄钟无关，数据只来自 habitLogs（见 DESIGN §9） */}
       <Section
         title="打卡提示"
         actions={
@@ -221,7 +232,11 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
                 {habitsDoneCount}/{activeHabits.length}
               </span>
             ) : null}
-            <button type="button" onClick={() => onNavigate('checkin')} className={LINK_ACTION}>
+            <button
+              type="button"
+              onClick={() => onNavigate('gofor.checkin/screen')}
+              className={LINK_ACTION}
+            >
               去打卡页 →
             </button>
           </>
@@ -279,6 +294,9 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
         </div>
       </Section>
 
+      {/* 命名插槽：插件可以在统计区后面加一块内容（例如单词库）。空则什么都不渲染。 */}
+      <PluginSlot name="home.after-stats" />
+
       {todaySessions.length > 0 ? (
         <Section title="今日记录">
           <Card padding="none" className="overflow-hidden">
@@ -307,10 +325,18 @@ export function Home({ tasks, schedule, onNavigate }: HomeProps) {
         title="任务提示"
         actions={
           <>
-            <button type="button" onClick={() => onNavigate('pomodoro')} className={LINK_ACTION}>
+            <button
+              type="button"
+              onClick={() => onNavigate('gofor.pomodoro/screen')}
+              className={LINK_ACTION}
+            >
               开始专注 →
             </button>
-            <button type="button" onClick={() => onNavigate('tasks')} className={LINK_ACTION}>
+            <button
+              type="button"
+              onClick={() => onNavigate('gofor.tasks/screen')}
+              className={LINK_ACTION}
+            >
               去作业清单 →
             </button>
           </>

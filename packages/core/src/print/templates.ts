@@ -77,7 +77,7 @@ export const BUILTIN_TEMPLATES: PrintTemplate[] = [
     blocks: [
       // 标题让出右边 3 列给二维码：二维码不占独立一行，A4 才装得下。
       { ...dateTitle('left'), span: 9 },
-      // 回填二维码：写死「模板 + 日期 + 纸张」，扫描时据此找回坐标清单（DESIGN §16）。
+      // 回填二维码：写死「模板 + 日期 + 纸张」，扫描时据此找回坐标清单（docs/Phase-note/P2/paper-loop.md）。
       { id: 'qr', kind: 'qrcode', span: 3, sizeMm: 16 },
       {
         id: 'tasks',
@@ -92,7 +92,7 @@ export const BUILTIN_TEMPLATES: PrintTemplate[] = [
       { id: 'am', kind: 'timeLog', span: 12, dayPart: 'morning', rows: 2, label: '上午' },
       { id: 'pm', kind: 'timeLog', span: 12, dayPart: 'afternoon', rows: 2, label: '下午' },
       { id: 'ev', kind: 'timeLog', span: 12, dayPart: 'evening', rows: 2, label: '晚上' },
-      // 三格自评印成 1–5 的勾选格：手写数字读不回来（DESIGN §16.3）。
+      // 三格自评印成 1–5 的勾选格：手写数字读不回来（docs/Phase-note/P2/paper-loop.md）。
       {
         id: 'rating',
         kind: 'ratingGrid',

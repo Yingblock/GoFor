@@ -4,15 +4,25 @@
 
 ## 现在在哪
 
-**P0–P3.6 完成**，离线闭环已跑通「打印 → 手写 → 拍照扫回来」：作业/课表/打卡/番茄上纸，
+**P0–P3.8 完成**，离线闭环已跑通「打印 → 手写 → 拍照扫回来」：作业/课表/打卡/番茄上纸，
 纸上有二维码 + 页尾条码 + 四角定位块 + 区块小定位点；支持指定日期/范围批量打印、应用内预览、
 深色主题、课表换课、打卡行换行；扫描结果逐条确认后才写库。
 
-**插件架构（P3 → P3.6）**：`packages/plugin-api` 定契约（manifest / 权限 / 生命周期 / 页面·命令·插槽·
-主题·数据·内容模块·转换器·扫描回填·OCR·AI，不依赖 React）；宿主 `apps/web/src/plugins/` 只做注册表、
-激活顺序、懒加载页面、命名插槽、主题 token、命令；全部功能插件与视图在 `@gofor/plugins`
-（`packages/plugins`），共享时钟/打印模板/数据 hook 在 `@gofor/plugin-kit`；`#/s/<id>` 深链 + 旧深链自动跳转；
-Dexie v8 加 `plugins`/`pluginData`；备份走 `BACKUP_SLICES` 注册表。**加一个插件不改核心代码。**
+**插件架构（P3 → P3.8）**：有两条平面，不要混用。
+
+1. **构建期 UI 插件**：`packages/plugin-api` 定契约（manifest / 权限 / 生命周期 / 页面·命令·插槽·
+   主题·数据·内容模块·转换器·扫描回填·OCR·AI，不依赖 React）；宿主 `apps/web/src/plugins/` 做注册表、
+   激活顺序、懒加载页面、命名插槽、主题 token、命令；13 个功能插件已拆成独立 workspace 包
+   `plugins/<name>`（包名 `gofor-plugin-*`），`@gofor/plugins` 只做聚合；单插件逻辑跟包走
+   （番茄状态机、工具箱练习数据、单词库解析器）；共享产品域在 `@gofor/domain`
+   （timetable / stats / habits / PomodoroRun）；`@gofor/plugin-kit` 只剩调试时钟与 `useHostData`；
+   `@gofor/core` 只剩 clock / id / config / paper / print / scan / plugin 解析；
+   `#/s/<id>` 深链 + 旧深链自动跳转；Dexie v8 加 `plugins`/`pluginData`；备份走 `BACKUP_SLICES`。
+2. **运行时无头插件**：`@gofor/contracts` 五方法 API（命令/视图插槽/打印模板/getTasks/updateTask）；
+   `@gofor/plugin-runtime` 在 Electron 主进程从 `userData/plugins` 用 `createRequire` 加载，
+   5s 超时、单插件失败隔离、`reloadPlugins()`、日志 `userData/logs/plugins.log`；`@gofor/plugin-cli`
+   提供 `gofor plugin add/remove/list`；视图插槽只传元数据，渲染进程按 `gofor.renderer` 懒加载。
+   边界见 `DECISIONS/0008`，手册见 `docs/PLUGIN-RUNTIME.md`。
 
 **纸面契约留在 core**：打印版式引擎、扫描几何（四角 / 条码 / 区块定位点）、校准、数据与备份、
 插件管理、应用外壳不插件化（见 `DECISIONS/0006`）。打印区块与扫描 handler 按 owner 归属插件：
@@ -23,10 +33,10 @@ Dexie v8 加 `plugins`/`pluginData`；备份走 `BACKUP_SLICES` 注册表。**�
 
 验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 浏览器 e2e）：
 
-- ✅ 单测 **545**：core 451 / store 48 / vision 46
+- ✅ 单测 **574**：core 253 / domain 140 / store 48 / vision 46 / plugin-runtime 17 / plugin-cli 12 / 插件包 58
 - ✅ e2e 约 **150** 项（`e2e/smoke.mjs` 的 `check()` 断言）
 - ✅ 构建产物：index **756KB**、扫描插件懒加载 chunk **423KB**、CSS **35KB**
-- ✅ monorepo `apps/web` + `packages/{core,store,ui,vision,plugin-api,plugin-kit,plugins}`；
+- ✅ monorepo `apps/web` + `apps/desktop` + `packages/{core,domain,store,ui,vision,plugin-api,plugin-kit,plugins,contracts,plugin-runtime,plugin-cli}` + `plugins/*`；
   TypeScript strict、Biome、Vitest + Playwright、CI `pnpm verify`
 
 ## 打包产物与验收入口
@@ -56,9 +66,12 @@ Dexie v8 加 `plugins`/`pluginData`；备份走 `BACKUP_SLICES` 注册表。**�
 - **手写内容读不回**：时间登记、`slots` 手写格需要 OCR（P4-4.14）；三格自评已改用 `ratingGrid` 勾选格。
 - **包体**：主包 756KB + CSS 35KB（React + core + 插件壳）；扫描插件（含 ZXing）是独立懒加载 chunk 423KB；主包仍偏大，
   手机首次打开慢，之后靠 Service Worker。
-- **插件能力边界**：插件只随应用构建（无运行时安装/侧载）；无 service facade（插件间不能调方法，
-  只有只读 `DataContract`）；无公开分发/签名/版本范围；主题包全局唯一（按激活顺序取第一个）；
-  插件数据是明文 JSON，随备份导出、不加密不压缩。
+- **插件能力边界**：两条平面互不相通——构建期 UI 插件没有运行时安装/侧载；运行时无头插件只有
+  命令/插槽/打印模板/任务读写，没有页面/主题/数据契约；无 service facade、公开分发/签名/版本范围；
+  主题包全局唯一（按激活顺序取第一个）；插件数据是明文 JSON，随备份导出、不加密不压缩。
+- **运行时插件未接渲染进程 UI**：IPC 快照与懒加载 helper 已交付，但 `apps/web` 没有插件列表/插槽渲染；
+  `apps/desktop` 的任务桥需要 web 侧安装 `runtimeBridge`（`docs/PLUGIN-RUNTIME.md`）。
+  `apps/desktop` 不把 electron 写进依赖，`pnpm start` 需要外部 Electron。
 - **插件 UI 缺口**：`notebook` / `file-view` 只有契约，无编辑器/预览器；转换器只有 `markdown-to-text`
   一个 Worker 白名单示例，PWA 下明确显示不能转 Office；首页仍是 core 外壳，只能挂 `home.after-stats`
   等命名插槽（见 `DECISIONS/0004`）。
@@ -92,12 +105,17 @@ journalctl --user -u gofor-preview -f
 
 pnpm install
 pnpm dev         # http://localhost:5173 ，同局域网手机可访问
-pnpm test        # 单测（core + store + vision）
+pnpm test        # 单测（core + domain + store + vision + plugins + runtime + cli）
 pnpm e2e         # 真实浏览器冒烟 + 生成 e2e/out/day-sheet.pdf（需先 pnpm build）
 pnpm typecheck
 pnpm build
 pnpm check       # Biome 自动修复
 pnpm verify      # typecheck + test + build + e2e
+
+# 运行时插件（P3.7）
+pnpm --filter @gofor/plugin-runtime build   # Electron 主进程用 dist
+pnpm --filter @gofor/plugin-cli build       # 生成 gofor bin
+pnpm exec gofor plugin list --user-data /tmp/gofor-user
 ```
 
 ## 踩过并修掉的坑（别再犯）
@@ -135,9 +153,33 @@ pnpm verify      # typecheck + test + build + e2e
 | hash 整段 `encodeURIComponent` | 深链变成 `#/s/x%2Fscreen`，地址不可读、测试误判 | 按 `/` 分段编码，保留 `/` |
 | 主题/CSS 作用域漏到打印层 | 纸面颜色被插件改掉，打印出来浅色字 | token 只挂 `.screen-only`，CSS 由宿主包 `@media screen { @scope }`；e2e 断言纸面 color |
 | 用整份 verify 日志 `grep -c "^✓"` 数 e2e | 多算 build 的 `✓`，文档里的 e2e 数虚高 | 只数 e2e 段，或核对 `smoke.mjs` 的 `check()` 调用点 |
+| 页面开着时重建 dist，旧懒加载 chunk 被删 | 启用一个之前禁用的插件时请求旧 chunk URL；预览把缺失 JS 回退成 index.html，报 `Failed to fetch dynamically imported module`，刷新才恢复 | `build.emptyOutDir:false` 保留旧 chunk 宽限期；SW 不缓存非导航的 text/html；加载失败识别旧构建并自动刷新一次；桌面静态服务对缺失资源返回 404 |
+| 侧栏分组展开 effect 依赖 `groups` 数组 | `buildNav` 每次宿主渲染都重建数组，用户点开的分组被立刻收回，看起来「点不开」 | 依赖分组结构指纹 `groupSignature`；只在切页/插件增删时重置 |
+| 桌面侧栏用 `md:static` | 页面一滚，整列侧栏跟着走；滚出视口后用户以为「点不开」 | 桌面 `md:sticky md:top-0 md:h-screen md:self-start`；e2e 断言滚动后 top≈0 且分组仍可点 |
 
 ## 最近一次更新
 
+- **2026-10-31 删插件测试工具**：`tools/sync-plugin-registry.mjs` 按现存 `plugins/*` 生成
+  `@gofor/plugins` 注册表；`tools/plugin-test.mjs` 用纯 node + Vite 构建，绕开 pnpm 对缺失 workspace
+  包的前置校验；`plugin-test.sh` / `.cmd` 为入口。删任意插件目录后可构建并运行，见
+  `docs/PLUGIN-TEST.md`。
+- **2026-10-31 旧 chunk 加载失败修复**：`apps/web/vite.config.ts` 关闭 `emptyOutDir`，重建不再删除上一版
+  assets；SW 缓存不再接收非导航请求的 `text/html`；插件页面/插槽加载失败若是旧构建，自动刷新一次，
+  仍失败才显示「页面已更新，需要刷新」。桌面静态服务对缺失资源返回 404，不再回退 index.html。
+- **2026-10-31 侧栏固定与点开修复**：桌面侧栏从 `md:static` 改为
+  `md:sticky md:top-0 md:h-screen md:self-start`，页面滚动不再把导航带走；分组展开 effect
+  改依赖分组结构指纹，避免宿主每次渲染把用户点开的分组收回去。e2e 新增两条断言
+  （滚动后 top≈0、分组仍可点）。
+- **2026-10-31 P3.8 core/domain 分层清理**：`@gofor/core` 去掉 timetable/stats/habits/pomodoro 状态机/
+  wellbeing/wordbook，只留原语、配置、纸面契约与插件解析；新增 `@gofor/domain`（timetable/stats/habits/
+  PomodoroRun 类型）；番茄状态机/工具箱练习/单词库解析下沉到各自插件包；`plugin-kit` 的
+  `todayLabel`/打印模板解析移入 `core/print`，kit 只剩调试时钟与 `useHostData`。单测总数不变（574），
+  仅重新分布；web 产物尺寸不变。见 `DECISIONS/0009`、`docs/ROADMAP.md` P3.8。
+- **2026-10-30 P3.7 运行时插件系统**：新增 `@gofor/contracts`（五方法 API）、`@gofor/plugin-runtime`
+  （userData 扫描/加载/5s 超时/隔离/重载/plugins.log）、`@gofor/plugin-cli`（add/remove/list）、
+  `apps/desktop` 最小 Electron 宿主与 `gofor-plugin://` 协议；13 个插件拆成 `plugins/*` workspace 包，
+  `@gofor/plugins` 改为聚合，`apps/web`/core 未改；示例 `examples/gofor-plugin-hello` 端到端可加载；
+  单测 574，web bundle 尺寸不变。见 `DECISIONS/0008`、`docs/PLUGIN-RUNTIME.md`。
 - **2026-10-30 P3.6 插件 npm 包化**：删运行时单文件 JS 加载（Blob/`GoForSDK`/安装 UI），插件与视图迁到
   `@gofor/plugins`，共享件抽到 `@gofor/plugin-kit`；规则落 `PLUGIN_RULES` + `docs/PLUGINS.md` §8；
   模板「加区块」只列可用 kind；主 bundle ~756KB，扫描独立 chunk；`pnpm verify` 全绿。

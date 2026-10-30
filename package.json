@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @gofor/web dev",
+    "plugin:sync": "node tools/sync-plugin-registry.mjs",
     "build": "pnpm --filter @gofor/web build",
     "preview": "pnpm --filter @gofor/web preview",
     "test": "pnpm -r --if-present test",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
+    "@gofor/plugin-cli": "workspace:*",
     "playwright": "^1.64.1",
     "typescript": "^7.0.2"
   }

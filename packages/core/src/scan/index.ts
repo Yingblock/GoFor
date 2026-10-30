@@ -34,7 +34,6 @@ export {
   type FiducialPoint,
   type FiducialQuad,
 } from './fiducial.ts';
-
 export {
   buildSheetManifest,
   type ManifestBlock,
@@ -42,6 +41,11 @@ export {
   type ScanTarget,
   type SheetManifest,
 } from './manifest.ts';
+export {
+  type OwnableScanResult,
+  SCAN_PAYLOAD_OWNERS,
+  scanResultOwner,
+} from './owner.ts';
 
 export {
   decodeQr,

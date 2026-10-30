@@ -1,4 +1,12 @@
 export {
+  blockKindLabel,
+  isPrintBlockKindAvailable,
+  type PrintBlockAvailability,
+  type PrintBlockMissing,
+  type PrintBlockOwnerRule,
+  resolvePrintBlocks,
+} from './availability.ts';
+export {
   BLOCK_KINDS,
   BLOCK_MARK_GAP_MM,
   BLOCK_MARK_SIZE_MM,
@@ -37,6 +45,7 @@ export {
   type TitleBlock,
   validateBlock,
 } from './blocks.ts';
+export { todayLabel } from './format.ts';
 export {
   fitsOnePage,
   type LayoutOptions,
@@ -60,6 +69,17 @@ export {
   type PaperSize,
   ROW_GAP_MM,
 } from './paper.ts';
+export {
+  CUSTOM_TEMPLATE_PREFIX,
+  customIdFromSelection,
+  editorSelectionId,
+  isBuiltinTemplateId,
+  PRINT_TEMPLATE_CONSTANTS,
+  type PrintTemplateChoice,
+  parseStoredTemplate,
+  printTemplateChoices,
+  resolvePrintTemplate,
+} from './templateResolution.ts';
 export {
   BUILTIN_TEMPLATES,
   CALIBRATION_TEMPLATE,

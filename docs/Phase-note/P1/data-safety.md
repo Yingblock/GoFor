@@ -49,4 +49,4 @@
 | 渲染异常白屏 | 根 + 按页边界 | 临时注入异常 → fallback 出现 → 重试恢复 → 回滚 |
 | 没有 CI | `verify.yml` | push / PR / 手动触发；真实 Chromium 跑 `pnpm verify`，并检查打印 PDF 不是白纸 |
 
-当前验证口径见 `docs/STATE.md`：545 单测（core 451 / store 48 / vision 46）、约 150 项 e2e。
+当前验证口径见 `docs/STATE.md`：574 单测（含 domain 140、插件包 58）、约 150 项 e2e。

@@ -15,6 +15,8 @@ export {
   focusUnitSchema,
   type Period,
   periodSchema,
+  pluginSettingsSchema,
+  pluginsSchema,
   printSchema,
   scanSchema,
 } from './schema.ts';

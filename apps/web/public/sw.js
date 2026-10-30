@@ -9,7 +9,7 @@
  * 也避免额外的构建期依赖。
  */
 
-const CACHE = 'gofor-v1';
+const CACHE = 'gofor-v2';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -35,6 +35,10 @@ self.addEventListener('activate', (event) => {
 function cachePut(request, response) {
   if (!response) return;
   if (response.status !== 200 || response.type === 'opaque') return;
+  // 非导航请求拿到 text/html，说明服务器把缺失的 chunk 回退成了 index.html。
+  // 绝不能把它按 chunk URL 缓存：否则刷新后仍然拿到 HTML，模块永远加载失败。
+  const type = response.headers.get('content-type') ?? '';
+  if (request.mode !== 'navigate' && type.includes('text/html')) return;
   const copy = response.clone();
   caches.open(CACHE).then((cache) => cache.put(request, copy));
 }

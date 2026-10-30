@@ -16,9 +16,10 @@ import type {
   Task,
   ToolboxRun,
 } from '@gofor/core/domain';
-import type { Habit } from '@gofor/core/habits';
-import type { PomodoroRun } from '@gofor/core/pomodoro';
+import type { Habit } from '@gofor/domain/habits';
+import type { PomodoroRun } from '@gofor/domain/pomodoro';
 import Dexie, { type Table } from 'dexie';
+import type { PluginDataRow, PluginRecord } from './plugins.ts';
 
 /** 配置在库里只有一行：key = 'app'，value 是序列化后的 AppConfig。 */
 export interface ConfigRow {
@@ -55,6 +56,15 @@ export class GoForDb extends Dexie {
   scanBatches!: Table<ScanBatch, string>;
   sheetManifests!: Table<SheetManifestRecord, string>;
   courseNotes!: Table<CourseNote, string>;
+  /** 插件注册记录（现在只有内置插件；source 字段保留兼容旧数据）。P3-3.12。 */
+  plugins!: Table<PluginRecord, string>;
+  /**
+   * 插件的通用键值容器（P3-3.12）。
+   *
+   * 插件**不能**自己开表：Dexie 版本号发布即冻结，让插件开表等于把版本管理
+   * 交给第三方。这里用 `{id: '插件/集合/键', value: JSON}` 一个容器接住所有插件数据。
+   */
+  pluginData!: Table<PluginDataRow, string>;
 
   constructor(name = 'gofor') {
     super(name);
@@ -215,6 +225,36 @@ export class GoForDb extends Dexie {
       scanBatches: 'id, status, createdAt',
       sheetManifests: 'id, date, templateId',
       courseNotes: 'id, date',
+    });
+
+    // v8：P3 插件化。只加两张表，不动任何已有数据。
+    //
+    // 为什么插件数据是一张通用容器而不是"每个插件一张表"：
+    // - Dexie 版本发布即冻结，新增表必须发新版本；插件是运行期安装的，
+    //   不可能为每个插件改一次 schema；
+    // - 备份只需登记一个切片，装/卸插件不用改 repositories（P1 就在这里漏过 5 张表）。
+    this.version(8).stores({
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+      focusRuns: 'id, status, createdAt',
+      checkins: 'date',
+      timetables: 'id',
+      tagPools: 'id',
+      habits: 'id, order',
+      habitLogs: 'id, habitId, date',
+      moodLogs: 'date',
+      diaryEntries: 'id, date',
+      toolboxRuns: 'id, exercise, startedAt',
+      checklists: 'id',
+      checklistLogs: 'id, date, checklistId',
+      scanBatches: 'id, status, createdAt',
+      sheetManifests: 'id, date, templateId',
+      courseNotes: 'id, date',
+      plugins: 'id, kind, installedAt',
+      pluginData: 'id, pluginId, [pluginId+collection]',
     });
   }
 }

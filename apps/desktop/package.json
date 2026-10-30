@@ -1,0 +1,17 @@
+{
+  "name": "@gofor/desktop",
+  "productName": "GoFor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "GoFor Electron 主进程：运行时插件加载 + 固定 origin 的 web 产物",
+  "main": "main.mjs",
+  "scripts": {
+    "prestart": "pnpm --filter @gofor/plugin-runtime build",
+    "start": "electron .",
+    "typecheck": "node --check main.mjs && node --check task-store.mjs && node --check preload.cjs"
+  },
+  "dependencies": {
+    "@gofor/plugin-runtime": "workspace:*"
+  }
+}

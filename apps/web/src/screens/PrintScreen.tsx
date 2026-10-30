@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '../clock.ts';
 import { todayLabel } from '../format.ts';
+import { BlockWarnings } from '../print/BlockWarnings.tsx';
 import {
   PrintPreview,
   PrintPreviewDialog,
@@ -34,7 +35,14 @@ export interface PrintScreenProps {
   /** 打印这些日期：App 先逐日固化清单，再换打印队列并调用 window.print()。 */
   onPrintDates: (dates: string[]) => Promise<void>;
   /** 按日期现算一张纸（与 App 的打印队列同一份逻辑），用于多天逐日预览。 */
-  buildSheetForDate: (date: string) => { blocks: Block[]; data: SheetData };
+  buildSheetForDate: (date: string) => {
+    blocks: Block[];
+    data: SheetData;
+    blockWarnings?: string[];
+    blockOwners?: Record<string, string>;
+  };
+  /** block.id → owner pluginId；写到坐标清单里，扫描时按它路由回填。 */
+  blockOwners?: Record<string, string>;
   onChangePaper: (paper: PaperId) => void;
   onChangeTemplate: (templateId: string) => void;
 }
@@ -63,6 +71,7 @@ export function PrintScreen({
   onChangeDate,
   onPrintDates,
   buildSheetForDate,
+  blockOwners = {},
   onChangePaper,
   onChangeTemplate,
 }: PrintScreenProps) {
@@ -139,6 +148,7 @@ export function PrintScreen({
           date: previewDate,
           blocks: sheet.blocks,
           data: sheet.data,
+          blockWarnings: sheet.blockWarnings,
           pages: layout(sheet.blocks, { paper }).pages.length,
         };
       }),
@@ -170,6 +180,7 @@ export function PrintScreen({
       date,
       paper,
       blocks,
+      blockOwners,
       bindings: {
         'tasks.today': tasks.map((task) => task.id),
         'habits.today': (data.habits ?? []).map((habit) => habit.id),
@@ -189,7 +200,7 @@ export function PrintScreen({
     }).catch((error: unknown) => {
       console.warn('坐标清单没存下来，这次扫描将无法回填', error);
     });
-  }, [templateId, date, paper, blocks, tasks, data.habits]);
+  }, [templateId, date, paper, blocks, blockOwners, tasks, data.habits]);
 
   // 下拉里必须能选中当前值：模板被删/坏数据回退时，至少还有「我的一天」兜底。
   const options = useMemo(() => {
@@ -364,6 +375,7 @@ export function PrintScreen({
               data={sheet.data}
               maxScale={previewSheets.length > 1 ? 1 : 0.93}
             />
+            <BlockWarnings warnings={sheet.blockWarnings} />
           </section>
         ))}
       </div>

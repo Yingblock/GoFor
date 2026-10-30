@@ -1,0 +1,27 @@
+{
+  "name": "gofor-plugin-tasks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@gofor/core": "workspace:*",
+    "@gofor/plugin-api": "workspace:*",
+    "@gofor/store": "workspace:*",
+    "@gofor/ui": "workspace:*",
+    "dexie-react-hooks": "^4.4.0"
+  },
+  "peerDependencies": {
+    "react": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "react": "^19.2.0"
+  }
+}

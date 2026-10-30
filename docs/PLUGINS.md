@@ -1,19 +1,25 @@
 # 插件开发指南
 
-> 面向给 GoFor 加功能的开发者。契约边界见 [`DECISIONS/0004`](DECISIONS/0004-plugin-extension-boundaries.md)、
+> 面向给 GoFor 加功能的开发者。**本文讲构建期 UI 插件**（页面/主题/数据/打印归属）。
+> 主进程运行时无头插件（命令/视图插槽/打印模板/任务读写）见 [`PLUGIN-RUNTIME.md`](PLUGIN-RUNTIME.md)
+> 与 [`DECISIONS/0008`](DECISIONS/0008-runtime-plugins.md)。
+> 构建期边界见 [`0004`](DECISIONS/0004-plugin-extension-boundaries.md)、
 > [`0006`](DECISIONS/0006-all-features-as-plugins.md)、[`0007`](DECISIONS/0007-npm-only-plugins.md)；
 > 规则清单见 §8；机器可读版是 `packages/plugins/src/rules.ts` 的 `PLUGIN_RULES`。
 
 ## 1 插件 = npm 包，随应用构建
 
+> 想测试「删掉任意插件后还能不能跑」：见 [`PLUGIN-TEST.md`](PLUGIN-TEST.md)，用
+> `./plugin-test.sh`（不要直接 `pnpm build`，pnpm 会先校验缺失的 workspace 包）。
+
 | 项 | 规则 |
 |---|---|
-| 位置 | `packages/plugins/src/<plugin>/`，统一在 workspace 包 `@gofor/plugins` 里 |
+| 位置 | 独立 workspace 包 `plugins/<plugin>/`（包名 `gofor-plugin-*`），由 `@gofor/plugins` 聚合 |
 | 形态 | TypeScript 模块，导出 `PluginModule = { manifest, activate, deactivate? }` |
-| 安装 | 随应用构建；没有运行时安装、Blob/`import()`、`window.GoForSDK` |
+| 安装 | 随应用构建；没有运行时安装、Blob/`import()`、`window.GoForSDK`（运行时无头插件另见 `PLUGIN-RUNTIME.md`） |
 | 更新 | 改代码 → `pnpm build` / 发版；开发期 `pnpm dev` 有 HMR |
 | 启停 | 只切换注册表与 Dexie `plugins` 表的 enabled，**不删插件数据** |
-| 信任 | 构建期受信代码，可 import `@gofor/core` / `@gofor/store` / `@gofor/ui` / `@gofor/plugin-kit` |
+| 信任 | 构建期受信代码，可 import `@gofor/core` / `@gofor/domain` / `@gofor/store` / `@gofor/ui` / `@gofor/plugin-kit` |
 
 没有「用户粘贴单文件 JS」这条路：无法 typecheck、无法带依赖、也没有真正的沙箱；
 需要新功能时加一个包内插件模块，并登记到 `packages/plugins/src/index.ts` 的 `BUILTIN_PLUGINS`。
@@ -145,8 +151,10 @@ ctx.registerData({
 
 ### 总则
 
-1. 插件是 npm 包：统一在 `@gofor/plugins`，拆分独立包时保持 `id`、manifest、贡献项不变。
-2. 没有运行时单文件加载：没有 Blob/`import()`、`plugins.source` 写入、`window.GoForSDK`。
+1. 构建期插件是独立 npm 包 `gofor-plugin-*`（`plugins/<name>/`），由 `@gofor/plugins` 聚合；
+   拆分/移动时保持 `id`、manifest、贡献项不变。
+2. 构建期插件没有运行时单文件加载：没有 Blob/`import()`、`plugins.source` 写入、`window.GoForSDK`；
+   主进程运行时插件是另一条平面（§9），不共享这套 manifest。
 3. 页面/命令/插槽/主题/CSS/内容模块/转换器 id 一律 `<pluginId>/<xId>`；撞上 core 的 ScreenId union（`apps/web/src/nav.ts`）直接忽略并报冲突。
 4. 权限在注册期检查；插件是构建期受信代码，没有沙箱这一层概念。
 5. 插件之间只能通过 `DataContract` 交换数据；禁止互读 `pluginData`（对方禁用后会静默读到空）。
@@ -173,6 +181,17 @@ ctx.registerData({
 | `gofor.theme.sepia` | 护眼主题 | — | `ui.theme`, `ui.slot`, `ui.css` | — | — | 插槽 `app.header.right`；默认禁用 |
 | `gofor.convert` | 纯文本转换 | — | `converter` | — | — | Worker 任务 `markdown-to-text` |
 
+共享产品域在 `@gofor/domain`（timetable / stats / habits / PomodoroRun 类型）；单插件专用逻辑
+留在各自包内（番茄状态机、工具箱练习、单词库解析）。`@gofor/core` 只留原语、配置、纸面契约与插件解析。
+
+每个插件对应一个独立 workspace 包（`plugins/<name>/`）：`gofor-plugin-checkin`、`-checklist`、
+`-converter`、`-diary`、`-mood`、`-pomodoro`、`-report`、`-scan`、`-tasks`、`-theme`、
+`-timetable`、`-toolbox`、`-wordbook`。`packageName` 映射在 `packages/plugins/src/rules.ts` 的
+`PACKAGE_BY_ID`，新增插件必须登记。
+
+注意：这 13 个构建期包的清单在 `src/index.ts` 的 `manifest`（`@gofor/plugin-api`），
+**不在 `package.json` 的 `gofor` 字段**；`gofor` 字段只属于运行时插件（见 §9）。
+
 默认禁用：`gofor.theme.sepia`（启用即改整站外观，必须是用户主动选择）。
 
 ### 数据契约
@@ -197,14 +216,29 @@ ctx.registerData({
 
 （打印区块与扫描回填的不变量见 §6。）
 
-## 9 尚未支持
+## 9 运行时插件（P3.7）
+
+构建期插件解决"功能页"，运行时插件解决"装一个包就多几条命令/插槽/打印模板"。两套 API 不互通：
+
+- 契约：`@gofor/contracts` 的 `GoForPluginAPI`（`registerCommand` / `registerViewSlot` /
+  `registerPrintTemplate` / `getTasks` / `updateTask`）。
+- 加载：主进程 `@gofor/plugin-runtime`，从 `app.getPath('userData')/plugins` 读 `enabled`，
+  `createRequire` 加载入口，5s 超时、单插件失败隔离、`reloadPlugins()`。
+- 安装：`gofor plugin add/remove/list`（`@gofor/plugin-cli`）；清单 `gofor.plugins.json`。
+- UI：主进程只经 IPC 给 `{ slotId, pluginId, renderer, componentName }`；渲染进程按
+  `gofor-plugin://<包名>/<renderer>` 懒加载组件，不 eval。
+- 示例：`examples/gofor-plugin-hello`（独立目录，不在 workspace）。
+
+完整步骤、IPC 时序、任务桥与排障见 [`PLUGIN-RUNTIME.md`](PLUGIN-RUNTIME.md)。
+
+## 10 尚未支持
 
 - 插件之间调用方法（public/private service facade）——目前只有只读数据契约。
-- 第三方独立发布 npm 包并动态装载（当前是 workspace 包 + 随应用构建）。
-- 打印模板插件、自定义 block 类型。
+- 打印模板插件、自定义 block 类型（构建期平面）。
+- 运行时插件的页面/主题/数据契约、签名、registry、版本范围、依赖解析。
 - 网络、文件系统、通知、常驻 overlay。
 
-## 10 提交前自检
+## 11 提交前自检
 
 - `pnpm typecheck` / `pnpm test` 绿。
 - 页面在 360px 下不横向溢出，深色主题可读。

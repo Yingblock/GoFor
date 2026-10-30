@@ -1,7 +1,7 @@
 /**
  * 把墨迹读数判成"勾了没有"。
  *
- * 这是 DESIGN §3.3 的最后一步：每个格子已经有局部采样算出的墨迹占比（0–1），
+ * 这是 DESIGN §5 的最后一步：每个格子已经有局部采样算出的墨迹占比（0–1），
  * 这里只做阈值判定，不做任何图像处理。阈值允许调用方覆盖（设置里的"激进/保守"）。
  *
  * 一条容易犯的错：**没有读数的格子也必须出现在结果里**，记 `ink: 0, selected: false`。
@@ -58,6 +58,8 @@ export function classifyInk(
         payload: target.applyPayload === undefined ? target.payload : target.applyPayload,
       };
       if (target.value !== undefined) result.value = target.value;
+      // 归属原样带进结果：回填时宿主按它路由到对应插件。
+      if (target.owner !== undefined) result.owner = target.owner;
       results.push(result);
     }
   }

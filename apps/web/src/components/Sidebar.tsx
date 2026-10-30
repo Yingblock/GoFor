@@ -1,20 +1,24 @@
 import { IconButton } from '@gofor/ui';
-import { useEffect, useState } from 'react';
-import { groupOf, NAV, type ScreenId } from '../nav.ts';
+import { type ReactNode, useEffect, useState } from 'react';
+import { groupOf, type NavGroup } from '../nav.ts';
 import { DebugPanel } from './DebugPanel.tsx';
 import { ThemeToggle } from './ThemeToggle.tsx';
 
 export interface SidebarProps {
-  screen: ScreenId;
-  onNavigate: (screen: ScreenId) => void;
+  screen: string;
+  /** 内核导航 + 插件贡献的页面（宿主注册表算好后传进来）。 */
+  groups: NavGroup[];
+  onNavigate: (screen: string) => void;
   open: boolean;
   onClose: () => void;
   /**
    * 桌面端折叠态：只留一列图标。
    *
-   * 只在 ≥768px 生效——窄屏是抽屉，抽屉里永远是完整文字版（DESIGN §13.2 规则 6）。
+   * 只在 ≥768px 生效——窄屏是抽屉，抽屉里永远是完整文字版（DESIGN §2 规则 5）。
    */
   collapsed: boolean;
+  /** 插件在侧栏底部的命名插槽（`app.sidebar.footer`）。 */
+  footerSlot?: ReactNode;
 }
 
 /**
@@ -27,17 +31,33 @@ export interface SidebarProps {
  * 折叠时不再有展开/收起分组的概念——所有条目平铺成一列，每个都点得到，
  * 悬停有 `title`、聚焦有 `aria-label` 报出名字。
  */
-export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: SidebarProps) {
-  const activeGroup = groupOf(screen) ?? NAV[1]?.code ?? null;
+export function Sidebar({
+  screen,
+  groups,
+  onNavigate,
+  open,
+  onClose,
+  collapsed,
+  footerSlot,
+}: SidebarProps) {
+  const activeGroup = groupOf(groups, screen) ?? groups[1]?.code ?? null;
   const [expanded, setExpanded] = useState<string | null>(activeGroup);
+  /**
+   * 分组结构指纹，而不是 `groups` 数组本身。
+   *
+   * 宿主每次渲染都会重建 `groups`（`buildNav` 不是 memo 的）；如果 effect 依赖
+   * `groups`，用户点开的分组会在下一次宿主渲染时被立刻收回，表现就是「点不开」。
+   * 只在页面切换或插件增删导致分组变化时重置。
+   */
+  const groupSignature = groups.map((group) => group.code).join('|');
 
-  // 切页时自动展开所在分组，避免"当前页在折叠的分组里"
+  // biome-ignore lint/correctness/useExhaustiveDependencies: groups 每次渲染都是新数组，依赖 groupSignature 才稳定
   useEffect(() => {
-    const group = groupOf(screen);
+    const group = groupOf(groups, screen);
     if (group) setExpanded(group);
-  }, [screen]);
+  }, [screen, groupSignature]);
 
-  const go = (next: ScreenId) => {
+  const go = (next: string) => {
     onNavigate(next);
     onClose();
   };
@@ -55,7 +75,7 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
 
       <aside
         id="app-sidebar"
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-line bg-paper transition-transform duration-base ease-standard md:static md:z-auto md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-line bg-paper transition-transform duration-base ease-standard md:sticky md:top-0 md:bottom-auto md:z-20 md:h-screen md:self-start md:translate-x-0 ${
           collapsed ? 'md:w-14' : 'md:w-60'
         } ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
@@ -86,7 +106,7 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
         <nav className="flex-1 overflow-y-auto pb-6">
           {/* 展开态：手风琴。窄屏永远走这一份（`md:hidden` 只在桌面折叠时生效）。 */}
           <div className={collapsed ? 'md:hidden' : ''}>
-            {NAV.map((group) => {
+            {groups.map((group) => {
               const isOpen = expanded === group.code;
               return (
                 <div key={group.code} className="border-t border-line">
@@ -137,7 +157,7 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
 
           {/* 折叠态（仅桌面）：所有条目平铺成图标列，分组之间用分隔线分组。 */}
           <div className={collapsed ? 'hidden md:block' : 'hidden'}>
-            {NAV.map((group) => (
+            {groups.map((group) => (
               <div key={group.code} className="border-t border-line py-1 first:border-t-0">
                 {group.items.map((item) => {
                   const isActive = item.id === screen;
@@ -165,6 +185,12 @@ export function Sidebar({ screen, onNavigate, open, onClose, collapsed }: Sideba
             ))}
           </div>
         </nav>
+
+        {footerSlot ? (
+          <div className={`border-t border-line px-3 py-2 ${collapsed ? 'md:hidden' : ''}`}>
+            {footerSlot}
+          </div>
+        ) : null}
 
         {/* 主题切换：折叠态只留图标，随时够得着。 */}
         <div className="border-t border-line px-3 py-2">

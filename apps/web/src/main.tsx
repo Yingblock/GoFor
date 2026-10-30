@@ -3,9 +3,17 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import './styles.css';
+import { reloadOnceForStaleChunk } from './plugins/staleChunk.ts';
 import { initTheme } from './theme.ts';
 
 initTheme();
+
+// 页面打开期间重新部署后，旧懒加载 chunk 会失效；自动刷新一次拿新 index。
+// 组件层的 import 失败也会走同一套判断，避免重复刷新。
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  reloadOnceForStaleChunk();
+});
 
 const container = document.getElementById('root');
 if (!container) throw new Error('#root 不存在');

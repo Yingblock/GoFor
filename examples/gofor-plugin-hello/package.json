@@ -1,0 +1,34 @@
+{
+  "name": "gofor-plugin-hello",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GoFor 运行时插件最小示例：一个命令 + 一个视图插槽",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "renderer.mjs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "gofor": {
+    "id": "plugin-hello",
+    "displayName": "Hello 插件",
+    "version": "0.1.0",
+    "main": "./dist/index.js",
+    "apiVersion": "1",
+    "capabilities": [
+      "view-slot",
+      "command"
+    ],
+    "renderer": "./renderer.mjs"
+  },
+  "dependencies": {
+    "@gofor/contracts": "file:../../packages/contracts"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

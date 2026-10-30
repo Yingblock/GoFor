@@ -6,10 +6,11 @@ import {
   type Subject,
   type Task,
 } from '@gofor/core/domain';
-import { type Habit, isHabitActiveOn } from '@gofor/core/habits';
-import { materialize, type PaperId } from '@gofor/core/print';
+import { shortcutMatches } from '@gofor/core/plugin';
+import { materialize, type PaperId, resolvePrintBlocks } from '@gofor/core/print';
 import { buildSheetManifest } from '@gofor/core/scan';
-import { occurrencesOn, parseTimetable } from '@gofor/core/timetable';
+import { type Habit, isHabitActiveOn } from '@gofor/domain/habits';
+import { occurrencesOn, parseTimetable } from '@gofor/domain/timetable';
 import {
   currentConfigOrDefault,
   db,
@@ -25,8 +26,9 @@ import {
   saveSheetManifest,
   sheetManifestId,
 } from '@gofor/store';
+import { cn } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { requestPersistentStorage } from './backup.ts';
 import { appClock } from './clock.ts';
 import { BackupBanner } from './components/BackupBanner.tsx';
@@ -34,30 +36,45 @@ import { type Command, CommandPalette } from './components/CommandPalette.tsx';
 import { ScreenBoundary } from './components/ErrorBoundary.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { todayLabel } from './format.ts';
-import { groupOf, type ScreenId, titleOf } from './nav.ts';
+import { groupOf, titleOf } from './nav.ts';
+import { PluginScreenView, PluginSlot } from './plugins/components.tsx';
+import { useScreenRoute } from './plugins/hash.ts';
+import { PluginHostProvider, usePluginHost } from './plugins/host.tsx';
+import { themeStyle } from './plugins/uiExtensions.ts';
 import { PrintLayer, type SheetData } from './print/PrintSheet.tsx';
 import { printTemplateChoices, resolvePrintTemplate } from './print/template.ts';
-import { CheckinScreen } from './screens/Checkin.tsx';
-import { ChecklistScreen } from './screens/Checklist.tsx';
 import { ComingSoon } from './screens/ComingSoon.tsx';
 import { DataScreen } from './screens/DataScreen.tsx';
-import { DiaryScreen } from './screens/Diary.tsx';
 import { Home } from './screens/Home.tsx';
-import { MoodScreen } from './screens/Mood.tsx';
-import { Pomodoro } from './screens/Pomodoro.tsx';
+import { PluginDirectoryScreen } from './screens/PluginDirectory.tsx';
 import { PrintScreen } from './screens/PrintScreen.tsx';
-import { ReportScreen } from './screens/Report.tsx';
-import { ScanScreen } from './screens/Scan.tsx';
-import { Tasks } from './screens/Tasks.tsx';
 import { TemplateEditorScreen } from './screens/TemplateEditor.tsx';
-import { TimetableScreen } from './screens/Timetable.tsx';
-import { ToolboxScreen } from './screens/Toolbox.tsx';
 
 /** 与课表页共用同一个库内 id；P1 只有一个学期。 */
 const TIMETABLE_ID = 'default';
 
 /** 折叠态持久化用的 key：刷新/重开都要保持用户上次的选择。 */
 const SIDEBAR_COLLAPSED_KEY = 'gofor.ui.sidebarCollapsed';
+
+/**
+ * P3 把 5 个行为屏迁成了插件，页面 id 变成 `<pluginId>/<screenId>`。
+ * 旧书签/旧深链（`#/s/checklist`）仍然要能打开，否则用户会以为"功能没了"。
+ */
+const LEGACY_SCREEN_REDIRECTS: Record<string, string> = {
+  // P3 迁走的 5 个行为屏
+  checklist: 'gofor.checklist/screen',
+  mood: 'gofor.mood/screen',
+  report: 'gofor.report/screen',
+  diary: 'gofor.diary/screen',
+  mind: 'gofor.toolbox/screen',
+  // 本轮迁走的 P1/P2 功能屏（含首页的拍照入口）
+  pomodoro: 'gofor.pomodoro/screen',
+  tasks: 'gofor.tasks/screen',
+  timetable: 'gofor.timetable/screen',
+  checkin: 'gofor.checkin/screen',
+  scan: 'gofor.scan/screen',
+  capture: 'gofor.scan/screen',
+};
 
 /** 惰性初始化读 localStorage：首帧就是最终状态，不会先画展开再跳成折叠。 */
 function readSidebarCollapsed(): boolean {
@@ -93,10 +110,25 @@ function clockLabel(minute: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
+/**
+ * 应用根：把插件宿主包在最外层。
+ *
+ * 宿主负责注册表/路由/数据契约，`AppShell` 只做"当前页面 + 打印层"的组装。
+ * 这样插件崩溃或加载失败时，外壳、导航和打印层都还在。
+ */
 export function App() {
+  return (
+    <PluginHostProvider>
+      <AppShell />
+    </PluginHostProvider>
+  );
+}
+
+function AppShell() {
+  const host = usePluginHost();
+  const { screen, navigate } = useScreenRoute();
   const today = dateKey(appClock);
   const [config, setConfig] = useState<AppConfig | null>(null);
-  const [screen, setScreen] = useState<ScreenId>('home');
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(readSidebarCollapsed);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -190,25 +222,27 @@ export function App() {
     }
   }, [collapsed]);
 
+  /**
+   * 路由兜底：
+   * - 旧书签（迁移成插件的页面）自动跳到新 id；
+   * - 插件被禁用/卸载后停在它的页面上，自动回首页，且边界错误随 screen 变化清掉。
+   */
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey)) return;
-      const key = event.key.toLowerCase();
-      if (key === 'k') {
-        event.preventDefault();
-        setPaletteOpen((open) => !open);
-        return;
-      }
-      // Ctrl/Cmd+B 切换侧栏折叠（不抢命令面板的 Ctrl/Cmd+K）。
-      // 窄屏没有折叠态：按了不改状态，免得用户看不见任何效果却把偏好改了。
-      if (key === 'b' && isDesktopLayout()) {
-        event.preventDefault();
-        setCollapsed((current) => !current);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+    if (!host.ready) return;
+    const legacy = LEGACY_SCREEN_REDIRECTS[screen];
+    if (legacy !== undefined && host.screens.some((entry) => entry.id === legacy)) {
+      navigate(legacy);
+      return;
+    }
+    if (!host.screens.some((entry) => entry.id === screen)) navigate('home');
+  }, [host.ready, host.screens, navigate, screen]);
+
+  const entry = host.screens.find((candidate) => candidate.id === screen);
+  const groupCode = entry?.group ?? groupOf(host.nav, screen);
+  const title = screen === 'home' ? todayLabel(today) : (entry?.title ?? titleOf(host.nav, screen));
+  const chromeNone = entry?.chrome === 'none';
+  const shell = entry?.shell ?? 'default';
+  const layout = entry?.layout ?? 'content';
 
   /**
    * 当前打印模板：**唯一来源是 `config.print.template`**。
@@ -260,16 +294,26 @@ export function App() {
     (date: string) => {
       const sheetTasks = tasksForDate(date);
       const sheetHabits = habitsForDate(date);
-      const sheetBlocks = materialize(printTemplate, {
+      const rawBlocks = materialize(printTemplate, {
         date,
         dateLabel: todayLabel(date),
         // 打卡项多的日子要换行显示（不是截断），行数必须在排版前算好。
         habitCount: sheetHabits.length,
       });
+      // P3.5：插件禁用/卸载后，它拥有的打印区块静默跳过；警告交给预览显示。
+      const availability = resolvePrintBlocks(rawBlocks, host.printBlockOwners);
       const data = buildSheetData(date, printTemplate.id);
-      return { date, blocks: sheetBlocks, data, tasks: sheetTasks, habits: sheetHabits };
+      return {
+        date,
+        blocks: availability.blocks,
+        blockWarnings: availability.warnings,
+        blockOwners: availability.owners,
+        data,
+        tasks: sheetTasks,
+        habits: sheetHabits,
+      };
     },
-    [buildSheetData, habitsForDate, printTemplate, tasksForDate],
+    [buildSheetData, habitsForDate, host.printBlockOwners, printTemplate, tasksForDate],
   );
 
   /** 当前打印队列（1 天或连续 N 天）。默认今天，进打印页后会改成明天。 */
@@ -299,6 +343,7 @@ export function App() {
           date,
           paper,
           blocks: sheet.blocks,
+          blockOwners: sheet.blockOwners,
           bindings: {
             'tasks.today': sheet.tasks.map((task) => task.id),
             'habits.today': sheet.habits.map((habit) => habit.id),
@@ -325,11 +370,6 @@ export function App() {
     },
     [buildSheetForDate, paper, printTemplate.id],
   );
-
-  const navigate = useCallback((next: ScreenId) => {
-    setScreen(next);
-    setNotice(null);
-  }, []);
 
   /** 把打印预设写进配置并立刻更新 UI；返回是否写成功。 */
   const applyPrintConfig = useCallback(
@@ -395,20 +435,124 @@ export function App() {
     setNotice('已导出 JSON');
   }, [today]);
 
-  const commands: Command[] = useMemo(
-    () => [
-      { id: 'home', title: '回到首页', run: () => navigate('home') },
-      { id: 'tasks', title: '作业清单', run: () => navigate('tasks') },
-      { id: 'print', title: '打印 checklist', hint: '⌘P', run: () => navigate('print') },
-      { id: 'a4', title: '纸张切换为 A4', run: () => changePaper('A4') },
-      { id: 'a5', title: '纸张切换为 A5', run: () => changePaper('A5') },
-      { id: 'export', title: '导出全部数据（JSON）', run: exportJson },
-      { id: 'import', title: '导入数据（JSON）', run: () => fileInputRef.current?.click() },
-    ],
-    [changePaper, exportJson, navigate],
+  /**
+   * 内核命令（P3-3.4）。
+   *
+   * 全部进宿主的命令注册表：插件命令、快捷键冲突检测、命令面板看到的是同一份。
+   * `Mod+K` / `Mod+B` / `Mod+P` 的语义与 P1/P2 保持一致。
+   */
+  const commands = useMemo(() => {
+    const list = [
+      {
+        id: 'core.home',
+        title: '回到首页',
+        source: 'core',
+        run: () => navigate('home'),
+      },
+      {
+        id: 'core.palette',
+        title: '打开命令面板',
+        hint: '⌘K',
+        shortcut: 'Mod+K',
+        source: 'core',
+        run: () => setPaletteOpen((open) => !open),
+      },
+      {
+        id: 'core.sidebar',
+        title: '折叠 / 展开侧栏',
+        shortcut: 'Mod+B',
+        source: 'core',
+        run: () => {
+          if (isDesktopLayout()) setCollapsed((current) => !current);
+        },
+      },
+      {
+        id: 'core.print-shortcut',
+        title: '打印 checklist',
+        hint: '⌘P',
+        shortcut: 'Mod+P',
+        source: 'core',
+        run: () => navigate('print'),
+      },
+      {
+        id: 'core.paper-a4',
+        title: '纸张切换为 A4',
+        source: 'core',
+        run: () => changePaper('A4'),
+      },
+      {
+        id: 'core.paper-a5',
+        title: '纸张切换为 A5',
+        source: 'core',
+        run: () => changePaper('A5'),
+      },
+      {
+        id: 'core.export',
+        title: '导出全部数据（JSON）',
+        source: 'core',
+        run: exportJson,
+      },
+      {
+        id: 'core.import',
+        title: '导入数据（JSON）',
+        source: 'core',
+        run: () => fileInputRef.current?.click(),
+      },
+    ];
+    // 每个可用页面都有一条「打开 X」，命令面板因此是全功能的（P3-3.4）。
+    for (const page of host.screens) {
+      if (!page.ready || page.id === 'home') continue;
+      list.push({
+        id: `core.open.${page.id}`,
+        title: `打开 ${page.title}`,
+        source: 'core',
+        run: () => navigate(page.id),
+      });
+    }
+    return list;
+  }, [changePaper, exportJson, host.screens, navigate]);
+
+  const registerCoreCommands = host.registerCoreCommands;
+  useEffect(() => {
+    registerCoreCommands(commands);
+  }, [commands, registerCoreCommands]);
+
+  // 快捷键统一由注册表驱动（含插件自己的命令）。
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+      for (const command of host.commands) {
+        if (command.shortcut === undefined) continue;
+        if (!shortcutMatches(event, command.shortcut, { isMac })) continue;
+        event.preventDefault();
+        void command.run();
+        return;
+      }
+      // 全幅/无壳页面：Esc 回首页（否则用户可能找不到出口）。
+      if (event.key === 'Escape' && chromeNone) {
+        event.preventDefault();
+        navigate('home');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [chromeNone, host.commands, navigate]);
+
+  const paletteCommands: Command[] = useMemo(
+    () =>
+      host.commands
+        .filter((command) => command.id !== 'core.palette')
+        .map((command) => ({
+          id: command.id,
+          title: command.title,
+          ...(command.hint === undefined ? {} : { hint: command.hint }),
+          ...(command.shortcut === undefined ? {} : { hint: command.hint ?? command.shortcut }),
+          run: command.run,
+        })),
+    [host.commands],
   );
 
-  if (!config) {
+  if (!config || !host.ready) {
     return (
       <main className="grid min-h-full place-items-center">
         <p className="text-sm opacity-50">正在打开本地数据库…</p>
@@ -416,19 +560,14 @@ export function App() {
     );
   }
 
-  const groupCode = groupOf(screen);
+  const body: ReactNode = (() => {
+    if (!entry) return null;
+    if (entry.kind === 'plugin') return <PluginScreenView entry={entry} />;
 
-  const body = (() => {
-    switch (screen) {
+    switch (entry.id) {
       case 'home':
         // 课表在 App 里算一次（打印层也用），首页直接复用，避免两处各自展开课表。
         return <Home tasks={tasks} schedule={schedule} onNavigate={navigate} />;
-      case 'tasks':
-        return <Tasks tasks={tasks} />;
-      case 'checkin':
-        return <CheckinScreen />;
-      case 'timetable':
-        return <TimetableScreen />;
       case 'templates':
         return (
           <TemplateEditorScreen
@@ -438,8 +577,6 @@ export function App() {
             onPrint={printTemplateSelection}
           />
         );
-      case 'pomodoro':
-        return <Pomodoro />;
       case 'print':
         return (
           <PrintScreen
@@ -454,29 +591,19 @@ export function App() {
             onChangeDate={(next) => setPrintDates([next])}
             onPrintDates={printDatesNow}
             buildSheetForDate={buildSheetForDate}
+            blockOwners={selectedSheet.blockOwners}
             onChangePaper={changePaper}
             onChangeTemplate={changeTemplate}
           />
         );
-      case 'capture':
-      case 'scan':
-        return <ScanScreen onOpenPrint={() => navigate('print')} />;
-      case 'mood':
-        return <MoodScreen />;
-      case 'report':
-        return <ReportScreen />;
-      case 'checklist':
-        return <ChecklistScreen />;
-      case 'diary':
-        return <DiaryScreen />;
       case 'data':
         return <DataScreen onNotice={setNotice} />;
-      case 'mind':
-        return <ToolboxScreen />;
+      case 'plugins':
+        return <PluginDirectoryScreen />;
       default:
         return (
           <ComingSoon
-            title={titleOf(screen)}
+            title={entry.title}
             groupCode={groupCode ?? '—'}
             part={groupCode?.startsWith('在线') ? 'online' : 'offline'}
             note="这个条目已经在计划里，但还没开始实现。详见 docs/ROADMAP.md 对应阶段。"
@@ -485,63 +612,101 @@ export function App() {
     }
   })();
 
+  const showSidebar = !chromeNone && shell !== 'focus';
+  const pluginSurface = entry?.kind === 'plugin' ? entry.pluginId : undefined;
+  const contentClass = cn(
+    'min-w-0 flex-1',
+    chromeNone
+      ? 'mx-auto w-full max-w-4xl px-4 py-6'
+      : layout === 'full'
+        ? 'w-full'
+        : 'px-4 py-6 break-words md:px-8',
+    !chromeNone && layout !== 'full' && shell === 'compact' && 'mx-auto w-full max-w-3xl',
+    !chromeNone && layout !== 'full' && shell === 'focus' && 'mx-auto w-full max-w-2xl',
+  );
+
   return (
     <>
-      <div className="screen-only flex min-h-full">
-        <Sidebar
-          screen={screen}
-          onNavigate={navigate}
-          open={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          collapsed={collapsed}
-        />
+      <div
+        className={cn(
+          'screen-only min-h-full',
+          chromeNone ? 'block' : 'flex',
+          !chromeNone && shell === 'sidebar-right' && 'flex-row-reverse',
+        )}
+        style={themeStyle(host.activeTheme)}
+        data-plugin-surface={pluginSurface}
+      >
+        {showSidebar ? (
+          <Sidebar
+            screen={screen}
+            groups={host.nav}
+            onNavigate={navigate}
+            open={menuOpen}
+            onClose={() => setMenuOpen(false)}
+            collapsed={collapsed}
+            footerSlot={<PluginSlot name="app.sidebar.footer" />}
+          />
+        ) : null}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-[var(--color-paper)]/90 px-4 py-3 backdrop-blur md:px-8">
-            <button
-              type="button"
-              onClick={() => setMenuOpen(true)}
-              className="rounded-md border border-line px-2 py-1 text-xs md:hidden"
-              aria-label="打开菜单"
-            >
-              ☰
-            </button>
-
-            {/*
-              折叠按钮放在 header 而不是侧栏里：侧栏折叠后只剩 56px，
-              把开关塞进去会跟图标列抢位置；放在紧邻侧栏的位置（内容区左上角）也符合直觉。
-            */}
-            <button
-              type="button"
-              onClick={() => setCollapsed((current) => !current)}
-              className="hidden rounded-md border border-line px-2 py-1 text-xs opacity-60 transition hover:opacity-100 md:inline-flex"
-              aria-label={collapsed ? '展开侧栏' : '折叠侧栏'}
-              aria-expanded={!collapsed}
-              aria-controls="app-sidebar"
-              title={`${collapsed ? '展开侧栏' : '折叠侧栏'}（Ctrl/⌘ + B）`}
-            >
-              {collapsed ? '»' : '«'}
-            </button>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-baseline gap-2">
-                {groupCode ? (
-                  <span className="font-mono text-[10px] opacity-35">{groupCode}</span>
-                ) : null}
-                <h1 className="truncate text-base font-medium">
-                  {screen === 'home' ? todayLabel(today) : titleOf(screen)}
-                </h1>
-              </div>
+          {chromeNone ? (
+            <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
+              <span className="truncate text-small opacity-50">{title}</span>
+              <button
+                type="button"
+                onClick={() => navigate('home')}
+                className="shrink-0 rounded-md border border-line px-3 py-1 text-small opacity-70 transition-opacity duration-fast hover:opacity-100"
+              >
+                返回首页（Esc）
+              </button>
             </div>
+          ) : (
+            <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-line bg-[var(--color-paper)]/90 px-4 py-3 backdrop-blur md:px-8">
+              <button
+                type="button"
+                onClick={() => setMenuOpen(true)}
+                className="rounded-md border border-line px-2 py-1 text-xs md:hidden"
+                aria-label="打开菜单"
+              >
+                ☰
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setPaletteOpen(true)}
-              className="rounded-lg border border-line bg-card-soft px-3 py-1.5 text-xs opacity-70"
-            >
-              命令 ⌘K
-            </button>
-          </header>
+              {/*
+                折叠按钮放在 header 而不是侧栏里：侧栏折叠后只剩 56px，
+                把开关塞进去会跟图标列抢位置；放在紧邻侧栏的位置（内容区左上角）也符合直觉。
+              */}
+              <button
+                type="button"
+                onClick={() => setCollapsed((current) => !current)}
+                className="hidden rounded-md border border-line px-2 py-1 text-xs opacity-60 transition hover:opacity-100 md:inline-flex"
+                aria-label={collapsed ? '展开侧栏' : '折叠侧栏'}
+                aria-expanded={!collapsed}
+                aria-controls="app-sidebar"
+                title={`${collapsed ? '展开侧栏' : '折叠侧栏'}（Ctrl/⌘ + B）`}
+              >
+                {collapsed ? '»' : '«'}
+              </button>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2">
+                  {groupCode ? (
+                    <span className="font-mono text-[10px] opacity-35">{groupCode}</span>
+                  ) : null}
+                  <h1 className="truncate text-base font-medium">{title}</h1>
+                </div>
+              </div>
+
+              <PluginSlot name="app.header.right" />
+
+              <button
+                type="button"
+                onClick={() => setPaletteOpen(true)}
+                className="rounded-lg border border-line bg-card-soft px-3 py-1.5 text-xs opacity-70"
+              >
+                命令 ⌘K
+              </button>
+            </header>
+          )}
 
           {notice ? (
             <div className="mx-4 mt-3 rounded-lg bg-overlay px-3 py-2 text-xs opacity-70 md:mx-8">
@@ -549,15 +714,16 @@ export function App() {
             </div>
           ) : null}
 
-          <BackupBanner reminderDays={config.backup.reminderDays} />
+          {chromeNone ? null : <BackupBanner reminderDays={config.backup.reminderDays} />}
 
-          <div className="min-w-0 flex-1 px-4 py-6 break-words md:px-8">
+          <div className={contentClass}>
             {/*
               按页包一层边界：单页渲染崩溃时只显示错误卡片，
-              导航、命令面板、打印层都还在（AGENTS 规则 10）。
+              导航、命令面板、打印层都还在（`docs/STANDARD.md` 规则 7）。
               resetKey 用 screen，切页自动解除错误，不会把人困在错误页。
             */}
             <ScreenBoundary resetKey={screen}>{body}</ScreenBoundary>
+            <PluginSlot name={`screen.${screen}.after`} />
           </div>
         </div>
       </div>
@@ -576,7 +742,9 @@ export function App() {
           try {
             const text = await file.text();
             const result = await importAll(db, JSON.parse(text));
-            setNotice(`已导入 ${result.imported.tasks} 个任务、${result.imported.sessions} 条记录`);
+            setNotice(
+              `已导入 ${result.imported.tasks ?? 0} 个任务、${result.imported.sessions ?? 0} 条记录`,
+            );
           } catch (error) {
             setNotice(`导入失败：${error instanceof Error ? error.message : '未知错误'}`);
           } finally {
@@ -587,7 +755,7 @@ export function App() {
 
       <CommandPalette
         open={paletteOpen}
-        commands={commands}
+        commands={paletteCommands}
         onClose={() => setPaletteOpen(false)}
       />
     </>

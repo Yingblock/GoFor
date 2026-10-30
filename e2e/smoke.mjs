@@ -98,7 +98,14 @@ try {
   if (!(await waitForServer())) throw new Error('preview 服务未启动，先跑 pnpm build');
 
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1100, height: 1400 } });
+  // 同一个 context 里开多个页：IndexedDB / localStorage / 插件状态共享，
+  // 才符合"同一台设备"的真实情况（以前 browser.newPage 会各开一个 context，
+  // 打印页和扫描页看到的坐标清单不是同一份）。
+  const context = await browser.newContext({
+    viewport: { width: 1100, height: 1400 },
+    deviceScaleFactor: 4,
+  });
+  const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (error) => errors.push(String(error)));
   page.on('console', (message) => {
@@ -625,6 +632,236 @@ try {
   await page.waitForSelector('text=写今天的', { timeout: 8000 });
   check('情绪日记可打开', true);
 
+  /* ------------------------------------------------------ P3：插件化 */
+
+  await openGroup(page, '导出');
+  await clickItem(page, '插件与扩展');
+  await page.waitForSelector('text=已注册插件', { timeout: 8000 });
+  const builtinCount = await page.getByText('内置', { exact: true }).count();
+  check('插件目录列出内置插件', builtinCount >= 7, `${builtinCount} 个`);
+  check('插件目录显示数据契约', (await page.getByText('sessions.range').count()) > 0);
+  check('插件目录说明插件随应用构建', (await page.getByText(/插件随应用构建/).count()) > 0);
+
+  // 单词库：导入 → 搜 → 首页插槽 → 周报数据契约
+  await openGroup(page, '工具');
+  await clickItem(page, '单词库');
+  await page.waitForSelector('[data-e2e="wordbook-count"]', { timeout: 8000 });
+  check('单词库插件页可打开', true);
+
+  await page.getByLabel('粘贴词表').fill('单词,释义,标签\napple,苹果,水果\nrun,跑,动作\n');
+  await page.getByRole('button', { name: '导入粘贴内容' }).click();
+  await page.waitForFunction(
+    () => document.querySelector('[data-e2e="wordbook-count"]')?.textContent?.includes('2 个词'),
+    { timeout: 8000 },
+  );
+  check('单词库可导入 CSV', true);
+
+  await page.getByLabel('搜索单词').fill('apple');
+  await page.waitForTimeout(200);
+  const visibleTerms = await page.locator('li').filter({ hasText: '苹果' }).count();
+  const hiddenTerms = await page.locator('li').filter({ hasText: '跑' }).count();
+  check('单词库可按词搜索', visibleTerms > 0 && hiddenTerms === 0, `命中 ${visibleTerms}`);
+  await page.getByLabel('搜索单词').fill('');
+
+  // 深链 + 刷新保持 + 后退
+  check(
+    '插件页面有 hash 深链',
+    (await page.evaluate(() => location.hash)) === '#/s/gofor.wordbook/screen',
+  );
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-e2e="wordbook-count"]', { timeout: 8000 });
+  check(
+    '刷新后仍停在插件页面',
+    (await page.evaluate(() => location.hash)) === '#/s/gofor.wordbook/screen',
+  );
+  await page.goBack();
+  await page.waitForTimeout(500);
+  check(
+    '浏览器后退可用',
+    (await page.evaluate(() => location.hash)) !== '#/s/gofor.wordbook/screen',
+  );
+
+  // 首页命名插槽
+  await page.locator('#app-sidebar button[aria-label="GoFor"]').click();
+  await page.waitForSelector('text=单词库', { timeout: 8000 });
+  check('首页出现单词库插件卡', (await page.getByText('2 个词').count()) > 0);
+
+  // 周报通过数据契约读到单词库（report 插件不 import @gofor/store）
+  await openGroup(page, '记录');
+  await clickItem(page, '自我周报');
+  await page.waitForSelector('[data-e2e="report-wordbook"]', { timeout: 8000 });
+  check(
+    '周报通过数据契约读到单词库',
+    (await page.locator('[data-e2e="report-wordbook"]').innerText()).includes('2'),
+  );
+
+  // 安装页把「可选依赖」如实标成可用
+  await openGroup(page, '导出');
+  await clickItem(page, '插件与扩展');
+  await page.waitForSelector('[data-e2e="consumes-gofor.report"]', { timeout: 8000 });
+  const consumesText = await page.locator('[data-e2e="consumes-gofor.report"]').innerText();
+  check(
+    '安装页显示数据依赖可用性',
+    consumesText.includes('wordbook.entries') && consumesText.includes('✓'),
+    consumesText.replace(/\s+/g, ' ').slice(0, 80),
+  );
+
+  // 禁用 → 周报显示「未安装」，首页扩展消失，深链回首页（不崩、不显示 0）
+  await page.getByRole('button', { name: '禁用 单词库' }).click();
+  await page.waitForTimeout(500);
+  await openGroup(page, '记录');
+  await clickItem(page, '自我周报');
+  await page.waitForSelector('[data-e2e="report-wordbook"]', { timeout: 8000 });
+  check(
+    '禁用插件后周报显示未安装',
+    (await page.locator('[data-e2e="report-wordbook"]').innerText()).includes('未安装'),
+  );
+
+  await page.locator('#app-sidebar button[aria-label="GoFor"]').click();
+  await page.waitForTimeout(300);
+  check('禁用插件后首页扩展消失', (await page.getByText('📚 单词库').count()) === 0);
+
+  await page.evaluate(() => {
+    location.hash = '#/s/gofor.wordbook/screen';
+  });
+  await page.waitForTimeout(600);
+  check('禁用插件的深链回到首页', (await page.evaluate(() => location.hash)) === '#/s/home');
+
+  // 重新启用：数据还在（pluginData 没被禁用清掉）
+  await openGroup(page, '导出');
+  await clickItem(page, '插件与扩展');
+  await page.getByRole('button', { name: '启用 单词库' }).click();
+  await page.waitForTimeout(500);
+  await openGroup(page, '工具');
+  await clickItem(page, '单词库');
+  await page.waitForSelector('[data-e2e="wordbook-count"]', { timeout: 8000 });
+  check(
+    '重新启用后单词库数据还在',
+    (await page.locator('[data-e2e="wordbook-count"]').innerText()).includes('2 个词'),
+  );
+
+  // 功能插件被禁用后：侧栏消失、深链回首页；打印仍读 core 数据，不受影响
+  await openGroup(page, '导出');
+  await clickItem(page, '插件与扩展');
+  await page.getByRole('button', { name: '禁用 作业清单' }).click();
+  await page.waitForTimeout(500);
+  await openGroup(page, '记录');
+  check(
+    '禁用功能插件后侧栏条目消失',
+    (await page.locator('aside').getByText('作业清单').count()) === 0,
+  );
+  await page.evaluate(() => {
+    location.hash = '#/s/gofor.tasks/screen';
+  });
+  await page.waitForTimeout(600);
+  check('禁用功能插件的深链回首页', (await page.evaluate(() => location.hash)) === '#/s/home');
+
+  // 打印页不依赖作业插件的页面，仍然能出纸
+  await openGroup(page, '导出');
+  await clickItem(page, '打印 checklist');
+  await page.getByLabel('打印模板').waitFor({ timeout: 8000 });
+  const printText = await page.locator('.print-page').first().innerText();
+  check(
+    '禁用作业插件后打印页仍能渲染纸面',
+    printText.includes('今日课表') && (await page.locator('.print-page').count()) > 0,
+    printText.replace(/\s+/g, ' ').slice(0, 40),
+  );
+  check('打印页提示缺失的作业插件', (await page.getByText(/缺失「作业清单」插件/).count()) > 0);
+
+  // 模板页：缺失插件的区块静默跳过，但预览下方必须给出警告
+  await openGroup(page, '导出');
+  await clickItem(page, '模板与校准页');
+  await page.waitForSelector('[data-e2e="block-warnings"]', { timeout: 8000 });
+  check('模板页提示缺失插件', (await page.getByText(/缺失「作业清单」插件/).count()) > 0);
+
+  // 旧深链在插件重新启用后自动跳到新页面
+  await openGroup(page, '导出');
+  await clickItem(page, '插件与扩展');
+  await page.getByRole('button', { name: '启用 作业清单' }).click();
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    location.hash = '#/s/tasks';
+  });
+  await page.waitForTimeout(600);
+  check(
+    '旧深链自动跳到插件页面',
+    (await page.evaluate(() => location.hash)) === '#/s/gofor.tasks/screen',
+  );
+
+  // 重新启用后重新固化一次今天的坐标清单：扫描用例读的是同一份清单，
+  // 不能让"禁用时保存的清单"残留到后面（真实使用里用户也会在启用后再打印）。
+  await openGroup(page, '导出');
+  await clickItem(page, '打印 checklist');
+  await page.getByLabel('打印日期').fill(todayKey);
+  await page.waitForTimeout(800);
+
+  // 命令面板是全功能的（插件页面也进命令面板）
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('input[placeholder="输入命令…"]', { timeout: 5000 });
+  check('命令面板包含插件页面', (await page.getByText('打开 单词库').count()) > 0);
+  await page.keyboard.press('Escape');
+
+  /* ------------------------------------------------ P3：UI 扩展三档 */
+
+  await openGroup(page, '导出');
+  await clickItem(page, '插件与扩展');
+  const pdfBeforeTheme = await page.pdf({ printBackground: true, preferCSSPageSize: true });
+  await page.getByRole('button', { name: '启用 护眼主题' }).click();
+  await page.waitForTimeout(500);
+
+  const screenPaper = await page
+    .locator('.screen-only')
+    .first()
+    .evaluate((element) => getComputedStyle(element).getPropertyValue('--color-paper').trim());
+  check('主题包覆盖屏幕层 token（档 1）', screenPaper === '#f4ecdc', screenPaper || '空');
+  check('主题包在页头出现标记', (await page.locator('[data-e2e="theme-badge"]').count()) > 0);
+
+  const badgeColor = await page
+    .locator('[data-e2e="theme-badge"]')
+    .evaluate((element) => getComputedStyle(element).color);
+  check('作用域 CSS 命中插件那块（档 3）', badgeColor === 'rgb(138, 90, 43)', badgeColor);
+
+  const printColor = await page
+    .locator('.print-page')
+    .first()
+    .evaluate((element) => getComputedStyle(element).color);
+  check('主题不影响纸面颜色', printColor === 'rgb(17, 17, 17)', printColor);
+  const pdfAfterTheme = await page.pdf({ printBackground: true, preferCSSPageSize: true });
+  check(
+    '启用主题后打印 PDF 体积不变',
+    pdfAfterTheme.length === pdfBeforeTheme.length,
+    `${pdfBeforeTheme.length} → ${pdfAfterTheme.length}`,
+  );
+
+  await page.getByRole('button', { name: '禁用 护眼主题' }).click();
+  await page.waitForTimeout(400);
+  check('禁用主题后标记消失', (await page.locator('[data-e2e="theme-badge"]').count()) === 0);
+
+  // 转换器：在独立的 Worker 里跑，不阻塞页面
+  await page.getByRole('button', { name: '试运行转换' }).click();
+  await page.waitForSelector('[data-e2e="converter-output"]', { timeout: 8000 });
+  const converted = await page.locator('[data-e2e="converter-output"]').innerText();
+  check(
+    '转换器在 Worker 里跑通',
+    converted.includes('标题') && !converted.includes('#'),
+    converted.replace(/\s+/g, ' ').slice(0, 40),
+  );
+  check(
+    'OCR/AI 未配置状态可见',
+    (await page.getByText(/OCR：未配置/).count()) > 0 &&
+      (await page.getByText(/AI：未配置/).count()) > 0,
+  );
+
+  /* ------------------------------------------- P3.5：没有运行时 JS 加载 */
+
+  check('插件目录说明插件随应用构建', (await page.getByText(/插件随应用构建/).count()) > 0);
+  check(
+    '不再提供单文件安装入口',
+    (await page.getByRole('button', { name: '安装插件' }).count()) === 0 &&
+      (await page.getByLabel('插件源码').count()) === 0,
+  );
+  check('没有注入 window.GoForSDK', (await page.evaluate(() => 'GoForSDK' in window)) === false);
+
   /* -------------------------------------------------- P2：侧栏可折叠 */
 
   const collapseButton = page.getByRole('button', { name: '折叠侧栏' });
@@ -645,17 +882,14 @@ try {
   // 把「打印预览的那一页」截图当照片。预览是缩小显示的，直接截会只有 29px 的二维码、
   // 解不出来——所以另开一个 4 倍像素密度的页面来截，像素量接近手机拍的照片。
   // 这样 e2e 不需要提交测试图片，也不依赖摄像头。
-  const photoPage = await browser.newPage({
-    viewport: { width: 1100, height: 1400 },
-    deviceScaleFactor: 4,
-  });
+  const photoPage = await context.newPage();
   await photoPage.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   await openGroup(photoPage, '导出');
   await clickItem(photoPage, '打印 checklist');
   await photoPage.waitForSelector('.print-page', { timeout: 10000 });
   // 打印页默认明天；扫描用例验的是今天的纸，先切到今天。
   await photoPage.getByLabel('打印日期').fill(new Date().toLocaleDateString('sv-SE'));
-  await photoPage.waitForTimeout(300);
+  await photoPage.waitForTimeout(800);
   const sheetPng = await photoPage.locator('.print-page').first().screenshot();
 
   // 再截一张"二维码被挡住"的同一页：验证页尾条码兜底（P2-2.12）。
@@ -670,7 +904,7 @@ try {
 
   // 用 canvas 在纸的下半部分涂黑，模拟"填了三格"。坐标清单采样的是归一化矩形，
   // 所以只需要保证墨迹落在那几行里，不用精确到格子。
-  const canvasPage = await browser.newPage();
+  const canvasPage = await context.newPage();
   const inkSheet = async (b64, from = 0.78, to = 0.94) =>
     canvasPage.evaluate(
       async ({ data, from, to }) => {
@@ -783,6 +1017,12 @@ try {
     await applyButton.click();
     await page.waitForSelector('text=/已回填/', { timeout: 10000 });
     check('扫描：回填写入数据层', true);
+    check(
+      '扫描：识别结果交给对应插件处理',
+      (await page.getByText(/项三格自评/).count()) > 0 ||
+        (await page.getByText(/项作业清单/).count()) > 0 ||
+        (await page.getByText(/项每日打卡/).count()) > 0,
+    );
     // 回填后三格自评应被写上（涂黑了整行，取到的是最右一格 → 5）。
     // liveQuery 是异步的：刚进页面时滑块还是默认值 3，必须等它读到库里那条记录。
     await openGroup(page, '记录');
@@ -935,6 +1175,18 @@ try {
   const expandedWidth = await asideWidth();
   check('桌面默认展开侧栏', expandedWidth > 200, `${expandedWidth}px`);
 
+  // 侧栏必须随滚动固定在视口顶部；否则整列被带出画面，看起来就是"点不开"。
+  await page.evaluate(() => window.scrollTo(0, 400));
+  await sleep(100);
+  const sidebarTop = await aside.evaluate((el) => Math.round(el.getBoundingClientRect().top));
+  check('侧栏滚动后固定', Math.abs(sidebarTop) <= 1, `${sidebarTop}px`);
+  const firstGroup = page.locator('#app-sidebar nav button[aria-expanded]').first();
+  const groupBefore = await firstGroup.getAttribute('aria-expanded');
+  await firstGroup.click();
+  check('滚动后侧栏仍可点', (await firstGroup.getAttribute('aria-expanded')) !== groupBefore);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await sleep(100);
+
   await page.locator('button[aria-label="折叠侧栏"]').click();
   await sleep(250);
   check(
@@ -979,7 +1231,9 @@ try {
   );
 
   // 刷新后保持折叠：首帧就是折叠态，不是展开再跳。
+  // P3 起刷新会保持当前页面（hash 路由），所以先回首页再断言首屏内容。
   await page.reload({ waitUntil: 'networkidle' });
+  await page.locator('#app-sidebar button[aria-label="GoFor"]').click();
   await page.waitForSelector('text=拍照录入', { timeout: 15000 });
   const widthAfterReload = await asideWidth();
   check('刷新后仍是折叠态', widthAfterReload === 56, `${widthAfterReload}px`);

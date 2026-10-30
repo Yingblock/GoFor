@@ -1,11 +1,23 @@
 import 'fake-indexeddb/auto';
 import { DEFAULT_APP_CONFIG } from '@gofor/core/config';
 import type { StoredTemplate, StudySession, Subject, Task } from '@gofor/core/domain';
-import type { PomodoroRun } from '@gofor/core/pomodoro';
+import type { PomodoroRun } from '@gofor/domain/pomodoro';
 import Dexie, { type Table } from 'dexie';
 import { describe, expect, it } from 'vitest';
+import { exportAll, importAll } from './backup.ts';
 import { currentConfigOrDefault, DEFAULT_CONFIG_KEY, readConfig } from './config.ts';
 import { GoForDb } from './db.ts';
+import {
+  deletePluginRecord,
+  ensureBuiltinPlugins,
+  getPluginRecord,
+  listPluginValues,
+  readPluginValue,
+  saveInstalledPlugin,
+  setPluginEnabled,
+  writePluginValue,
+} from './plugins.ts';
+import { createBuiltinDataProviders } from './providers.ts';
 import {
   addSession,
   addToolboxRun,
@@ -16,12 +28,10 @@ import {
   deleteFocusRun,
   deleteScanBatch,
   ensureSubjects,
-  exportAll,
   getCheckin,
   getChecklistLog,
   getMoodLog,
   getSheetManifest,
-  importAll,
   listActiveFocusRuns,
   listCheckins,
   listChecklistLogs,
@@ -1153,6 +1163,189 @@ describe('课程备注（v7）', () => {
     const left = await listCourseNotesByDate(db, '2026-10-20');
     expect(left).toHaveLength(1);
     expect(left[0]?.text).toBe('乙');
+    await db.close();
+  });
+});
+
+/* ------------------------------------------------- P3：插件注册与数据层 */
+
+describe('存储：Dexie v8 插件表', () => {
+  it('停在 v7 的库升级后插件表可写（版本号冻结，必须新开 v8）', async () => {
+    const name = `gofor-v8-${Math.random().toString(36).slice(2)}`;
+
+    const v7 = {
+      config: 'key',
+      tasks: 'id, done, due, subjectId, sortKey',
+      subjects: 'id, order',
+      sessions: 'id, date, subjectId',
+      templates: 'id, name',
+      focusRuns: 'id, status, createdAt',
+      checkins: 'date',
+      timetables: 'id',
+      tagPools: 'id',
+      habits: 'id, order',
+      habitLogs: 'id, habitId, date',
+      moodLogs: 'date',
+      diaryEntries: 'id, date',
+      toolboxRuns: 'id, exercise, startedAt',
+      checklists: 'id',
+      checklistLogs: 'id, date, checklistId',
+      scanBatches: 'id, status, createdAt',
+      sheetManifests: 'id, date, templateId',
+      courseNotes: 'id, date',
+    };
+    class V7Db extends Dexie {
+      tasks!: Table<{ id: string; title: string }, string>;
+      constructor() {
+        super(name);
+        this.version(1).stores(v7);
+      }
+    }
+    const old = new V7Db();
+    await old.tasks.put({ id: 't1', title: 'v7 时期写入' });
+    old.close();
+
+    const upgraded = new GoForDb(name);
+    expect((await upgraded.tasks.toArray())[0]?.title).toBe('v7 时期写入');
+    await ensureBuiltinPlugins(upgraded, [{ id: 'gofor.wordbook', manifestJson: '{"id":"w"}' }], 1);
+    await writePluginValue(upgraded, 'gofor.wordbook', 'entries', 'apple', { term: 'apple' }, 2);
+    expect(await upgraded.plugins.count()).toBe(1);
+    expect(await upgraded.pluginData.count()).toBe(1);
+    upgraded.close();
+  });
+
+  it('内置插件播种不覆盖用户禁用状态', async () => {
+    const db = freshDb('plugin-seed');
+    await ensureBuiltinPlugins(db, [{ id: 'gofor.wordbook', manifestJson: '{"v":1}' }], 1);
+    await setPluginEnabled(db, 'gofor.wordbook', false, 2);
+    await ensureBuiltinPlugins(db, [{ id: 'gofor.wordbook', manifestJson: '{"v":2}' }], 3);
+    const record = await getPluginRecord(db, 'gofor.wordbook');
+    expect(record?.enabled).toBe(false);
+    expect(record?.manifestJson).toBe('{"v":2}');
+    expect(record?.kind).toBe('builtin');
+    await db.close();
+  });
+
+  it('插件数据按插件 / 集合隔离，坏 JSON 当不存在而不是抛错', async () => {
+    const db = freshDb('plugin-data');
+    await writePluginValue(db, 'a.plugin', 'entries', 'apple', { term: 'apple' }, 1);
+    await writePluginValue(db, 'a.plugin', 'entries', 'pear', { term: 'pear' }, 2);
+    await writePluginValue(db, 'b.plugin', 'entries', 'apple', { term: 'other' }, 3);
+
+    expect(await readPluginValue(db, 'a.plugin', 'entries', 'apple')).toEqual({ term: 'apple' });
+    expect((await listPluginValues(db, 'a.plugin', 'entries')).map((row) => row.key)).toEqual([
+      'apple',
+      'pear',
+    ]);
+    await db.pluginData.put({
+      id: 'a.plugin/entries/broken',
+      pluginId: 'a.plugin',
+      collection: 'entries',
+      key: 'broken',
+      value: '{not json',
+      updatedAt: 4,
+    });
+    expect(await readPluginValue(db, 'a.plugin', 'entries', 'broken')).toBeNull();
+    await expect(writePluginValue(db, 'a.plugin', 'bad/name', 'x', 1, 5)).rejects.toThrow(
+      '集合名非法',
+    );
+    await db.close();
+  });
+
+  it('卸载插件默认保留数据，显式删除才清空', async () => {
+    const db = freshDb('plugin-uninstall-data');
+    await saveInstalledPlugin(
+      db,
+      { id: 'demo.plugin', manifestJson: '{"v":1}', source: 'export default {}' },
+      1,
+    );
+    await writePluginValue(db, 'demo.plugin', 'notes', 'keep', { text: '保留' }, 2);
+
+    await deletePluginRecord(db, 'demo.plugin');
+    expect(await getPluginRecord(db, 'demo.plugin')).toBeUndefined();
+    expect(await readPluginValue(db, 'demo.plugin', 'notes', 'keep')).toEqual({ text: '保留' });
+
+    await saveInstalledPlugin(
+      db,
+      { id: 'demo.plugin', manifestJson: '{"v":1}', source: 'export default {}' },
+      3,
+    );
+    await deletePluginRecord(db, 'demo.plugin', { deleteData: true });
+    expect(await readPluginValue(db, 'demo.plugin', 'notes', 'keep')).toBeNull();
+    await db.close();
+  });
+
+  it('插件与插件数据进备份，导出→清库→导入仍在', async () => {
+    const source = freshDb('plugin-backup-src');
+    await ensureBuiltinPlugins(source, [{ id: 'gofor.wordbook', manifestJson: '{"v":1}' }], 1);
+    await saveInstalledPlugin(
+      source,
+      { id: 'demo.plugin', manifestJson: '{"v":1}', source: 'export default {}' },
+      2,
+    );
+    await writePluginValue(source, 'demo.plugin', 'notes', 'hello', { text: '你好' }, 3);
+
+    const bundle = await exportAll(source);
+    expect(bundle.formatVersion).toBe(2);
+    expect(bundle.plugins?.map((plugin) => plugin.id)).toEqual(['demo.plugin', 'gofor.wordbook']);
+    expect(bundle.pluginData).toHaveLength(1);
+
+    const target = freshDb('plugin-backup-dst');
+    const result = await importAll(target, bundle);
+    expect(result.imported.plugins).toBe(2);
+    expect(result.imported.pluginData).toBe(1);
+    expect(await readPluginValue(target, 'demo.plugin', 'notes', 'hello')).toEqual({
+      text: '你好',
+    });
+    expect((await getPluginRecord(target, 'demo.plugin'))?.source).toBe('export default {}');
+    await source.close();
+    await target.close();
+  });
+});
+
+describe('存储：内置数据 provider（周报不 import store 也能取数）', () => {
+  it('sessions/habits/mood/wordbook 之外的四个契约都能出数', async () => {
+    const db = freshDb('providers');
+    await addSession(db, {
+      id: 's1',
+      date: '2026-03-05',
+      start: 480,
+      end: 525,
+      subjectId: 'subject-1',
+      taskId: null,
+      source: 'appTimer',
+      interruptions: 1,
+      createdAt: 1,
+    });
+    await saveHabit(db, {
+      id: 'h1',
+      name: '背单词',
+      weekdays: [],
+      startDate: '2026-03-01',
+      endDate: null,
+      order: 0,
+      createdAt: 1,
+    });
+    await setHabitLog(db, 'h1', '2026-03-05', true, 2);
+    await saveMoodLog(db, { date: '2026-03-05', sleep: 4, mood: 3, focus: 5 }, 3);
+
+    const providers = createBuiltinDataProviders(db);
+    const byId = new Map(providers.map((provider) => [provider.id, provider]));
+    const range = { from: '2026-03-01', to: '2026-03-07' };
+
+    expect(await byId.get('sessions.range')?.query(range)).toHaveLength(1);
+    expect(await byId.get('habits.range')?.query(range)).toMatchObject({
+      habits: [{ id: 'h1' }],
+      logs: [{ habitId: 'h1', done: true }],
+    });
+    expect(await byId.get('mood.range')?.query(range)).toEqual([
+      { date: '2026-03-05', sleep: 4, mood: 3, focus: 5, updatedAt: 3 },
+    ]);
+    // 非法输入返回空数组，不抛错（插件传错参数不该炸掉周报）
+    expect(await byId.get('sessions.range')?.query({ from: 'x' })).toEqual([]);
+
+    const revision = await byId.get('tasks.all')?.revision();
+    expect(typeof revision).toBe('number');
     await db.close();
   });
 });

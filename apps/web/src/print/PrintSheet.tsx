@@ -323,7 +323,7 @@ function QrView({ sizeMm, data }: { sizeMm: number; data: SheetData }) {
  * 睡眠 / 心情 / 专注这类 1–N 自评格。
  *
  * 为什么印成勾选格而不是"写数字"：写数字要 OCR 才读得回来，
- * 勾选格只要判断"这一格里有没有墨"，回填链路简单一个数量级（DESIGN §16.3）。
+ * 勾选格只要判断"这一格里有没有墨"，回填链路简单一个数量级（docs/Phase-note/P2/paper-loop.md）。
  */
 /** 从 `Block` 联合里取评分格那一支，避免依赖 core 的导出清单。 */
 type RatingGridLike = Extract<Block, { kind: 'ratingGrid' }>;
@@ -339,7 +339,7 @@ function RatingGridView({ block }: { block: RatingGridLike }) {
             alignItems: 'center',
             gap: mm(2),
             // 行高必须正好 7mm 且从块顶开始铺：坐标清单按 rows × 7mm 等分采样窗，
-            // 这里多一个 gap 就会让越靠下的行偏得越多（DESIGN §16.2）。
+            // 这里多一个 gap 就会让越靠下的行偏得越多（docs/Phase-note/P2/paper-loop.md）。
             height: mm(7),
             borderBottom: `${mm(0.2)} solid #dcdad2`,
           }}

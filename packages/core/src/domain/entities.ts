@@ -254,6 +254,11 @@ export interface ScanResult {
   payload?: string | null;
   /** 三滑块回填时的 1–5；其它 kind 没有。 */
   value?: number;
+  /**
+   * 这个结果归哪个插件处理（P3.5）。旧批次没有该字段时按 payload 前缀回退。
+   * 缺失对应插件时宿主必须明确提示，不能静默跳过。
+   */
+  owner?: string;
 }
 
 /** 一次扫描的结果批次。 */

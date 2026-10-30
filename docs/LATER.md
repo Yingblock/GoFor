@@ -106,7 +106,7 @@
 ## P3.5 之后（2026-10-30，未实现）
 
 - **每个插件拆独立 npm 包**：现在统一在 `@gofor/plugins`（`packages/plugins/src/<id>/`），
-  `@gofor/plugin-kit` 已抽出共享时钟/打印模板/数据 hook；下一步是独立包名、peer 范围与发布；
+  `@gofor/plugin-kit` 已收缩到调试时钟 + `useHostData`（打印模板/日期已进 core/print）；下一步是独立包名、peer 范围与发布；
 - **public/private service facade**：manifest `provides.services` + `ctx.services.get()`，
   宿主代理只暴露插件声明的方法；JSON 进出、超时、禁用失效；先找一个真实消费者再写；
 - **第三方写 core 数据**：tasks/habits/sessions/timetable 的写能力必须走 core 校验的

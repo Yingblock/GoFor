@@ -1,5 +1,34 @@
+export {
+  BACKUP_SLICES,
+  type BackupSlice,
+  EXPORT_FORMAT_VERSION,
+  type ExportBundle,
+  exportAll,
+  type ImportResult,
+  importAll,
+} from './backup.ts';
 export { currentConfigOrDefault, DEFAULT_CONFIG_KEY, type ResolvedConfig } from './config.ts';
 export { type ConfigRow, db, GoForDb } from './db.ts';
+export {
+  assertPluginKey,
+  clearPluginValues,
+  deletePluginRecord,
+  deletePluginValue,
+  ensureBuiltinPlugins,
+  getPluginRecord,
+  listPluginDataRows,
+  listPluginRecords,
+  listPluginValues,
+  type PluginDataRow,
+  type PluginKind,
+  type PluginRecord,
+  pluginDataId,
+  readPluginValue,
+  saveInstalledPlugin,
+  setPluginEnabled,
+  writePluginValue,
+} from './plugins.ts';
+export { type BuiltinDataProvider, createBuiltinDataProviders } from './providers.ts';
 export {
   addSession,
   addToolboxRun,
@@ -16,16 +45,11 @@ export {
   deleteTagPool,
   deleteTask,
   deleteTimetable,
-  EXPORT_FORMAT_VERSION,
-  type ExportBundle,
   ensureSubjects,
-  exportAll,
   getCheckin,
   getChecklistLog,
   getMoodLog,
   getSheetManifest,
-  type ImportResult,
-  importAll,
   listActiveFocusRuns,
   listCheckins,
   listChecklistLogs,

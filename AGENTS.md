@@ -23,6 +23,7 @@
 
 GoFor —— 面向中国高中生的离线优先学习辅助工具。
 **纸是主输入端**：每日闭环在纸上完成，屏幕只做"拍照回填"和"每周收银"。
+每次改动完编译最新版本并在127.0.0.1:4173上运行供验收
 
 ## 技术栈
 
@@ -37,15 +38,21 @@ GoFor —— 面向中国高中生的离线优先学习辅助工具。
 
 ```
 apps/web          PWA 宿主（Vite + React）
-packages/core     纯领域逻辑：零 UI、零平台 API、零副作用
-                  子路径：./config（配置+zod）、./print（版式）、./paper（时间解析）、./domain
+packages/core     纯原语 + 纸面契约：Clock / ID / 配置 / 版式 / 扫描几何 / 插件解析；零 UI、零平台 API
+                  子路径：./config、./print、./paper、./domain（共享实体）、./scan、./plugin
+packages/domain   共享产品领域：课表 / 统计 / 打卡 / 番茄运行态类型；只依赖 core，不依赖 React/store
 packages/store    Dexie 实现（浏览器专用，v1→v8），实现了 core 里的仓储接口；另有内置数据 provider 与备份切片
 packages/ui       跨宿主组件（token 样式，19 个组件）
 packages/vision   纯图像算法：灰度/Otsu/二值化/单应透视矫正/墨迹占比/找纸/定位点（零依赖，46 测试）
 packages/plugin-api  插件契约（manifest / 权限 / 生命周期 / 页面·命令·插槽·主题·数据·内容模块·转换器 / 扫描回填 / OCR·AI）
                    **不依赖 React**：组件用结构类型 `PluginComponent`，宿主再转 ComponentType
-packages/plugin-kit  插件与宿主共享的时钟 / 日期 / 打印模板解析 / `useHostData`（只依赖页面 props）
-packages/plugins  现有全部功能插件与视图（npm workspace 包 `@gofor/plugins`），按插件子目录组织
+packages/plugin-kit  插件与宿主共享的调试时钟 / `useHostData`（打印模板解析与日期已进 core/print）
+packages/plugins  聚合层（`@gofor/plugins`）：汇总 13 个构建期插件包，公开导出保持兼容
+plugins/*         13 个独立构建期插件包（`gofor-plugin-*`，各自 package.json/tsconfig）；单插件逻辑跟包走
+packages/contracts 运行时插件契约（GoForPluginAPI / PluginManifest / PluginStatus，零依赖）
+packages/plugin-runtime 主进程运行时加载器（userData/plugins、5s 超时、隔离、reload、logs、IPC）
+packages/plugin-cli    `gofor plugin add/remove/list`
+apps/desktop      最小 Electron 主进程（运行时插件宿主骨架；PWA 仍是主渠道）
 e2e/              真实浏览器冒烟（Playwright），产物在 e2e/out/（已 ignore）
 docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS / PLUGINS / STANDARD / DESIGN-SYSTEM / Phase-note
 ```

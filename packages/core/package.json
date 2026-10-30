@@ -9,12 +9,8 @@
     "./paper": "./src/paper/index.ts",
     "./print": "./src/print/index.ts",
     "./domain": "./src/domain/entities.ts",
-    "./pomodoro": "./src/pomodoro/index.ts",
-    "./timetable": "./src/timetable/index.ts",
-    "./stats": "./src/stats/index.ts",
-    "./habits": "./src/habits/index.ts",
     "./scan": "./src/scan/index.ts",
-    "./wellbeing": "./src/wellbeing/index.ts"
+    "./plugin": "./src/plugin/index.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -26,6 +22,7 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
+    "@gofor/plugin-api": "workspace:*",
     "jsqr": "^1.4.0",
     "qrcode": "^1.5.4",
     "zod": "^4.6.7"
