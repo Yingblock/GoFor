@@ -15,7 +15,8 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "check": "biome check --write .",
     "verify": "pnpm typecheck && pnpm test && pnpm build && pnpm e2e",
-    "e2e": "node e2e/smoke.mjs"
+    "e2e": "node e2e/smoke.mjs",
+    "plugin:host": "node packages/plugin-host/dist/cli.js"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

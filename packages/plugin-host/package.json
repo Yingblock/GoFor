@@ -1,0 +1,32 @@
+{
+  "name": "@gofor/plugin-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "gofor-plugin-host": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prebuild": "pnpm --filter @gofor/plugin-runtime build",
+    "pretest": "pnpm --filter @gofor/plugin-runtime build",
+    "pretypecheck": "pnpm --filter @gofor/plugin-runtime build"
+  },
+  "dependencies": {
+    "@gofor/contracts": "workspace:*",
+    "@gofor/plugin-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
