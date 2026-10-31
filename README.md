@@ -105,15 +105,16 @@ React + Vite + Tailwind（CSS-first `@theme`）、Dexie、Vitest + Playwright、
 
 ## 删除任意插件后的测试
 
+构建期插件由 Vite 的 `import.meta.glob` 自动发现，删目录后直接构建即可：
+
 ```bash
 pnpm install                 # 完整目录时先装
-rm -rf plugins/checkin       # 删任意一个插件目录
-./plugin-test.sh             # Windows: plugin-test.cmd
-PORT=4174 ./plugin-test.sh --preview
+rm -rf plugins/mood          # 删任意一个插件目录
+pnpm build
+PORT=4174 ./plugin-test.sh --preview   # 可选：纯 node + Vite 直连构建并预览
 ```
 
-不要直接 `pnpm build`：pnpm 会先校验缺失的 workspace 包。细节见
-[`docs/PLUGIN-TEST.md`](docs/PLUGIN-TEST.md)。
+细节见 [`docs/PLUGIN-TEST.md`](docs/PLUGIN-TEST.md)。
 
 ## 平台策略
 

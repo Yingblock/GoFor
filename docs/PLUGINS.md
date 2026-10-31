@@ -9,8 +9,8 @@
 
 ## 1 插件 = npm 包，随应用构建
 
-> 想测试「删掉任意插件后还能不能跑」：见 [`PLUGIN-TEST.md`](PLUGIN-TEST.md)，用
-> `./plugin-test.sh`（不要直接 `pnpm build`，pnpm 会先校验缺失的 workspace 包）。
+> 想测试「删掉任意插件后还能不能跑」：见 [`PLUGIN-TEST.md`](PLUGIN-TEST.md)。
+> 注册表由 Vite `import.meta.glob` 自动发现，删 `plugins/<name>` 后直接 `pnpm build` 即可。
 
 | 项 | 规则 |
 |---|---|

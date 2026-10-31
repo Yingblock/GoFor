@@ -9,7 +9,6 @@
   },
   "scripts": {
     "dev": "pnpm --filter @gofor/web dev",
-    "plugin:sync": "node tools/sync-plugin-registry.mjs",
     "build": "pnpm --filter @gofor/web build",
     "preview": "pnpm --filter @gofor/web preview",
     "test": "pnpm -r --if-present test",

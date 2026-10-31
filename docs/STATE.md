@@ -153,16 +153,17 @@ pnpm exec gofor plugin list --user-data /tmp/gofor-user
 | hash 整段 `encodeURIComponent` | 深链变成 `#/s/x%2Fscreen`，地址不可读、测试误判 | 按 `/` 分段编码，保留 `/` |
 | 主题/CSS 作用域漏到打印层 | 纸面颜色被插件改掉，打印出来浅色字 | token 只挂 `.screen-only`，CSS 由宿主包 `@media screen { @scope }`；e2e 断言纸面 color |
 | 用整份 verify 日志 `grep -c "^✓"` 数 e2e | 多算 build 的 `✓`，文档里的 e2e 数虚高 | 只数 e2e 段，或核对 `smoke.mjs` 的 `check()` 调用点 |
+| 删 `plugins/<name>` 后手改静态注册表 | 漏删数组项会 `moodPlugin is not defined`，模块顶层抛错导致整页黑屏 | 已改为 Vite `import.meta.glob` 自动发现；不要再手写 `BUILTIN_PLUGINS` |
 | 页面开着时重建 dist，旧懒加载 chunk 被删 | 启用一个之前禁用的插件时请求旧 chunk URL；预览把缺失 JS 回退成 index.html，报 `Failed to fetch dynamically imported module`，刷新才恢复 | `build.emptyOutDir:false` 保留旧 chunk 宽限期；SW 不缓存非导航的 text/html；加载失败识别旧构建并自动刷新一次；桌面静态服务对缺失资源返回 404 |
 | 侧栏分组展开 effect 依赖 `groups` 数组 | `buildNav` 每次宿主渲染都重建数组，用户点开的分组被立刻收回，看起来「点不开」 | 依赖分组结构指纹 `groupSignature`；只在切页/插件增删时重置 |
 | 桌面侧栏用 `md:static` | 页面一滚，整列侧栏跟着走；滚出视口后用户以为「点不开」 | 桌面 `md:sticky md:top-0 md:h-screen md:self-start`；e2e 断言滚动后 top≈0 且分组仍可点 |
 
 ## 最近一次更新
 
-- **2026-10-31 删插件测试工具**：`tools/sync-plugin-registry.mjs` 按现存 `plugins/*` 生成
-  `@gofor/plugins` 注册表；`tools/plugin-test.mjs` 用纯 node + Vite 构建，绕开 pnpm 对缺失 workspace
-  包的前置校验；`plugin-test.sh` / `.cmd` 为入口。删任意插件目录后可构建并运行，见
-  `docs/PLUGIN-TEST.md`。
+- **2026-10-31 构建期插件自动发现**：`@gofor/plugins` 改用 Vite `import.meta.glob` 扫描
+  `plugins/*/src/index.ts`，删除注册表的静态 import 与插件 workspace 依赖；删任意插件目录后
+  `pnpm build` 直接生效。逐个删 13 个插件构建并加载页面验证通过。`plugin-test.sh` 保留为
+  纯 node + Vite 直连入口。见 `DECISIONS/0010`、`docs/PLUGIN-TEST.md`。
 - **2026-10-31 旧 chunk 加载失败修复**：`apps/web/vite.config.ts` 关闭 `emptyOutDir`，重建不再删除上一版
   assets；SW 缓存不再接收非导航请求的 `text/html`；插件页面/插槽加载失败若是旧构建，自动刷新一次，
   仍失败才显示「页面已更新，需要刷新」。桌面静态服务对缺失资源返回 404，不再回退 index.html。

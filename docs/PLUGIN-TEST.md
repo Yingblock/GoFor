@@ -1,26 +1,30 @@
 # 删除任意插件后的运行测试
 
-构建期插件在 `plugins/<name>`，由 `@gofor/plugins` 的生成注册表汇总。
-删掉一个目录后不能直接 `pnpm build`：pnpm 会在 script 之前校验 workspace 依赖，
-先报 `no package named gofor-plugin-*`。用下面的脚本绕过 pnpm 的预校验。
+构建期插件在 `plugins/<name>`。`@gofor/plugins` 用 Vite 的 `import.meta.glob`
+在构建时扫描这些目录，**没有静态 import 列表，也没有插件 workspace 依赖**：
+
+- 删掉任意 `plugins/<name>` 后，直接 `pnpm build` 就少这个插件；
+- 不需要手改 `packages/plugins/src/index.ts` 或 `package.json`；
+- 不会再出现「漏删数组项 → `moodPlugin is not defined` → 整页黑屏」。
 
 ## 步骤
 
 ```bash
-# 1. 完整目录时先安装（删除插件前）
+# 1. 完整目录时先安装（删除插件之前）
 pnpm install
 
 # 2. 删掉任意一个插件目录，例如
-rm -rf plugins/checkin
+rm -rf plugins/mood
 
-# 3. 同步注册表 + 直接调 Vite 构建
-./plugin-test.sh
-# Windows: plugin-test.cmd
-# 或：node tools/plugin-test.mjs
+# 3. 直接构建
+pnpm build
 
 # 4. 预览（默认 4174，避免和常驻 4173 冲突）
-PORT=4174 ./plugin-test.sh --preview
+cd apps/web && node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4174
 ```
+
+也可以继续用 `./plugin-test.sh`（Windows: `plugin-test.cmd`）：它是纯 node + Vite 的直连构建，
+在 pnpm 因其他原因做依赖预校验时仍可用。
 
 ## 预期
 
@@ -33,16 +37,19 @@ PORT=4174 ./plugin-test.sh --preview
 
 ```bash
 # 把目录放回 plugins/<name>
-node tools/sync-plugin-registry.mjs
-pnpm install   # 重新链接 workspace 包
 pnpm build
 ```
 
 ## 原理
 
-`tools/sync-plugin-registry.mjs` 扫描仍然存在的 `plugins/*/src/index.ts`，重写：
+`packages/plugins/src/index.ts`：
 
-- `packages/plugins/src/index.ts` 的 import 与 `BUILTIN_PLUGINS`；
-- `packages/plugins/package.json` 的 `gofor-plugin-*` workspace 依赖。
+```ts
+const PLUGIN_MODULES = import.meta.glob('../../../plugins/*/src/index.ts', { eager: true });
+```
 
-`tools/plugin-test.mjs` 只调用 node + Vite 二进制，不经过 pnpm 的依赖校验。
+按目录名排序后导出 `BUILTIN_PLUGINS`。`eager` 只是把模块并进 bundle；插件页面仍由
+`registerScreen` 的 `load()` 懒加载。
+
+注意：这 13 个仍是**构建期插件**（React 页面直接 import core/store/ui），和
+`userData/plugins` 的运行时无头插件是两条平面，不能互相替代。

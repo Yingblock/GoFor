@@ -11,19 +11,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@gofor/plugin-api": "workspace:*",
-    "gofor-plugin-checkin": "workspace:*",
-    "gofor-plugin-checklist": "workspace:*",
-    "gofor-plugin-converter": "workspace:*",
-    "gofor-plugin-diary": "workspace:*",
-    "gofor-plugin-mood": "workspace:*",
-    "gofor-plugin-pomodoro": "workspace:*",
-    "gofor-plugin-report": "workspace:*",
-    "gofor-plugin-scan": "workspace:*",
-    "gofor-plugin-tasks": "workspace:*",
-    "gofor-plugin-theme": "workspace:*",
-    "gofor-plugin-timetable": "workspace:*",
-    "gofor-plugin-toolbox": "workspace:*",
-    "gofor-plugin-wordbook": "workspace:*"
+    "@gofor/plugin-api": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^7.1.9"
   }
 }

@@ -1,8 +1,6 @@
-// 删除插件目录后的构建入口：先同步注册表，再直接调 Vite。
+// 删除插件目录后的构建入口：直接调 Vite，不经过 pnpm 的 workspace 依赖预校验。
 //
-// 不能走 `pnpm build`：pnpm 在任何 script 之前会校验 workspace 依赖，删掉
-// plugins/<name> 后会先报 "no package named ..." 而根本轮不到 prebuild。
-// 这里用纯 node + Vite 二进制，绕开 pnpm 的依赖校验。
+// 注册表本身由 Vite 的 import.meta.glob 扫描 plugins/*，删目录即可自动消失。
 
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -25,10 +23,6 @@ function run(command, args, cwd = ROOT) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-// 1. 按现有 plugins/* 目录重写 @gofor/plugins 的 index 与依赖。
-run(process.execPath, [join(ROOT, 'tools', 'sync-plugin-registry.mjs')]);
-
-// 2. 直接调 Vite，避免 pnpm 在 script 前尝试重装缺失的 workspace 包。
 run(process.execPath, [VITE_BIN, 'build'], APP_DIR);
 
 const port = process.env.PORT ?? '4174';

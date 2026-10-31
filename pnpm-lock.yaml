@@ -343,45 +343,10 @@ importers:
       '@gofor/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
-      gofor-plugin-checkin:
-        specifier: workspace:*
-        version: link:../../plugins/checkin
-      gofor-plugin-checklist:
-        specifier: workspace:*
-        version: link:../../plugins/checklist
-      gofor-plugin-converter:
-        specifier: workspace:*
-        version: link:../../plugins/converter
-      gofor-plugin-diary:
-        specifier: workspace:*
-        version: link:../../plugins/diary
-      gofor-plugin-mood:
-        specifier: workspace:*
-        version: link:../../plugins/mood
-      gofor-plugin-pomodoro:
-        specifier: workspace:*
-        version: link:../../plugins/pomodoro
-      gofor-plugin-report:
-        specifier: workspace:*
-        version: link:../../plugins/report
-      gofor-plugin-scan:
-        specifier: workspace:*
-        version: link:../../plugins/scan
-      gofor-plugin-tasks:
-        specifier: workspace:*
-        version: link:../../plugins/tasks
-      gofor-plugin-theme:
-        specifier: workspace:*
-        version: link:../../plugins/theme
-      gofor-plugin-timetable:
-        specifier: workspace:*
-        version: link:../../plugins/timetable
-      gofor-plugin-toolbox:
-        specifier: workspace:*
-        version: link:../../plugins/toolbox
-      gofor-plugin-wordbook:
-        specifier: workspace:*
-        version: link:../../plugins/wordbook
+    devDependencies:
+      vite:
+        specifier: ^7.1.9
+        version: 7.3.7(@types/node@26.6.5)(jiti@2.7.0)(lightningcss@1.32.0)
 
   packages/store:
     dependencies:
