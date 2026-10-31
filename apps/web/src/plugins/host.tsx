@@ -58,10 +58,10 @@ import {
 } from 'react';
 import { appClock } from '../clock.ts';
 import { buildNav, CORE_NAV, flattenNav, type NavGroup } from '../nav.ts';
-import { loadExternalPlugins } from './external.ts';
+import { PaperHomeBlock } from '../screens/PaperHomeBlock.tsx';
+import { externalHostOrigin, loadExternalPlugins } from './external.ts';
 import { createPluginStorage } from './pluginStorage.ts';
 import { createPluginStore } from './pluginStore.ts';
-import { PaperHomeBlock } from '../screens/PaperHomeBlock.tsx';
 import { notConfiguredAi, notConfiguredOcr } from './providers.ts';
 import type {
   DataProviderSummary,
@@ -440,9 +440,7 @@ async function buildPluginHost(input: {
     records.filter((record) => record.enabled).map((record) => record.id),
   );
   const entries: DataContractEntry[] = createBuiltinDataProviders(db)
-    .filter(
-      (provider) => provider.owner === undefined || enabledPluginIds.has(provider.owner),
-    )
+    .filter((provider) => provider.owner === undefined || enabledPluginIds.has(provider.owner))
     .map((provider) =>
       toEntry(
         {
@@ -866,6 +864,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
   const activeModulesRef = useRef<PluginModule[]>([]);
   const scanHandlersRef = useRef<Map<string, ScanHandlerContribution>>(new Map());
   const pluginNamesRef = useRef<Map<string, string>>(new Map());
+  const externalPluginsRef = useRef<Map<string, PluginInfo>>(new Map());
   const rebuildingRef = useRef(false);
   const versionRef = useRef(0);
   const data = useMemo(() => createDataClient(entriesRef), []);
@@ -892,7 +891,16 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
       pluginNamesRef.current = result.pluginNames;
 
       // 外部插件（plugin-host）可选：宿主不在线时 PWA 继续只跑内置插件。
-      const external = await loadExternalPlugins().catch((error: unknown) => {
+      const external = await loadExternalPlugins({
+        data,
+        applyScan,
+        navigate,
+        back,
+        now,
+        newId: createId,
+        storageFor,
+        storeFor,
+      }).catch((error: unknown) => {
         console.warn('[external] 加载失败', error);
         return null;
       });
@@ -905,11 +913,33 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
           ...pluginNamesRef.current,
           ...external.plugins.map((plugin) => [plugin.id, plugin.name] as const),
         ]);
+        for (const plugin of external.plugins) externalPluginsRef.current.set(plugin.id, plugin);
+        const activeExternalIds = new Set(external.plugins.map((plugin) => plugin.id));
+        const disabledExternal = [...externalPluginsRef.current.values()]
+          .filter((plugin) => !activeExternalIds.has(plugin.id))
+          .map((plugin) => ({
+            ...plugin,
+            enabled: false,
+            screens: [],
+            commands: [],
+            themes: [],
+            contentModules: [],
+            converters: [],
+            providesData: [],
+          }));
+        const disabledPrintOwners = disabledExternal.flatMap((plugin) =>
+          (plugin.printBlocks ?? []).map((kind) => ({
+            kind,
+            pluginId: plugin.id,
+            name: plugin.name,
+            enabled: false,
+          })),
+        );
         entriesRef.current = [...entriesRef.current, ...external.dataContracts];
         const screens = [...result.snapshot.screens, ...external.screens];
         snapshot = {
           ...result.snapshot,
-          plugins: [...result.snapshot.plugins, ...external.plugins],
+          plugins: [...result.snapshot.plugins, ...external.plugins, ...disabledExternal],
           screens,
           nav: buildNav(
             screens
@@ -923,12 +953,28 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
                 ...(screen.order === undefined ? {} : { order: screen.order }),
               })),
           ),
+          homeBlocks: [...result.snapshot.homeBlocks, ...external.homeBlocks],
           commands: [...result.snapshot.commands, ...external.commands],
           slots: [...result.snapshot.slots, ...external.slots],
           themes: [...result.snapshot.themes, ...external.themes],
+          css: [...result.snapshot.css, ...external.css],
+          content: [...result.snapshot.content, ...external.content],
+          converters: [...result.snapshot.converters, ...external.converters],
+          connectors: [...result.snapshot.connectors, ...external.connectors],
           dataProviders: [...result.snapshot.dataProviders, ...external.dataProviders],
+          printBlockOwners: [
+            ...result.snapshot.printBlockOwners,
+            ...external.printBlockOwners,
+            ...disabledPrintOwners,
+          ],
+          scanPayloadOwners: {
+            ...result.snapshot.scanPayloadOwners,
+            ...external.scanPayloadOwners,
+          },
           conflicts: [...result.snapshot.conflicts, ...external.conflicts],
           activeTheme: result.snapshot.activeTheme ?? external.themes[0] ?? null,
+          ocr: external.ocr[0] ?? result.snapshot.ocr,
+          ai: external.ai[0] ?? result.snapshot.ai,
         };
       }
       versionRef.current += 1;
@@ -949,6 +995,19 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void rebuild();
   }, [rebuild]);
+
+  const setExternalPluginEnabled = useCallback(
+    async (id: string, enabled: boolean, packageName?: string) => {
+      const response = await fetch(`${externalHostOrigin()}/api/plugins/enable`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, enabled, packageName }),
+      });
+      if (!response.ok) throw new Error(`外部插件 ${id} 切换失败`);
+      await rebuild();
+    },
+    [rebuild],
+  );
 
   const navigate = useCallback((screenId: string) => {
     navigateToScreen(screenId);
@@ -1007,48 +1066,51 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
     };
   }, [snapshot.css]);
 
-  const applyScan = useCallback(async (results: readonly ScanResult[], date: string) => {
-    const handlers = scanHandlersRef.current;
-    const names = pluginNamesRef.current;
-    const byOwner = new Map<string, ScanResult[]>();
-    let skipped = 0;
+  const applyScan = useCallback(
+    async (results: readonly ScanResult[], date: string) => {
+      const handlers = scanHandlersRef.current;
+      const names = pluginNamesRef.current;
+      const byOwner = new Map<string, ScanResult[]>();
+      let skipped = 0;
 
-    for (const result of results) {
-      if (!result.selected) continue;
-      const owner = scanResultOwner(result, snapshot.scanPayloadOwners);
-      if (owner === null) {
-        skipped += 1;
-        continue;
+      for (const result of results) {
+        if (!result.selected) continue;
+        const owner = scanResultOwner(result, snapshot.scanPayloadOwners);
+        if (owner === null) {
+          skipped += 1;
+          continue;
+        }
+        const list = byOwner.get(owner) ?? [];
+        list.push(result);
+        byOwner.set(owner, list);
       }
-      const list = byOwner.get(owner) ?? [];
-      list.push(result);
-      byOwner.set(owner, list);
-    }
 
-    const parts: Array<{ pluginId: string; name: string; handled: number }> = [];
-    const missing: Array<{ pluginId: string; name: string; count: number }> = [];
-    const errors: string[] = [];
-    let handled = 0;
+      const parts: Array<{ pluginId: string; name: string; handled: number }> = [];
+      const missing: Array<{ pluginId: string; name: string; count: number }> = [];
+      const errors: string[] = [];
+      let handled = 0;
 
-    for (const [owner, list] of byOwner) {
-      const handler = handlers.get(owner);
-      const name = names.get(owner) ?? owner;
-      if (!handler) {
-        missing.push({ pluginId: owner, name, count: list.length });
-        continue;
+      for (const [owner, list] of byOwner) {
+        const handler = handlers.get(owner);
+        const name = names.get(owner) ?? owner;
+        if (!handler) {
+          missing.push({ pluginId: owner, name, count: list.length });
+          continue;
+        }
+        try {
+          const outcome = await handler.handle(list, { date, now: () => appClock.now() });
+          handled += outcome.handled;
+          skipped += outcome.skipped;
+          if (outcome.handled > 0) parts.push({ pluginId: owner, name, handled: outcome.handled });
+        } catch (error) {
+          errors.push(`${name}：${errorMessage(error)}`);
+        }
       }
-      try {
-        const outcome = await handler.handle(list, { date, now: () => appClock.now() });
-        handled += outcome.handled;
-        skipped += outcome.skipped;
-        if (outcome.handled > 0) parts.push({ pluginId: owner, name, handled: outcome.handled });
-      } catch (error) {
-        errors.push(`${name}：${errorMessage(error)}`);
-      }
-    }
 
-    return { handled, skipped, parts, missing, errors };
-  }, [snapshot.scanPayloadOwners]);
+      return { handled, skipped, parts, missing, errors };
+    },
+    [snapshot.scanPayloadOwners],
+  );
 
   const api = useMemo<PluginHostApi>(() => {
     // 主题 token 在展示前再过滤一次：即使插件 manifest 里写了怪值也到不了纸面。
@@ -1069,6 +1131,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
       storeFor,
       registerCoreCommands,
       setPluginEnabled,
+      setExternalPluginEnabled,
       reloadPlugins,
     };
   }, [

@@ -51,5 +51,5 @@ const PLUGIN_MODULES = import.meta.glob('../../../plugins/*/src/index.ts', { eag
 按目录名排序后导出 `BUILTIN_PLUGINS`。`eager` 只是把模块并进 bundle；插件页面仍由
 `registerScreen` 的 `load()` 懒加载。
 
-注意：这 12 个仍是**构建期插件**（React 页面 + `host.store` 授权数据），和
+注意：当前 12 个插件已外置迁移，`BUILTIN_PLUGINS=[]`；本文件保留为“放回构建期”时的测试说明。它们仍是**构建期插件格式**（React 页面 + `host.store` 授权数据），和
 `userData/plugins` 的运行时无头插件是两条平面，不能互相替代。

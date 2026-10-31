@@ -1,4 +1,11 @@
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import {
+  createReadStream,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, resolve, sep } from 'node:path';
 import {
@@ -138,6 +145,22 @@ function servePluginAsset(response: ServerResponse, pluginsRoot: string, pathnam
  * - 不接数据层：getTasks/updateTask 目前明确报未接入；
  * - 已提供 snapshot / reload / run-command / renderer 资源，供后续 PWA 客户端。
  */
+function findPackageByPluginId(userDataDir: string, pluginId: string): string | null {
+  const root = join(userDataDir, 'plugins', 'node_modules');
+  if (!existsSync(root)) return null;
+  for (const name of readdirSync(root)) {
+    try {
+      const manifest = JSON.parse(
+        readFileSync(join(root, name, 'package.json'), 'utf8'),
+      ) as { gofor?: { id?: unknown } };
+      if (manifest.gofor?.id === pluginId) return name;
+    } catch {
+      // 忽略坏包
+    }
+  }
+  return null;
+}
+
 export async function startPluginHost(options: PluginHostOptions): Promise<PluginHost> {
   const host = options.host ?? '0.0.0.0';
   const port = options.port ?? 47822;
@@ -190,6 +213,47 @@ export async function startPluginHost(options: PluginHostOptions): Promise<Plugi
 
       if (request.method === 'GET' && pathname === '/api/plugins/snapshot') {
         json(response, 200, manager.snapshot());
+        return;
+      }
+
+      if (request.method === 'POST' && pathname === '/api/plugins/enable') {
+        const body = await readJson(request);
+        if (
+          typeof body !== 'object' ||
+          body === null ||
+          typeof (body as { id?: unknown }).id !== 'string' ||
+          typeof (body as { enabled?: unknown }).enabled !== 'boolean'
+        ) {
+          json(response, 400, { ok: false, error: '需要 { id: string, enabled: boolean }' });
+          return;
+        }
+        const id = (body as { id: string }).id;
+        const enabled = (body as { enabled: boolean }).enabled;
+        const explicitPackage =
+          typeof (body as { packageName?: unknown }).packageName === 'string'
+            ? (body as { packageName: string }).packageName
+            : null;
+        const packageName =
+          explicitPackage ??
+          manager.snapshot().plugins.find((plugin) => plugin.id === id)?.packageName ??
+          findPackageByPluginId(options.userDataDir, id) ??
+          id;
+        const manifestPath = join(options.userDataDir, 'plugins', 'gofor.plugins.json');
+        let current: { enabled?: unknown } = {};
+        try {
+          current = JSON.parse(readFileSync(manifestPath, 'utf8')) as { enabled?: unknown };
+        } catch {
+          current = {};
+        }
+        const list = Array.isArray(current.enabled)
+          ? current.enabled.filter((item): item is string => typeof item === 'string')
+          : [];
+        const next = enabled
+          ? [...new Set([...list, packageName])]
+          : list.filter((item) => item !== packageName);
+        writeFileSync(manifestPath, `${JSON.stringify({ enabled: next }, null, 2)}\n`);
+        const snapshot = await manager.reloadPlugins();
+        json(response, 200, { ok: true, enabled: next, snapshot });
         return;
       }
 

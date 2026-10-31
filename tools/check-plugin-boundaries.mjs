@@ -18,7 +18,9 @@ async function walk(dir) {
     if (entry.name === 'node_modules' || entry.name === 'dist') continue;
     const path = join(dir, entry.name);
     if (entry.isDirectory()) files.push(...(await walk(path)));
-    else if (/\.(ts|tsx|mjs|js)$/.test(entry.name)) files.push(path);
+    else if (/\.(ts|tsx|mjs|js)$/.test(entry.name) && entry.name !== 'external-entry.ts') {
+      files.push(path);
+    }
   }
   return files;
 }

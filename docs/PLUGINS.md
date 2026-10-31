@@ -1,4 +1,7 @@
-# 插件开发指南
+# 插件
+
+> 当前迁移状态：`BUILTIN_PLUGINS=[]`，12 个插件由 `pnpm plugins:build` 打成外部插件，
+> 通过 plugin-host 加载。本文件保留构建期插件规则，供用户决定放回哪些插件。开发指南
 
 > 面向给 GoFor 加功能的开发者。**本文讲构建期 UI 插件**（页面/主题/数据/打印归属）。
 > 主进程运行时无头插件（命令/视图插槽/打印模板/任务读写）见 [`PLUGIN-RUNTIME.md`](PLUGIN-RUNTIME.md)

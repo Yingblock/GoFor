@@ -14,7 +14,7 @@
 | 安装 | `pnpm install` + 重新构建 | `gofor plugin add` + 重启/`reloadPlugins()` |
 | 契约 | `@gofor/plugin-api` | `@gofor/contracts`（五方法） |
 
-**不要把 12 个构建期插件迁到运行时 API**：它们需要 React 页面和 Dexie，五方法 API 故意不含这些。
+当前 12 个插件已外置迁移（见 `DECISIONS/0016`）；下面是放回构建期时的说明。**不要把构建期插件迁到运行时五方法 API**：它们需要 React 页面和 Dexie，五方法 API 故意不含这些。
 
 ## 2 磁盘布局
 

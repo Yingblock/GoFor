@@ -4,21 +4,21 @@ import type { PrintBlockOwnerRule } from '@gofor/core/print';
 import type {
   AiProvider,
   CommandContribution,
-  HomeBlockContribution,
   ContentModuleContribution,
   ContentModuleKind,
   CssContribution,
   DataClient,
+  HomeBlockContribution,
   OcrProvider,
   PluginScreenModule,
   PluginStorage,
+  PluginStoreLike,
   ScreenContribution,
   ShellVariant,
   SlotContribution,
   SlotName,
   ThemeContribution,
 } from '@gofor/plugin-api';
-import type { PluginStoreLike } from '@gofor/plugin-api';
 import type { ComponentType } from 'react';
 import type { NavGroup } from '../nav.ts';
 
@@ -114,6 +114,8 @@ export interface PluginInfo {
   kind: 'builtin' | 'installed';
   /** 运行时外部插件（来自 plugin-host），不能在本页启用/禁用。 */
   external?: boolean;
+  /** 外部插件的 npm 包名；用于启停。 */
+  packageName?: string;
   enabled: boolean;
   permissions: string[];
   unknownPermissions: string[];
@@ -123,6 +125,7 @@ export interface PluginInfo {
   consumes: DataDependencyStatus[];
   providesData: Array<{ id: string; version: number; summary: string }>;
   screens: string[];
+  printBlocks?: string[];
   commands: string[];
   contentModules: string[];
   themes: string[];
@@ -212,6 +215,7 @@ export interface PluginHostApi extends HostSnapshot {
   storeFor(pluginId: string): PluginStoreLike;
   registerCoreCommands(commands: HostCommand[]): void;
   setPluginEnabled(id: string, enabled: boolean): Promise<void>;
+  setExternalPluginEnabled(id: string, enabled: boolean, packageName?: string): Promise<void>;
   reloadPlugins(): Promise<void>;
 }
 

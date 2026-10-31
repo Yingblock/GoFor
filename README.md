@@ -86,9 +86,10 @@ packages/domain    共享产品领域：课表 / 统计 / 打卡 / 番茄运行�
 packages/store     Dexie 实现（浏览器专用，v1→v8 迁移）+ 内置数据 provider + 备份切片
 packages/plugin-api 插件契约（零 React 依赖）
 packages/plugin-kit 插件/宿主共享调试时钟、useHostData（打印模板解析/日期已进 core/print）
-packages/plugins  聚合层（@gofor/plugins）：只汇总 12 个构建期插件
-plugins/*         12 个独立构建期插件包（gofor-plugin-*，各自 package.json）
+packages/plugins  聚合层（@gofor/plugins）：当前构建期插件 0 个（全部外置迁移中）
+plugins/*         12 个插件源码包（当前由 external 构建工具打包，不再进 app 构建图）
 packages/scan     core 打印回填页面/扫描流程（@gofor/scan；不是插件）
+external-plugins/ `pnpm plugins:build` 生成的外部插件包（已 ignore）
 packages/contracts 运行时插件契约（GoForPluginAPI / PluginManifest / PluginStatus，零依赖）
 packages/plugin-runtime 主进程运行时加载器（userData/plugins、超时、隔离、日志、IPC）
 packages/plugin-host   本地插件宿主（阶段一：0.0.0.0:47822，仅 loopback；PWA/LAN 后续接）
@@ -120,15 +121,18 @@ PORT=4174 ./plugin-test.sh --preview   # 可选：纯 node + Vite 直连构建�
 
 ## 外部插件（运行时）
 
-外部插件是装在 `userData/plugins` 的 pnpm 包，由本地 plugin-host 加载；页面/主题/数据/扫描
-都由插件的 `gofor.renderer` 提供。
+当前 12 个原构建期插件已外置迁移（`BUILTIN_PLUGINS=[]`）；由本地 plugin-host 加载。
 
 ```bash
+pnpm plugins:build                    # 12 个插件源码 → external-plugins/ 外部包
+pnpm plugins:install                  # 安装到 userData/plugins，并写入 enabled
 pnpm --filter @gofor/plugin-runtime build
 pnpm --filter @gofor/plugin-host build
 pnpm plugin:host                      # 0.0.0.0:47822，阶段一只接受 loopback
 # 4173 → 插件与扩展 → 启用外部插件（或 ?external=1）
 ```
+
+用户决定哪些插件放回构建期后，再从 `plugins/*` 重新登记；当前全部在外部。
 
 详见 [`docs/PLUGIN-HOST.md`](docs/PLUGIN-HOST.md)。
 

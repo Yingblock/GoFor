@@ -136,9 +136,21 @@ export function PluginDirectoryScreen() {
 
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   {plugin.external ? (
-                    <span className="text-micro opacity-30">
-                      运行时插件 · 用 gofor plugin remove 卸载；重载请重启或 reloadPlugins()
-                    </span>
+                    <>
+                      <button
+                        type="button"
+                        aria-label={`${plugin.enabled ? '禁用' : '启用'} ${plugin.name}`}
+                        className="rounded-md border border-line px-2 py-1 text-micro opacity-70 hover:opacity-100"
+                        onClick={() =>
+                          void host.setExternalPluginEnabled(plugin.id, !plugin.enabled)
+                        }
+                      >
+                        {plugin.enabled ? '禁用' : '启用'}
+                      </button>
+                      <span className="text-micro opacity-30">
+                        运行时插件 · 由 plugin-host 管理
+                      </span>
+                    </>
                   ) : (
                     <>
                       <Button

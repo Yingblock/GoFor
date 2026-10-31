@@ -20,3 +20,7 @@ apps/web/android/.gradle/
 apps/web/android/build/
 apps/web/android/app/build/
 apps/web/android/capacitor-cordova-android-plugins/build/
+
+# 外部插件构建产物 + 生成的入口
+external-plugins/
+plugins/*/src/external-entry.ts

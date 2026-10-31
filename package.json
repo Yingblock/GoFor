@@ -8,16 +8,19 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter @gofor/web dev",
     "build": "pnpm --filter @gofor/web build",
+    "check": "biome check --write .",
+    "check:boundaries": "node tools/check-plugin-boundaries.mjs",
+    "dev": "pnpm --filter @gofor/web dev",
+    "e2e": "node e2e/smoke.mjs",
+    "e2e:external": "node e2e/external-smoke.mjs",
+    "plugin:host": "node packages/plugin-host/dist/cli.js",
+    "plugins:build": "node tools/build-external-plugins.mjs",
+    "plugins:install": "node tools/install-external-plugins.mjs",
     "preview": "pnpm --filter @gofor/web preview",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
-    "check": "biome check --write .",
-    "verify": "pnpm check:boundaries && pnpm typecheck && pnpm test && pnpm build && pnpm e2e",
-    "e2e": "node e2e/smoke.mjs",
-    "plugin:host": "node packages/plugin-host/dist/cli.js",
-    "check:boundaries": "node tools/check-plugin-boundaries.mjs"
+    "verify": "pnpm check:boundaries && pnpm typecheck && pnpm test && pnpm build && pnpm e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
