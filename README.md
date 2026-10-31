@@ -86,8 +86,9 @@ packages/domain    共享产品领域：课表 / 统计 / 打卡 / 番茄运行�
 packages/store     Dexie 实现（浏览器专用，v1→v8 迁移）+ 内置数据 provider + 备份切片
 packages/plugin-api 插件契约（零 React 依赖）
 packages/plugin-kit 插件/宿主共享调试时钟、useHostData（打印模板解析/日期已进 core/print）
-packages/plugins  聚合层（@gofor/plugins）：只汇总 13 个构建期插件
-plugins/*         13 个独立构建期插件包（gofor-plugin-*，各自 package.json）
+packages/plugins  聚合层（@gofor/plugins）：只汇总 12 个构建期插件
+plugins/*         12 个独立构建期插件包（gofor-plugin-*，各自 package.json）
+packages/scan     core 打印回填页面/扫描流程（@gofor/scan；不是插件）
 packages/contracts 运行时插件契约（GoForPluginAPI / PluginManifest / PluginStatus，零依赖）
 packages/plugin-runtime 主进程运行时加载器（userData/plugins、超时、隔离、日志、IPC）
 packages/plugin-host   本地插件宿主（阶段一：0.0.0.0:47822，仅 loopback；PWA/LAN 后续接）

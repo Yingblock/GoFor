@@ -85,7 +85,10 @@ export const CORE_NAV: NavGroup[] = [
     code: '离线·M2',
     part: 'offline',
     title: '记录',
-    items: [{ id: 'usage', title: '使用时长', ready: false, icon: '⏱️', order: 90 }],
+    items: [
+      { id: 'scan', title: '扫描回填', ready: true, icon: '📸', order: 50 },
+      { id: 'usage', title: '使用时长', ready: false, icon: '⏱️', order: 90 },
+    ],
   },
   {
     code: '离线·M3',

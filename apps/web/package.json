@@ -19,6 +19,7 @@
     "@gofor/plugin-api": "workspace:*",
     "@gofor/plugin-kit": "workspace:*",
     "@gofor/plugins": "workspace:*",
+    "@gofor/scan": "workspace:*",
     "@gofor/store": "workspace:*",
     "@gofor/ui": "workspace:*",
     "@gofor/vision": "workspace:*",

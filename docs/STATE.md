@@ -12,7 +12,7 @@
 
 1. **构建期 UI 插件**：`packages/plugin-api` 定契约（manifest / 权限 / 生命周期 / 页面·命令·插槽·
    主题·数据·内容模块·转换器·扫描回填·OCR·AI，不依赖 React）；宿主 `apps/web/src/plugins/` 做注册表、
-   激活顺序、懒加载页面、命名插槽、主题 token、命令；13 个功能插件已拆成独立 workspace 包
+   激活顺序、懒加载页面、命名插槽、主题 token、命令；12 个功能插件已拆成独立 workspace 包
    `plugins/<name>`（包名 `gofor-plugin-*`），`@gofor/plugins` 只做聚合；单插件逻辑跟包走
    （番茄状态机、工具箱练习数据、单词库解析器）；共享产品域在 `@gofor/domain`
    （timetable / stats / habits / PomodoroRun）；`@gofor/plugin-kit` 只剩调试时钟与 `useHostData`；
@@ -164,6 +164,9 @@ pnpm exec gofor plugin list --user-data /tmp/gofor-user
 
 ## 最近一次更新
 
+- **2026-10-31 打印回填回归 core**：`gofor.scan` 构建期插件移除，扫描页面/流程迁移到
+  `packages/scan`（`@gofor/scan`），`scan` 成为 core 页面；core 首页增加 `core.paper` 纸面闭环块。
+  插件只保留自己的扫描数据 handler；所有插件禁用时打印/扫描仍可打开。见 `DECISIONS/0015`。
 - **2026-10-31 首页内容块 + 构建期插件权限边界**：首页不再写死任务/打卡/课表/统计/主行动，
   全部由插件 `registerHomeBlock` 注册；core 只排序，右侧手柄可拖拽并持久化。构建期插件移除
   `@gofor/store` 依赖，统一走 `host.store` 的 pluginId allowlist；`pnpm check:boundaries` 拦截回退。

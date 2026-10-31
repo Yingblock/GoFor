@@ -50,8 +50,9 @@ packages/vision   纯图像算法：灰度/Otsu/二值化/单应透视矫正/墨
 packages/plugin-api  插件契约（manifest / 权限 / 生命周期 / 页面·命令·插槽·主题·数据·内容模块·转换器 / 扫描回填 / OCR·AI）
                    **不依赖 React**：组件用结构类型 `PluginComponent`，宿主再转 ComponentType
 packages/plugin-kit  插件与宿主共享的调试时钟 / `useHostData`（打印模板解析与日期已进 core/print）
-packages/plugins  聚合层（`@gofor/plugins`）：汇总 13 个构建期插件包，公开导出保持兼容
-plugins/*         13 个独立构建期插件包（`gofor-plugin-*`，各自 package.json/tsconfig）；单插件逻辑跟包走
+packages/plugins  聚合层（`@gofor/plugins`）：汇总 12 个构建期插件包，公开导出保持兼容
+plugins/*         12 个独立构建期插件包（`gofor-plugin-*`，各自 package.json/tsconfig）；单插件逻辑跟包走
+packages/scan     core 打印回填页面/扫描流程（`@gofor/scan`；打印回填是 core，不是插件）
 packages/contracts 运行时插件契约（GoForPluginAPI / PluginManifest / PluginStatus，零依赖）
 packages/plugin-runtime 主进程运行时加载器（userData/plugins、5s 超时、隔离、reload、logs、IPC）
 packages/plugin-host   本地插件宿主（阶段一：绑 0.0.0.0:47822，仅 loopback；snapshot/renderer 资源）

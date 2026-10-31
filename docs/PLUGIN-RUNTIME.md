@@ -14,7 +14,7 @@
 | 安装 | `pnpm install` + 重新构建 | `gofor plugin add` + 重启/`reloadPlugins()` |
 | 契约 | `@gofor/plugin-api` | `@gofor/contracts`（五方法） |
 
-**不要把 13 个构建期插件迁到运行时 API**：它们需要 React 页面和 Dexie，五方法 API 故意不含这些。
+**不要把 12 个构建期插件迁到运行时 API**：它们需要 React 页面和 Dexie，五方法 API 故意不含这些。
 
 ## 2 磁盘布局
 
@@ -106,7 +106,7 @@ core **不再写死首页内容**：任务、打卡、课表、统计、主行�
 
 构建期插件不能 `import '@gofor/store'`；用 `pluginStore(host.store)`（或 `context.store`）
 调用宿主授权的能力。宿主按 pluginId 维护 allowlist，越权调用运行期抛错。
-`pnpm check:boundaries` 检查 52 个插件源文件，发现直接 import store 直接失败。
+`pnpm check:boundaries` 检查 43 个插件源文件，发现直接 import store 直接失败。
 
 - `Task` 与 `@gofor/core/domain` 同形（id/title/subjectId/done/due/optional/subtasks/tags/sortKey/
   createdAt/updatedAt），定义在 `@gofor/contracts`，插件不需要依赖 monorepo 源码。

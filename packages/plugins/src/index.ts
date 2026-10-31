@@ -20,7 +20,6 @@ const KNOWN_ORDER = [
   'tasks',
   'timetable',
   'checkin',
-  'scan',
   'checklist',
   'mood',
   'report',

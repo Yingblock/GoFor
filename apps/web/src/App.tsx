@@ -28,7 +28,16 @@ import {
 } from '@gofor/store';
 import { cn } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  lazy,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { requestPersistentStorage } from './backup.ts';
 import { appClock } from './clock.ts';
 import { BackupBanner } from './components/BackupBanner.tsx';
@@ -40,7 +49,13 @@ import { groupOf, titleOf } from './nav.ts';
 import { PluginScreenView, PluginSlot } from './plugins/components.tsx';
 import { useScreenRoute } from './plugins/hash.ts';
 import { PluginHostProvider, usePluginHost } from './plugins/host.tsx';
+import { createCoreStore } from './plugins/pluginStore.ts';
 import { themeStyle } from './plugins/uiExtensions.ts';
+
+const ScanCoreScreen = lazy(() =>
+  import('@gofor/scan').then((module) => ({ default: module.ScanCoreScreen })),
+);
+
 import { PrintLayer, type SheetData } from './print/PrintSheet.tsx';
 import { printTemplateChoices, resolvePrintTemplate } from './print/template.ts';
 import { ComingSoon } from './screens/ComingSoon.tsx';
@@ -72,8 +87,8 @@ const LEGACY_SCREEN_REDIRECTS: Record<string, string> = {
   tasks: 'gofor.tasks/screen',
   timetable: 'gofor.timetable/screen',
   checkin: 'gofor.checkin/screen',
-  scan: 'gofor.scan/screen',
-  capture: 'gofor.scan/screen',
+  'gofor.scan/screen': 'scan',
+  capture: 'scan',
 };
 
 /** 惰性初始化读 localStorage：首帧就是最终状态，不会先画展开再跳成折叠。 */
@@ -566,6 +581,22 @@ function AppShell() {
     switch (entry.id) {
       case 'home':
         return <Home />;
+      case 'scan':
+        return (
+          <Suspense
+            fallback={<p className="py-8 text-center text-small opacity-40">正在加载扫描页…</p>}
+          >
+            <ScanCoreScreen
+              pluginId="core"
+              screenId="scan"
+              host={{
+                ...host,
+                storage: host.storageFor('core'),
+                store: createCoreStore(),
+              }}
+            />
+          </Suspense>
+        );
       case 'templates':
         return (
           <TemplateEditorScreen

@@ -23,7 +23,6 @@ const ACCESS: Readonly<Record<string, readonly string[]>> = {
   'gofor.diary': ['diary.*'],
   'gofor.checklist': ['checklists.*', 'checklistLogs.*'],
   'gofor.toolbox': ['toolbox.*'],
-  'gofor.scan': ['scan.*', 'templates.list'],
   'gofor.wordbook': [],
   'gofor.report': [],
 };
@@ -148,4 +147,18 @@ export function createPluginStore(pluginId: string): PluginStoreLike {
   };
   cache.set(pluginId, store);
   return store;
+}
+
+/** core 自己调用数据能力：不受插件 allowlist 限制；只允许 core 模块 import。 */
+let coreStore: PluginStoreLike | null = null;
+export function createCoreStore(): PluginStoreLike {
+  if (coreStore) return coreStore;
+  coreStore = {
+    async call<T>(operation: string, ...args: unknown[]): Promise<T> {
+      const handler = OPS[operation];
+      if (handler === undefined) throw new Error(`未知数据能力 ${operation}`);
+      return (await handler(...(args as never[]))) as T;
+    },
+  };
+  return coreStore;
 }

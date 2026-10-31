@@ -171,7 +171,6 @@ ctx.registerData({
 | `gofor.tasks` | 作业清单 | `gofor.tasks/screen` | `ui.screen`, `scan.handle` | `checkboxList` | `gofor.tasks/scan` | — |
 | `gofor.timetable` | 课程表 | `gofor.timetable/screen` | `ui.screen` | `schedule` | — | — |
 | `gofor.checkin` | 每日打卡 | `gofor.checkin/screen` | `ui.screen`, `scan.handle` | `habitRow`, `checkboxGrid` | `gofor.checkin/scan` | — |
-| `gofor.scan` | 扫描回填 | `gofor.scan/screen` | `ui.screen` | — | — | — |
 | `gofor.checklist` | 环境清单 | `gofor.checklist/screen` | `ui.screen` | — | — | — |
 | `gofor.mood` | 三格自评 | `gofor.mood/screen` | `ui.screen`, `scan.handle` | `ratingGrid` | `gofor.mood/scan` | — |
 | `gofor.report` | 自我周报 | `gofor.report/screen` | `ui.screen`, `data.read` | — | — | 消费 7 个数据契约（可选依赖 `wordbook.entries`） |
@@ -189,7 +188,7 @@ ctx.registerData({
 `-timetable`、`-toolbox`、`-wordbook`。`packageName` 映射在 `packages/plugins/src/rules.ts` 的
 `PACKAGE_BY_ID`，新增插件必须登记。
 
-注意：这 13 个构建期包的清单在 `src/index.ts` 的 `manifest`（`@gofor/plugin-api`），
+注意：这 12 个构建期包的清单在 `src/index.ts` 的 `manifest`（`@gofor/plugin-api`），
 **不在 `package.json` 的 `gofor` 字段**；`gofor` 字段只属于运行时插件（见 §9）。
 
 默认禁用：`gofor.theme.sepia`（启用即改整站外观，必须是用户主动选择）。

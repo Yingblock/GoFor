@@ -211,6 +211,9 @@ importers:
       '@gofor/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
+      '@gofor/scan':
+        specifier: workspace:*
+        version: link:../../packages/scan
       '@gofor/store':
         specifier: workspace:*
         version: link:../../packages/store
@@ -375,6 +378,34 @@ importers:
       vite:
         specifier: ^7.1.9
         version: 7.3.7(@types/node@26.6.5)(jiti@2.7.0)(lightningcss@1.32.0)
+
+  packages/scan:
+    dependencies:
+      '@gofor/core':
+        specifier: workspace:*
+        version: link:../core
+      '@gofor/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
+      '@gofor/plugin-kit':
+        specifier: workspace:*
+        version: link:../plugin-kit
+      '@gofor/ui':
+        specifier: workspace:*
+        version: link:../ui
+      '@gofor/vision':
+        specifier: workspace:*
+        version: link:../vision
+      '@zxing/library':
+        specifier: ^0.21.3
+        version: 0.21.3
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.3.0
+      react:
+        specifier: ^19.2.0
+        version: 19.3.1
 
   packages/store:
     dependencies:
@@ -570,34 +601,6 @@ importers:
       '@gofor/plugin-kit':
         specifier: workspace:*
         version: link:../../packages/plugin-kit
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.0
-        version: 19.3.0
-      react:
-        specifier: ^19.2.0
-        version: 19.3.1
-
-  plugins/scan:
-    dependencies:
-      '@gofor/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@gofor/plugin-api':
-        specifier: workspace:*
-        version: link:../../packages/plugin-api
-      '@gofor/plugin-kit':
-        specifier: workspace:*
-        version: link:../../packages/plugin-kit
-      '@gofor/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-      '@gofor/vision':
-        specifier: workspace:*
-        version: link:../../packages/vision
-      '@zxing/library':
-        specifier: ^0.21.3
-        version: 0.21.3
     devDependencies:
       '@types/react':
         specifier: ^19.2.0

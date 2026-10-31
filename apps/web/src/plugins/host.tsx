@@ -61,6 +61,7 @@ import { buildNav, CORE_NAV, flattenNav, type NavGroup } from '../nav.ts';
 import { loadExternalPlugins } from './external.ts';
 import { createPluginStorage } from './pluginStorage.ts';
 import { createPluginStore } from './pluginStore.ts';
+import { PaperHomeBlock } from '../screens/PaperHomeBlock.tsx';
 import { notConfiguredAi, notConfiguredOcr } from './providers.ts';
 import type {
   DataProviderSummary,
@@ -600,7 +601,16 @@ async function buildPluginHost(input: {
     }));
 
   // 7. 插槽 / 主题 / CSS / 内容模块 / 转换器。
-  const homeBlocks: RegisteredHomeBlock[] = [];
+  const homeBlocks: RegisteredHomeBlock[] = [
+    {
+      id: 'core.paper',
+      title: '纸面闭环',
+      pluginId: 'core',
+      order: 10,
+      span: 2,
+      load: async () => ({ default: PaperHomeBlock }),
+    },
+  ];
   const slots: RegisteredSlot[] = [];
   const themes: RegisteredTheme[] = [];
   const css: RegisteredCss[] = [];

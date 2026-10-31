@@ -795,6 +795,17 @@ try {
   check('禁用作业插件后首页不显示任务提示', (await page.getByText('任务提示').count()) === 0);
   check('禁用作业插件后首页不显示今日作业统计', (await page.getByText('今日作业').count()) === 0);
 
+  // 打印回填是 core：作业插件禁用后，扫描回填仍必须存在
+  await openGroup(page, '记录');
+  await clickItem(page, '扫描回填');
+  await page.waitForTimeout(600);
+  check('作业插件禁用后扫描回填仍在', (await page.evaluate(() => location.hash)) === '#/s/scan');
+  check('扫描回填页面可打开', (await page.getByText('拍一张纸').count()) > 0);
+  await page.evaluate(() => {
+    location.hash = '#/s/home';
+  });
+  await page.waitForTimeout(400);
+
   // 番茄钟仍可用，但不能绑定任务
   await page.evaluate(() => {
     location.hash = '#/s/gofor.pomodoro/screen';

@@ -39,7 +39,6 @@ const PACKAGE_BY_ID: Readonly<Record<string, string>> = {
   'gofor.mood': 'gofor-plugin-mood',
   'gofor.pomodoro': 'gofor-plugin-pomodoro',
   'gofor.report': 'gofor-plugin-report',
-  'gofor.scan': 'gofor-plugin-scan',
   'gofor.tasks': 'gofor-plugin-tasks',
   'gofor.theme.sepia': 'gofor-plugin-theme',
   'gofor.timetable': 'gofor-plugin-timetable',
