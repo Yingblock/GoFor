@@ -72,6 +72,13 @@ const BLOCK_PRESETS: Record<string, () => Block> = {
   qrcode: () => ({ id: newId(), kind: 'qrcode', span: 3, sizeMm: 12 }),
   // 打卡行：一行并排当天该做的习惯，扫描按 habit id 回填（P2-2.13）。
   habitRow: () => ({ id: newId(), kind: 'habitRow', span: 12 }),
+  checkboxGrid: () => ({
+    id: newId(),
+    kind: 'checkboxGrid',
+    span: 12,
+    cols: 7,
+    rows: 3,
+  }),
   // 三格自评：印成 1–5 的勾选格，扫描能读回数值（手写数字读不了，见 docs/Phase-note/P2/paper-loop.md）。
   ratingGrid: () => ({
     id: newId(),
@@ -479,6 +486,21 @@ export function TemplateEditorScreen({
     [host.printBlockOwners],
   );
 
+  /**
+   * 数据区块只在对应插件启用时显示；没有 owner 的内置区块始终显示。
+   * 未启用插件的区块仍保留在 draft 里，重新启用后会回来，而不是保存时被删掉。
+   */
+  const rowEntries = useMemo(() => {
+    const entries = (draft?.blocks ?? currentTemplate.blocks).map((block, index) => ({
+      block,
+      index,
+    }));
+    return entries.filter(({ block }) =>
+      isPrintBlockKindAvailable(block.kind, host.printBlockOwners),
+    );
+  }, [currentTemplate.blocks, draft, host.printBlockOwners]);
+  const hiddenRowCount = (draft?.blocks ?? currentTemplate.blocks).length - rowEntries.length;
+
   const pageCount = layout(blocks, { paper: currentTemplate.paper }).pages.length;
 
   const updateDraft = useCallback((patch: (current: PrintTemplate) => PrintTemplate) => {
@@ -716,7 +738,7 @@ export function TemplateEditorScreen({
         </div>
 
         <ul className="divide-y divide-line rounded-xl border border-line bg-card-faint">
-          {(draft?.blocks ?? currentTemplate.blocks).map((block, index) => (
+          {rowEntries.map(({ block, index }) => (
             <li key={block.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
               <span className="w-8 tabular-nums opacity-35">{index + 1}</span>
               <span className="w-28 font-mono text-caption">{block.kind}</span>
@@ -760,6 +782,11 @@ export function TemplateEditorScreen({
             </li>
           ))}
         </ul>
+        {hiddenRowCount > 0 ? (
+          <p className="text-caption leading-relaxed opacity-45">
+            已隐藏 {hiddenRowCount} 个未启用插件提供的区块；数据仍保留，重新启用插件后会回来。
+          </p>
+        ) : null}
 
         {draft ? (
           <div className="flex flex-wrap items-center gap-2 text-xs">

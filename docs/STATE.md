@@ -164,6 +164,10 @@ pnpm exec gofor plugin list --user-data /tmp/gofor-user
 
 ## 最近一次更新
 
+- **2026-10-31 打印区块归属**：数据区块按 `provides.printBlocks` 随插件启停；
+  模板编辑器隐藏未启用插件的区块，无 owner 的内置区块保留。修复全禁用时
+  owner 为空与禁用插件重复两个宿主 bug。见 `DECISIONS/0019`。
+
 - **2026-10-31 数据访问单一入口**：`App` 不再直接读 tasks/habits/timetable，改用
   `tasks.all` / `habits.all` / `timetable.current` provider；core 边界检查脚本加入
   `pnpm check:boundaries`。见 `DECISIONS/0018`。

@@ -955,7 +955,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
           source: entry.source,
         }));
         for (const plugin of external.plugins) externalPluginsRef.current.set(plugin.id, plugin);
-        const activeExternalIds = new Set(external.plugins.map((plugin) => plugin.id));
+        const activeExternalIds = new Set(activeExternalPluginIds);
         const disabledExternal = [...externalPluginsRef.current.values()]
           .filter((plugin) => !activeExternalIds.has(plugin.id))
           .map((plugin) => ({
@@ -976,11 +976,10 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
             enabled: false,
           })),
         );
-        entriesRef.current = [...entriesRef.current, ...external.dataContracts];
         const screens = [...result.snapshot.screens, ...external.screens];
         snapshot = {
           ...result.snapshot,
-          plugins: [...result.snapshot.plugins, ...external.plugins, ...disabledExternal],
+          plugins: [...result.snapshot.plugins, ...external.plugins],
           screens,
           nav: buildNav(
             screens
