@@ -565,9 +565,24 @@ function AppShell() {
     if (entry.kind === 'plugin') return <PluginScreenView entry={entry} />;
 
     switch (entry.id) {
-      case 'home':
-        // 课表在 App 里算一次（打印层也用），首页直接复用，避免两处各自展开课表。
-        return <Home tasks={tasks} schedule={schedule} onNavigate={navigate} />;
+      case 'home': {
+        // 数据可用性由插件启用状态决定：作业/打卡插件禁用后首页不展示对应数据。
+        const tasksAvailable = host.data.available('tasks.all');
+        const habitsAvailable = host.data.available('habits.range');
+        const timetableAvailable = host.plugins.some(
+          (plugin) => plugin.id === 'gofor.timetable' && plugin.enabled,
+        );
+        return (
+          <Home
+            tasks={tasksAvailable ? tasks : []}
+            tasksAvailable={tasksAvailable}
+            habitsAvailable={habitsAvailable}
+            timetableAvailable={timetableAvailable}
+            schedule={timetableAvailable ? schedule : []}
+            onNavigate={navigate}
+          />
+        );
+      }
       case 'templates':
         return (
           <TemplateEditorScreen

@@ -756,6 +756,25 @@ try {
   await page.waitForTimeout(600);
   check('禁用功能插件的深链回首页', (await page.evaluate(() => location.hash)) === '#/s/home');
 
+  // 作业插件禁用后，首页不能继续展示任务统计/任务列表
+  await page.evaluate(() => {
+    location.hash = '#/s/home';
+  });
+  await page.waitForTimeout(600);
+  check('禁用作业插件后首页不显示任务提示', (await page.getByText('任务提示').count()) === 0);
+  check('禁用作业插件后首页不显示今日作业统计', (await page.getByText('今日作业').count()) === 0);
+
+  // 番茄钟仍可用，但不能绑定任务
+  await page.evaluate(() => {
+    location.hash = '#/s/gofor.pomodoro/screen';
+  });
+  await page.waitForTimeout(800);
+  check('禁用作业插件后番茄钟不显示绑定任务', (await page.getByText('绑定任务').count()) === 0);
+  check(
+    '禁用作业插件后番茄钟仍能开始',
+    (await page.getByRole('button', { name: /开始专注/ }).count()) > 0,
+  );
+
   // 打印页不依赖作业插件的页面，仍然能出纸
   await openGroup(page, '导出');
   await clickItem(page, '打印 checklist');
@@ -787,6 +806,35 @@ try {
     '旧深链自动跳到插件页面',
     (await page.evaluate(() => location.hash)) === '#/s/gofor.tasks/screen',
   );
+
+  // 课表/打卡插件禁用后，首页对应区块也必须消失
+  await openGroup(page, '导出');
+  await clickItem(page, '插件与扩展');
+  await page.getByRole('button', { name: '禁用 课程表' }).click();
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    location.hash = '#/s/home';
+  });
+  await page.waitForTimeout(600);
+  check('禁用课表插件后首页不显示今日课表', (await page.getByText('今日课表').count()) === 0);
+  await openGroup(page, '导出');
+  await clickItem(page, '插件与扩展');
+  await page.getByRole('button', { name: '启用 课程表' }).click();
+  await page.waitForTimeout(400);
+
+  await openGroup(page, '导出');
+  await clickItem(page, '插件与扩展');
+  await page.getByRole('button', { name: '禁用 每日打卡' }).click();
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    location.hash = '#/s/home';
+  });
+  await page.waitForTimeout(600);
+  check('禁用打卡插件后首页不显示打卡提示', (await page.getByText('打卡提示').count()) === 0);
+  await openGroup(page, '导出');
+  await clickItem(page, '插件与扩展');
+  await page.getByRole('button', { name: '启用 每日打卡' }).click();
+  await page.waitForTimeout(400);
 
   // 重新启用后重新固化一次今天的坐标清单：扫描用例读的是同一份清单，
   // 不能让"禁用时保存的清单"残留到后面（真实使用里用户也会在启用后再打印）。

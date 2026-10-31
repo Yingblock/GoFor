@@ -62,6 +62,7 @@ docs/             STATE / WORKFLOW / ROADMAP / DESIGN / LATER / DECISIONS / PLUG
  - 填写任何表单/文件均简明扼要，用最少字数精准指出规范/要求，不写废话
  - 开工前先阅读/docs/STANDARD.md并按其要求进行处理
  - 完成修改后及时更新涉及的文档
+ - 用户未说明不要push至github
 
 
 

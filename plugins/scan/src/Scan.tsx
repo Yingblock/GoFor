@@ -80,8 +80,10 @@ interface MissingManifest {
 export function ScanScreen({
   onOpenPrint,
   applyScan,
+  tasksAvailable = true,
 }: {
   onOpenPrint?: () => void;
+  tasksAvailable?: boolean;
   applyScan: (
     results: readonly import('@gofor/core/domain').ScanResult[],
     date: string,
@@ -344,7 +346,7 @@ export function ScanScreen({
 
       const paper = missing.paper as PaperId;
       const template = resolvePrintTemplate(missing.templateId, paper, customs);
-      const tasks = await listTasks(db);
+      const tasks = tasksAvailable ? await listTasks(db) : [];
       const blocks = materialize(template, {
         date: missing.date,
         dateLabel: todayLabel(missing.date),

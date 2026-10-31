@@ -99,6 +99,8 @@ v2 的 manifest 增加 `permissions` 与 `renderer`；capabilities 可取
 - `Task` 与 `@gofor/core/domain` 同形（id/title/subjectId/done/due/optional/subtasks/tags/sortKey/
   createdAt/updatedAt），定义在 `@gofor/contracts`，插件不需要依赖 monorepo 源码。
 - 插件**不能** import Dexie、`@gofor/store`、`@gofor/core`；数据走宿主 API / 数据契约。
+- 数据 provider 有 owner；插件禁用时该契约变成 `missing`，消费者必须显示未安装，
+  不能继续读数据。归属表见 `DECISIONS/0013`。
 - 外部插件页面/主题/数据 query/扫描 handler 都在 `gofor.renderer` 里按名字导出；
   主进程只登记可序列化声明，不能通过 IPC 传函数。
 - `registerViewSlot` 的 `component` 在主进程只用于取导出名：

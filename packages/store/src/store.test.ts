@@ -1332,6 +1332,10 @@ describe('存储：内置数据 provider（周报不 import store 也能取数�
     const providers = createBuiltinDataProviders(db);
     const byId = new Map(providers.map((provider) => [provider.id, provider]));
     const range = { from: '2026-03-01', to: '2026-03-07' };
+    expect(byId.get('tasks.all')?.owner).toBe('gofor.tasks');
+    expect(byId.get('habits.range')?.owner).toBe('gofor.checkin');
+    expect(byId.get('mood.range')?.owner).toBe('gofor.mood');
+    expect(byId.get('sessions.range')?.owner).toBeUndefined();
 
     expect(await byId.get('sessions.range')?.query(range)).toHaveLength(1);
     expect(await byId.get('habits.range')?.query(range)).toMatchObject({

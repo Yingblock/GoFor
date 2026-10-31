@@ -417,20 +417,28 @@ async function buildPluginHost(input: {
     }
   }
 
-  // 4. 数据 provider：core 先登记，插件在激活过程中追加。
-  const entries: DataContractEntry[] = createBuiltinDataProviders(db).map((provider) =>
-    toEntry(
-      {
-        id: provider.id,
-        version: provider.version,
-        summary: provider.summary,
-        query: (value) => provider.query(value),
-        revision: () => provider.revision(),
-      },
-      'core',
-      'core',
-    ),
+  // 4. 数据 provider：core 先登记，但归属某个插件的数据在插件禁用时一起移除。
+  //    这样“作业清单插件禁用”后，tasks.all 是 missing，消费方不能再读到任务。
+  const enabledPluginIds = new Set(
+    records.filter((record) => record.enabled).map((record) => record.id),
   );
+  const entries: DataContractEntry[] = createBuiltinDataProviders(db)
+    .filter(
+      (provider) => provider.owner === undefined || enabledPluginIds.has(provider.owner),
+    )
+    .map((provider) =>
+      toEntry(
+        {
+          id: provider.id,
+          version: provider.version,
+          summary: provider.summary,
+          query: (value) => provider.query(value),
+          revision: () => provider.revision(),
+        },
+        'core',
+        'core',
+      ),
+    );
   entriesRef.current = entries;
 
   const collected = new Map<string, Collected>();

@@ -1,4 +1,5 @@
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
+import type { PluginScreenProps } from '@gofor/plugin-api';
 import { appClock } from '@gofor/plugin-kit';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatClock, progress, remainingMs } from './machine.ts';
@@ -40,8 +41,9 @@ const overlayGhost = `${overlayButtonBase} border border-line bg-card-soft hover
  *
  * 两态互斥：有 `run` → 全屏遮罩；没有 `run` → 设置页。
  */
-export function Pomodoro() {
-  const controller = usePomodoro();
+export function Pomodoro({ host }: PluginScreenProps) {
+  const tasksAvailable = host.data.available('tasks.all');
+  const controller = usePomodoro(tasksAvailable);
   return controller.run ? (
     <FocusSession controller={controller} />
   ) : (
@@ -147,32 +149,34 @@ function FocusSetup({ controller }: { controller: PomodoroController }) {
         )}
       </section>
 
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-sm font-medium opacity-50">绑定任务</h2>
-          <span className="text-[11px] opacity-35">可选 · 再点一次取消</span>
-        </div>
-        {controller.taskCandidates.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-line px-4 py-4 text-center text-xs opacity-40">
-            {controller.tasks.length === 0 ? '还没有作业，不绑也能开始' : '今天的作业都完成了'}
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {controller.taskCandidates.map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                onClick={() => controller.toggleTask(task.id)}
-                className={`${chipBase} max-w-full truncate ${
-                  controller.taskId === task.id ? chipOn : chipOff
-                }`}
-              >
-                {task.title}
-              </button>
-            ))}
+      {controller.tasksAvailable ? (
+        <section>
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="text-sm font-medium opacity-50">绑定任务</h2>
+            <span className="text-[11px] opacity-35">可选 · 再点一次取消</span>
           </div>
-        )}
-      </section>
+          {controller.taskCandidates.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-line px-4 py-4 text-center text-xs opacity-40">
+              {controller.tasks.length === 0 ? '还没有作业，不绑也能开始' : '今天的作业都完成了'}
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {controller.taskCandidates.map((task) => (
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={() => controller.toggleTask(task.id)}
+                  className={`${chipBase} max-w-full truncate ${
+                    controller.taskId === task.id ? chipOn : chipOff
+                  }`}
+                >
+                  {task.title}
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <div className="space-y-2">
         <button

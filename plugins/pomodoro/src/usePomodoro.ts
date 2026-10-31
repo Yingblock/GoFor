@@ -55,6 +55,8 @@ export interface PomodoroController {
   /** 当前运行态；null 表示还没开始（或刚结算完）。 */
   run: PomodoroRun | null;
   subjects: Subject[];
+  /** 作业清单插件是否启用；禁用时不能绑定任务。 */
+  tasksAvailable: boolean;
   /** 全部任务：展示已绑定任务标题时要用，候选只取未完成的前 8 条。 */
   tasks: Task[];
   taskCandidates: Task[];
@@ -82,7 +84,7 @@ export interface PomodoroController {
  * `remainingMs(run, appClock)` 现算。绝对不能用 tick 累加——
  * 浏览器在后台会节流定时器，25 分钟会被拖成 40 分钟。
  */
-export function usePomodoro(): PomodoroController {
+export function usePomodoro(tasksAvailable = true): PomodoroController {
   const [run, setRun] = useState<PomodoroRun | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -150,7 +152,7 @@ export function usePomodoro(): PomodoroController {
       const [configResult, subjectRows, taskRows, activeRuns] = await Promise.all([
         currentConfigOrDefault(db),
         listSubjects(db),
-        listTasks(db),
+        tasksAvailable ? listTasks(db) : Promise.resolve([] as Task[]),
         listActiveFocusRuns(db),
       ]);
       if (cancelled) return;
@@ -158,6 +160,7 @@ export function usePomodoro(): PomodoroController {
       setUnitMinutes(resolveUnitMinutes(configResult.config));
       setSubjects(subjectRows);
       setTasks(taskRows);
+      if (!tasksAvailable) setSelectedTaskId(null);
 
       // 正常运行中最多只有一条未结算的 run；若真有多条，只恢复最近开始的。
       const latest = [...activeRuns].sort((a, b) => b.createdAt - a.createdAt)[0];
@@ -170,7 +173,7 @@ export function usePomodoro(): PomodoroController {
       // 恢复已选时长：历史数据可能是被改过的、或者小于 1 分钟的脏值，重新钳一次。
       setSelectedMinutes(clampMinutes(recovered.plannedMs / MS_PER_MINUTE));
       setSelectedSubjectId(recovered.subjectId);
-      setSelectedTaskId(recovered.taskId);
+      setSelectedTaskId(tasksAvailable ? recovered.taskId : null);
 
       // 恢复出来就已经到点的，立即结算，不用等第一个 tick。
       if (recovered.status === 'running' && isComplete(recovered, appClock)) {
@@ -181,7 +184,7 @@ export function usePomodoro(): PomodoroController {
     return () => {
       cancelled = true;
     };
-  }, [settle]);
+  }, [settle, tasksAvailable]);
 
   // 每秒只触发一次重渲染并顺手检查是否到点；后台节流不会让计时变慢，
   // 因为剩余时间始终由 `remainingMs(run, appClock)` 现算。
@@ -219,9 +222,13 @@ export function usePomodoro(): PomodoroController {
     setSelectedMinutes(clampMinutes(next));
   }, []);
   const selectSubject = useCallback((id: string) => setSelectedSubjectId(id), []);
-  const toggleTask = useCallback((id: string) => {
-    setSelectedTaskId((current) => (current === id ? null : id));
-  }, []);
+  const toggleTask = useCallback(
+    (id: string) => {
+      if (!tasksAvailable) return;
+      setSelectedTaskId((current) => (current === id ? null : id));
+    },
+    [tasksAvailable],
+  );
 
   const start = useCallback(() => {
     if (run) return;
@@ -231,14 +238,14 @@ export function usePomodoro(): PomodoroController {
         id: newId(),
         plannedMs: minutes * MS_PER_MINUTE,
         subjectId,
-        taskId: selectedTaskId,
+        taskId: tasksAvailable ? selectedTaskId : null,
       },
       appClock,
       appClock.now(),
     );
     setRun(next);
     void saveFocusRun(db, next);
-  }, [minutes, run, selectedTaskId, subjectId]);
+  }, [minutes, run, selectedTaskId, subjectId, tasksAvailable]);
 
   const pause = useCallback(() => {
     if (run?.status !== 'running') return;
@@ -275,6 +282,7 @@ export function usePomodoro(): PomodoroController {
   return {
     run,
     subjects,
+    tasksAvailable,
     tasks,
     taskCandidates,
     minutes,

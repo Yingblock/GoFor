@@ -33,6 +33,11 @@ export interface BuiltinDataProvider {
   id: string;
   version: number;
   summary: string;
+  /**
+   * 数据归属插件。插件被禁用时宿主会把这个 provider 一起移除，
+   * 消费方看到的是「未安装」，而不是继续读到禁用插件的数据。
+   */
+  owner?: string;
   query(input: unknown): Promise<unknown>;
   revision(): Promise<number>;
 }
@@ -107,6 +112,7 @@ export function createBuiltinDataProviders(database: GoForDb): BuiltinDataProvid
     },
     {
       id: 'habits.range',
+      owner: 'gofor.checkin',
       version: 1,
       summary: '打卡项定义 + 区间内的打卡记录',
       async query(input) {
@@ -122,6 +128,7 @@ export function createBuiltinDataProviders(database: GoForDb): BuiltinDataProvid
     },
     {
       id: 'mood.range',
+      owner: 'gofor.mood',
       version: 1,
       summary: '区间内的三滑块（睡眠 / 心情 / 专注）',
       async query(input) {
@@ -135,6 +142,7 @@ export function createBuiltinDataProviders(database: GoForDb): BuiltinDataProvid
     },
     {
       id: 'diary.range',
+      owner: 'gofor.diary',
       version: 1,
       summary: '区间内的情绪日记（正文 + 标签）',
       async query(input) {
@@ -148,6 +156,7 @@ export function createBuiltinDataProviders(database: GoForDb): BuiltinDataProvid
     },
     {
       id: 'toolbox.recent',
+      owner: 'gofor.toolbox',
       version: 1,
       summary: '最近的放松练习记录',
       async query(input) {
@@ -165,6 +174,7 @@ export function createBuiltinDataProviders(database: GoForDb): BuiltinDataProvid
     },
     {
       id: 'tasks.all',
+      owner: 'gofor.tasks',
       version: 1,
       summary: '全部作业（含完成状态与截止日期）',
       async query() {
@@ -176,6 +186,7 @@ export function createBuiltinDataProviders(database: GoForDb): BuiltinDataProvid
     },
     {
       id: 'checklists.all',
+      owner: 'gofor.checklist',
       version: 1,
       summary: '环境清单定义',
       async query() {

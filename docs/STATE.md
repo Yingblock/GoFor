@@ -164,6 +164,8 @@ pnpm exec gofor plugin list --user-data /tmp/gofor-user
 
 ## 最近一次更新
 
+- **2026-10-31 插件数据归属**：内置数据 provider 增加 owner；作业/打卡/课表禁用后，
+  首页对应区块消失；番茄钟不再提供任务绑定；扫描不再读取任务标签；e2e 覆盖。
 - **2026-10-31 外部插件 v2（分支 feat/plugin-host-v2）**：契约增加页面/主题/数据/扫描声明；
   `PluginManager` 快照扩展；PWA external client 从 plugin-host 拉 renderer，合并页面/主题/插槽/
   命令/数据契约/扫描 handler；示例 hello 升级并验证数据、扫描、主题、插槽。外部插件默认关闭，
