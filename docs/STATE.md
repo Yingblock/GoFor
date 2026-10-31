@@ -165,8 +165,7 @@ pnpm exec gofor plugin list --user-data /tmp/gofor-user
 ## 最近一次更新
 
 - **2026-10-31 打印模板插件化**：删除 core `BUILTIN_TEMPLATES`；tasks/checkin/mood/timetable
-  注册模板，`host.printTemplates` 统一解析；`density` 取代模板 id 判断。全禁用时打印/模板页
-  只显示空态，不再渲染模板壳或打印层。见 `DECISIONS/0019`。
+  注册模板，`host.printTemplates` 统一解析；`density` 取代模板 id 判断。见 `DECISIONS/0019`。
 
 - **2026-10-31 数据访问单一入口**：`App` 不再直接读 tasks/habits/timetable，改用
   `tasks.all` / `habits.all` / `timetable.current` provider；core 边界检查脚本加入
