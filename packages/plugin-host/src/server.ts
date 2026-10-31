@@ -239,6 +239,7 @@ export async function startPluginHost(options: PluginHostOptions): Promise<Plugi
                   capabilities?: unknown;
                   permissions?: unknown;
                   renderer?: unknown;
+                  provides?: { printBlocks?: unknown };
                 };
               };
               const gofor = manifest.gofor;
@@ -252,6 +253,9 @@ export async function startPluginHost(options: PluginHostOptions): Promise<Plugi
                 capabilities: Array.isArray(gofor.capabilities) ? gofor.capabilities : [],
                 permissions: Array.isArray(gofor.permissions) ? gofor.permissions : [],
                 renderer: typeof gofor.renderer === 'string' ? gofor.renderer : null,
+                printBlocks: Array.isArray(gofor.provides?.printBlocks)
+                  ? gofor.provides.printBlocks
+                  : [],
                 enabled: active.has(packageName),
               });
             } catch {

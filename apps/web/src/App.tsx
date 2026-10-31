@@ -160,6 +160,12 @@ function AppShell() {
   const customTemplates = useLiveQuery(() => listTemplates(db), [], [] as StoredTemplate[]);
   /** 今天该做的打卡项：打印到纸上的「打卡行」，扫描后按 habit id 回填。 */
   const habits = useLiveQuery(() => listHabits(db), [], [] as Habit[]);
+  const tasksAvailable = host.data.available('tasks.all');
+  const habitsAvailable = host.data.available('habits.range');
+  const timetableAvailable = host.plugins.some(
+    (plugin) => plugin.id === 'gofor.timetable' && plugin.enabled,
+  );
+
   // 课表存在 Dexie 里是 `unknown`（导入可能带进坏数据），用上面的守卫收窄。
   const timetable = useLiveQuery(() => loadTimetable(db, TIMETABLE_ID), [], undefined);
   /** 所有课程备注：按日期分组，任意打印日期都能取到自己那天的备注。 */
@@ -183,6 +189,7 @@ function AppShell() {
    */
   const scheduleForDate = useCallback(
     (date: string): ScheduleEntry[] => {
+      if (!timetableAvailable) return [];
       const data = parseTimetable(timetable);
       if (!data) return [];
 
@@ -211,7 +218,7 @@ function AppShell() {
         return [];
       }
     },
-    [notesByDate, subjects, timetable],
+    [notesByDate, subjects, timetable, timetableAvailable],
   );
 
   useEffect(() => {
@@ -275,18 +282,25 @@ function AppShell() {
 
   const templateChoices = useMemo(() => printTemplateChoices(customTemplates), [customTemplates]);
 
+  // 纸面数据也必须跟随插件可用性；不能只隐藏区块却继续把数据交给模板。
+
   /** 某一天纸上的任务：今天延续原行为（全部任务），其它日期只取该日到期的。 */
   const tasksForDate = useCallback(
-    (date: string) => (date === today ? tasks : tasks.filter((task) => task.due === date)),
-    [tasks, today],
+    (date: string) => {
+      if (!tasksAvailable) return [] as Task[];
+      return date === today ? tasks : tasks.filter((task) => task.due === date);
+    },
+    [tasks, tasksAvailable, today],
   );
   /** 某一天该做的打卡。 */
   const habitsForDate = useCallback(
-    (date: string) =>
-      habits
+    (date: string) => {
+      if (!habitsAvailable) return [];
+      return habits
         .filter((habit) => isHabitActiveOn(habit, date))
-        .map((habit) => ({ id: habit.id, name: habit.name })),
-    [habits],
+        .map((habit) => ({ id: habit.id, name: habit.name }));
+    },
+    [habits, habitsAvailable],
   );
 
   /** 某一天的纸面数据（不含 blocks）：任务/课表/备注/打卡/二维码。 */
@@ -327,7 +341,16 @@ function AppShell() {
         habits: sheetHabits,
       };
     },
-    [buildSheetData, habitsForDate, host.printBlockOwners, printTemplate, tasksForDate],
+    [
+      buildSheetData,
+      habitsForDate,
+      habitsAvailable,
+      host.printBlockOwners,
+      printTemplate,
+      tasksForDate,
+      tasksAvailable,
+      timetableAvailable,
+    ],
   );
 
   /** 当前打印队列（1 天或连续 N 天）。默认今天，进打印页后会改成明天。 */

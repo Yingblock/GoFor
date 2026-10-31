@@ -83,6 +83,7 @@ interface InstalledPlugin {
   capabilities: string[];
   permissions: string[];
   renderer: string | null;
+  printBlocks: string[];
   enabled: boolean;
 }
 
@@ -486,7 +487,6 @@ export async function loadExternalPlugins(
     });
   }
 
-  const installedIds = new Set(installed.map((plugin) => plugin.id));
   for (const plugin of installed) {
     if (activeById.has(plugin.id)) continue;
     if (plugins.some((info) => info.id === plugin.id)) continue;
@@ -503,6 +503,7 @@ export async function loadExternalPlugins(
       consumes: [],
       providesData: [],
       screens: [],
+      printBlocks: [...(plugin.printBlocks ?? [])],
       commands: [],
       contentModules: [],
       themes: [],
@@ -512,9 +513,6 @@ export async function loadExternalPlugins(
       packageName: plugin.packageName,
     });
   }
-  // 宿主可能安装了但快照里没有的插件（例如刚被禁用）；上面的 installed 已覆盖。
-  void installedIds;
-
   // 迁移后的构建期插件：renderer 导出完整 pluginModule，用宿主 PluginContext 原样激活。
   const activated = new Set<string>();
   const moduleManifests = new Map<string, PluginModule['manifest']>();

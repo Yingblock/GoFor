@@ -12,11 +12,11 @@ const SHIM_JSX = join(ROOT, 'tools/external-runtime/jsx-runtime.ts');
 
 /** 构建期插件源码 → 外部插件包。 */
 const PLUGINS = [
-  { dir: 'tasks', id: 'gofor.tasks', name: '作业清单', version: '1.0.0', exportName: 'tasksPlugin' },
-  { dir: 'checkin', id: 'gofor.checkin', name: '每日打卡', version: '1.0.0', exportName: 'checkinPlugin' },
-  { dir: 'timetable', id: 'gofor.timetable', name: '课程表', version: '1.0.0', exportName: 'timetablePlugin' },
+  { dir: 'tasks', id: 'gofor.tasks', name: '作业清单', version: '1.0.0', exportName: 'tasksPlugin', printBlocks: ['checkboxList'] },
+  { dir: 'checkin', id: 'gofor.checkin', name: '每日打卡', version: '1.0.0', exportName: 'checkinPlugin', printBlocks: ['habitRow', 'checkboxGrid'] },
+  { dir: 'timetable', id: 'gofor.timetable', name: '课程表', version: '1.0.0', exportName: 'timetablePlugin', printBlocks: ['schedule'] },
   { dir: 'pomodoro', id: 'gofor.pomodoro', name: '番茄钟', version: '1.0.0', exportName: 'pomodoroPlugin' },
-  { dir: 'mood', id: 'gofor.mood', name: '三格自评', version: '1.0.0', exportName: 'moodPlugin' },
+  { dir: 'mood', id: 'gofor.mood', name: '三格自评', version: '1.0.0', exportName: 'moodPlugin', printBlocks: ['ratingGrid'] },
   { dir: 'diary', id: 'gofor.diary', name: '情绪日记', version: '1.0.0', exportName: 'diaryPlugin' },
   { dir: 'checklist', id: 'gofor.checklist', name: '环境清单', version: '1.0.0', exportName: 'checklistPlugin' },
   { dir: 'toolbox', id: 'gofor.toolbox', name: '自助工具箱', version: '1.0.0', exportName: 'toolboxPlugin' },
@@ -102,6 +102,7 @@ async function buildOne(plugin) {
             'scan',
           ],
           permissions: meta.permissions,
+          provides: { printBlocks: plugin.printBlocks ?? [] },
           renderer: './dist/plugin.js',
         },
       },

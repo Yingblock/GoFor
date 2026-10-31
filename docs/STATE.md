@@ -164,6 +164,9 @@ pnpm exec gofor plugin list --user-data /tmp/gofor-user
 
 ## 最近一次更新
 
+- **2026-10-31 打印数据门控**：插件禁用后 `tasksForDate`/`habitsForDate`/`scheduleForDate`
+  返回空，打印页和模板页不再读到任务/打卡/课表数据。见 `DECISIONS/0017`。
+
 - **2026-10-31 构建期插件外置迁移演示**：12 个插件源码经 `pnpm plugins:build` 打成外部包，
   `BUILTIN_PLUGINS=[]`；PWA 通过 plugin-host 激活完整 PluginContext（页面/首页块/主题/数据/扫描/
   打印归属）。内置 0、外部 12。旧内置 e2e 需要外部 harness，见 `DECISIONS/0016`。
