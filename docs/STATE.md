@@ -110,7 +110,7 @@ journalctl --user -u gofor-preview -f
 pnpm install
 pnpm dev         # http://localhost:5173 ，同局域网手机可访问
 pnpm test        # 单测（core + domain + store + vision + plugins + runtime + cli）
-pnpm e2e         # 真实浏览器冒烟 + 生成 e2e/out/day-sheet.pdf（需先 pnpm build）
+pnpm e2e         # 真实浏览器冒烟 + 生成 e2e/out/day-sheet.pdf（需先 build + plugin:host）
 pnpm typecheck
 pnpm build
 pnpm check       # Biome 自动修复
@@ -163,6 +163,10 @@ pnpm exec gofor plugin list --user-data /tmp/gofor-user
 | 桌面侧栏用 `md:static` | 页面一滚，整列侧栏跟着走；滚出视口后用户以为「点不开」 | 桌面 `md:sticky md:top-0 md:h-screen md:self-start`；e2e 断言滚动后 top≈0 且分组仍可点 |
 
 ## 最近一次更新
+
+- **2026-10-31 bug sweep**：外部扫描 handler 按 owner 注册（此前按贡献 id，
+  导致回填不进 tasks/mood）；`pnpm e2e` 改为 external 模式并自动恢复插件状态；
+  隐藏数据区块时只与相邻可见区块交换；全量 e2e 通过。
 
 - **2026-10-31 打印区块归属**：数据区块按 `provides.printBlocks` 随插件启停；
   模板编辑器隐藏未启用插件的区块，无 owner 的内置区块保留。修复全禁用时

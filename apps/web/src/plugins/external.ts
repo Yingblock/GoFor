@@ -299,7 +299,8 @@ function createExternalContext(
     },
     registerScanHandler(contribution) {
       requirePermission('scan.handle');
-      additions.scanHandlers.set(contribution.id, contribution);
+      // 宿主按 owner（插件 id）分发扫描结果；不能用贡献 id（<pluginId>/scan）。
+      additions.scanHandlers.set(pluginId, contribution);
     },
     registerData(contract) {
       requirePermission('data.provide');

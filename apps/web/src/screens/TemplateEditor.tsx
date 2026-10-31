@@ -501,12 +501,24 @@ export function TemplateEditorScreen({
   }, [currentTemplate.blocks, draft, host.printBlockOwners]);
   const hiddenRowCount = (draft?.blocks ?? currentTemplate.blocks).length - rowEntries.length;
 
+
   const pageCount = layout(blocks, { paper: currentTemplate.paper }).pages.length;
 
   const updateDraft = useCallback((patch: (current: PrintTemplate) => PrintTemplate) => {
     setDraft((current) => (current ? patch(current) : current));
     setNotice(null);
   }, []);
+
+  /** 只和相邻的可见区块交换；隐藏的数据区块不能被上移/下移悄悄跨过去。 */
+  const moveVisible = useCallback(
+    (index: number, delta: -1 | 1) => {
+      const position = rowEntries.findIndex((entry) => entry.index === index);
+      const target = rowEntries[position + delta]?.index;
+      if (target === undefined) return;
+      updateDraft((current) => swapBlocks(current, index, target));
+    },
+    [rowEntries, updateDraft],
+  );
 
   // 行内编辑统一按区块 id 替换：id 是模板内稳定的，不用数组下标，移动/删除后不会串行。
   const replaceBlock = useCallback(
@@ -749,7 +761,7 @@ export function TemplateEditorScreen({
                   <button
                     type="button"
                     aria-label={`上移 ${block.kind}`}
-                    onClick={() => updateDraft((current) => moveBlock(current, index, -1))}
+                    onClick={() => moveVisible(index, -1)}
                     className="px-1 opacity-50"
                   >
                     ↑
@@ -757,7 +769,7 @@ export function TemplateEditorScreen({
                   <button
                     type="button"
                     aria-label={`下移 ${block.kind}`}
-                    onClick={() => updateDraft((current) => moveBlock(current, index, 1))}
+                    onClick={() => moveVisible(index, 1)}
                     className="px-1 opacity-50"
                   >
                     ↓
@@ -845,9 +857,8 @@ export function TemplateEditorScreen({
   );
 }
 
-function moveBlock(template: PrintTemplate, index: number, delta: -1 | 1): PrintTemplate {
-  const target = index + delta;
-  if (target < 0 || target >= template.blocks.length) return template;
+function swapBlocks(template: PrintTemplate, index: number, target: number): PrintTemplate {
+  if (target < 0 || target >= template.blocks.length || target === index) return template;
   const blocks = [...template.blocks];
   const current = blocks[index];
   const other = blocks[target];

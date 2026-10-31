@@ -76,6 +76,39 @@ async function waitForServer(attempts = 40) {
   return false;
 }
 
+const HOST = 'http://127.0.0.1:47822';
+
+/**
+ * 外部插件是 e2e 的前置条件，也是 e2e 会改的状态。
+ * 跑前统一启用、跑完（即使断言/点击失败）统一恢复，避免把用户的插件状态留在
+ * “只剩一个启用”的半残状态——旧版 harness 就漏过这一点。
+ */
+async function readExternalPlugins() {
+  const response = await fetch(`${HOST}/api/plugins/installed`);
+  if (!response.ok) throw new Error(`plugin-host 不可用：HTTP ${response.status}`);
+  const body = await response.json();
+  return body.plugins ?? [];
+}
+
+async function setExternalPlugins(states) {
+  for (const plugin of states) {
+    await fetch(`${HOST}/api/plugins/enable`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: plugin.id,
+        packageName: plugin.packageName,
+        enabled: plugin.enabled,
+      }),
+    });
+  }
+}
+
+async function setAllExternalPlugins(enabled) {
+  const plugins = await readExternalPlugins();
+  await setExternalPlugins(plugins.map((plugin) => ({ ...plugin, enabled })));
+}
+
 /** 展开某个模块分组（已展开则不点，否则会把它收起来）。 */
 async function openGroup(page, title) {
   const button = page.locator('aside button[aria-expanded]').filter({ hasText: title }).first();
@@ -96,6 +129,8 @@ try {
     );
   }
   if (!(await waitForServer())) throw new Error('preview 服务未启动，先跑 pnpm build');
+  const originalExternalPlugins = await readExternalPlugins();
+  await setAllExternalPlugins(true);
 
   const browser = await chromium.launch();
   // 同一个 context 里开多个页：IndexedDB / localStorage / 插件状态共享，
@@ -112,7 +147,8 @@ try {
     if (message.type() === 'error') errors.push(message.text());
   });
 
-  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  // 插件已全部外置：e2e 必须显式启用 external，否则首页只有 core 纸面闭环。
+  await page.goto(`${BASE}/?external=1`, { waitUntil: 'networkidle' });
 
   /* ---------------------------------------------------------- 导航与首页 */
 
@@ -381,6 +417,11 @@ try {
 
   await page.getByRole('button', { name: 'GoFor', exact: true }).click();
   await page.waitForSelector('text=任务提示', { timeout: 5000 });
+  // 外部插件首屏是异步激活的：任务列表要等 liveQuery 把数据填进来，
+  // 否则会在「任务提示」已出现、复选框还没渲染的瞬间数到 0。
+  await page
+    .waitForSelector('input[aria-label^="完成 "]', { timeout: 5000 })
+    .catch(() => undefined);
   // 注意：应用外壳的根是 div.screen-only，不是 <main>；用 aria-label 定位更稳
   const homeBoxes = page.locator('input[aria-label^="完成 "]');
   const before = await homeBoxes.count();
@@ -661,8 +702,8 @@ try {
   await openGroup(page, '导出');
   await clickItem(page, '插件与扩展');
   await page.waitForSelector('text=已注册插件', { timeout: 8000 });
-  const builtinCount = await page.getByText('内置', { exact: true }).count();
-  check('插件目录列出内置插件', builtinCount >= 7, `${builtinCount} 个`);
+  const runtimeCount = await page.getByText('运行时', { exact: true }).count();
+  check('插件目录列出运行时插件', runtimeCount >= 10, `${runtimeCount} 个`);
   check('插件目录显示数据契约', (await page.getByText('sessions.range').count()) > 0);
   check('插件目录说明插件随应用构建', (await page.getByText(/插件随应用构建/).count()) > 0);
 
@@ -721,9 +762,17 @@ try {
   await openGroup(page, '记录');
   await clickItem(page, '自我周报');
   await page.waitForSelector('[data-e2e="report-wordbook"]', { timeout: 8000 });
+  const reportWordbook = await page
+    .waitForFunction(
+      () => document.querySelector('[data-e2e="report-wordbook"]')?.textContent?.includes('2'),
+      { timeout: 5000 },
+    )
+    .then(() => true)
+    .catch(() => false);
   check(
     '周报通过数据契约读到单词库',
-    (await page.locator('[data-e2e="report-wordbook"]').innerText()).includes('2'),
+    reportWordbook,
+    (await page.locator('[data-e2e="report-wordbook"]').innerText()),
   );
 
   // 安装页把「可选依赖」如实标成可用
@@ -766,9 +815,17 @@ try {
   await openGroup(page, '工具');
   await clickItem(page, '单词库');
   await page.waitForSelector('[data-e2e="wordbook-count"]', { timeout: 8000 });
+  const wordbookKept = await page
+    .waitForFunction(
+      () => document.querySelector('[data-e2e="wordbook-count"]')?.textContent?.includes('2 个词'),
+      { timeout: 5000 },
+    )
+    .then(() => true)
+    .catch(() => false);
   check(
     '重新启用后单词库数据还在',
-    (await page.locator('[data-e2e="wordbook-count"]').innerText()).includes('2 个词'),
+    wordbookKept,
+    await page.locator('[data-e2e="wordbook-count"]').innerText(),
   );
 
   // 功能插件被禁用后：侧栏消失、深链回首页；打印仍读 core 数据，不受影响
@@ -896,7 +953,8 @@ try {
   await openGroup(page, '导出');
   await clickItem(page, '插件与扩展');
   const pdfBeforeTheme = await page.pdf({ printBackground: true, preferCSSPageSize: true });
-  await page.getByRole('button', { name: '启用 护眼主题' }).click();
+  const enableTheme = page.getByRole('button', { name: '启用 护眼主题' });
+  if ((await enableTheme.count()) > 0) await enableTheme.click();
   await page.waitForTimeout(500);
 
   const screenPaper = await page
@@ -1504,6 +1562,11 @@ try {
 
   await browser.close();
 } finally {
+  try {
+    await setExternalPlugins(originalExternalPlugins);
+  } catch {
+    // 宿主没起来时上面的失败已经足够说明问题，不在 finally 里掩盖它。
+  }
   await stopServer();
 }
 

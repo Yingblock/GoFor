@@ -87,7 +87,7 @@
 | `pnpm test` | 0.3 s |
 | `pnpm typecheck` | 2–5 s |
 | `pnpm build` | 1–2 s |
-| `pnpm e2e`（起浏览器 + PDF） | 15–30 s |
+| `pnpm e2e`（起浏览器 + PDF，需 plugin-host） | 15–30 s |
 | Playwright 截图脚本 | 10–20 s |
 | 首次安装 Playwright 浏览器 | 1 m 31 s |
 | `pnpm install`（新增依赖） | 10 s – 1 m |

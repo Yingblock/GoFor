@@ -62,7 +62,7 @@ pnpm build       # 构建 PWA 产物到 apps/web/dist（保留旧 assets；干�
 pnpm test        # 单测（core + store + vision + plugin-runtime + plugin-cli）
 pnpm typecheck   # 全量类型检查
 pnpm check       # Biome 自动修复
-pnpm e2e         # 真实浏览器冒烟，需先 build；生成 e2e/out/day-sheet.pdf
+pnpm e2e         # 真实浏览器冒烟；需先 build 并启动 pnpm plugin:host；生成 e2e/out/day-sheet.pdf
 pnpm verify      # typecheck + test + build + e2e（提交前必须全绿）
 
 # 运行时插件（P3.7，见 docs/PLUGIN-RUNTIME.md）
