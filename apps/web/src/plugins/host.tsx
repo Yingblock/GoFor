@@ -75,6 +75,7 @@ import type {
   RegisteredConverter,
   RegisteredCss,
   RegisteredHomeBlock,
+  RegisteredPrintTemplate,
   RegisteredSlot,
   RegisteredTheme,
   ScreenEntry,
@@ -85,6 +86,7 @@ import { sanitizeThemeTokens, scopePluginCss } from './uiExtensions.ts';
 interface Collected {
   screens: ScreenContribution[];
   homeBlocks: HomeBlockContribution[];
+  printTemplates: import('@gofor/core/print').PrintTemplate[];
   commands: CommandContribution[];
   slots: SlotContribution[];
   themes: ThemeContribution[];
@@ -102,6 +104,7 @@ function emptyCollected(): Collected {
   return {
     screens: [],
     homeBlocks: [],
+    printTemplates: [],
     commands: [],
     slots: [],
     themes: [],
@@ -128,6 +131,7 @@ function emptySnapshot(): HostSnapshot {
     plugins: [],
     screens: [],
     homeBlocks: [],
+    printTemplates: [],
     nav: buildNav([]),
     commands: [],
     shortcuts: [],
@@ -326,6 +330,14 @@ function createPluginContext(input: {
       requireNamespaced(contribution.id);
       if (contribution.title.trim() === '') throw new Error('首页块 title 不能为空');
       collector.homeBlocks.push(contribution);
+    },
+    registerPrintTemplate(template) {
+      requirePermission('print.template');
+      const candidate = template as { id?: unknown; name?: unknown };
+      if (typeof candidate.id !== 'string' || typeof candidate.name !== 'string') {
+        throw new Error('registerPrintTemplate 参数非法：需要 { id, name, blocks, paper }');
+      }
+      collector.printTemplates.push(template as import('@gofor/core/print').PrintTemplate);
     },
     registerCommand(contribution) {
       requirePermission('command');
@@ -616,6 +628,7 @@ async function buildPluginHost(input: {
     }));
 
   // 7. 插槽 / 主题 / CSS / 内容模块 / 转换器。
+  const printTemplates: RegisteredPrintTemplate[] = [];
   const homeBlocks: RegisteredHomeBlock[] = [
     {
       id: 'core.paper',
@@ -649,6 +662,18 @@ async function buildPluginHost(input: {
         order: block.order ?? 100,
         span: block.span ?? 1,
         load: block.load,
+      });
+    }
+    for (const template of collector.printTemplates) {
+      if (printTemplates.some((entry) => entry.id === template.id)) {
+        conflicts.push(`打印模板 id ${template.id} 重复，已忽略「${pluginId}」`);
+        continue;
+      }
+      printTemplates.push({
+        id: template.id,
+        name: template.name,
+        pluginId,
+        template,
       });
     }
     for (const slot of collector.slots) {
@@ -834,6 +859,7 @@ async function buildPluginHost(input: {
       shortcuts: findShortcutConflicts(bindings),
       conflicts,
       homeBlocks,
+      printTemplates,
       slots,
       themes,
       css,
@@ -995,6 +1021,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
               })),
           ),
           homeBlocks: [...result.snapshot.homeBlocks, ...external.homeBlocks],
+          printTemplates: [...result.snapshot.printTemplates, ...external.printTemplates],
           commands: [...result.snapshot.commands, ...external.commands],
           slots: [...result.snapshot.slots, ...external.slots],
           themes: [...result.snapshot.themes, ...external.themes],

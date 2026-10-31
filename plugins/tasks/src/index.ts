@@ -1,4 +1,5 @@
 import { PLUGIN_API_VERSION, type PluginModule } from '@gofor/plugin-api';
+import { TASKS_PRINT_TEMPLATES } from './printTemplates.ts';
 import { pluginStore } from '@gofor/plugin-kit/store';
 
 export const tasksPlugin: PluginModule = {
@@ -9,7 +10,7 @@ export const tasksPlugin: PluginModule = {
     apiVersion: PLUGIN_API_VERSION,
     description: '截止、必做/选做、步骤、标签池与上下移动。',
     author: 'GoFor',
-    permissions: ['ui.screen', 'ui.home', 'scan.handle'],
+    permissions: ['ui.screen', 'ui.home', 'print.template', 'scan.handle'],
     provides: {
       screens: ['gofor.tasks/screen'],
       printBlocks: ['checkboxList'],
@@ -17,6 +18,10 @@ export const tasksPlugin: PluginModule = {
     },
   },
   activate(context) {
+    for (const template of TASKS_PRINT_TEMPLATES) {
+      context.registerPrintTemplate(template);
+    }
+
     context.registerScreen({
       id: 'gofor.tasks/screen',
       title: '作业清单',

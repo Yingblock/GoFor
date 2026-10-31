@@ -51,6 +51,13 @@ export interface HostCommand {
   run(): void | Promise<void>;
 }
 
+export interface RegisteredPrintTemplate {
+  id: string;
+  name: string;
+  pluginId: string;
+  template: import('@gofor/core/print').PrintTemplate;
+}
+
 export interface RegisteredHomeBlock {
   id: string;
   title: string;
@@ -181,6 +188,7 @@ export interface HostSnapshot {
   /** 注册冲突 / 数据 provider 冲突等需要告诉用户的问题。 */
   conflicts: string[];
   homeBlocks: RegisteredHomeBlock[];
+  printTemplates: RegisteredPrintTemplate[];
   slots: RegisteredSlot[];
   themes: RegisteredTheme[];
   css: RegisteredCss[];

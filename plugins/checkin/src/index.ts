@@ -1,4 +1,5 @@
 import { PLUGIN_API_VERSION, type PluginModule } from '@gofor/plugin-api';
+import { CHECKIN_PRINT_TEMPLATES } from './printTemplates.ts';
 import { pluginStore } from '@gofor/plugin-kit/store';
 
 export const checkinPlugin: PluginModule = {
@@ -9,7 +10,7 @@ export const checkinPlugin: PluginModule = {
     apiVersion: PLUGIN_API_VERSION,
     description: '周几重复 / 起止日期；未来不渲染、过去只读，只写今天。',
     author: 'GoFor',
-    permissions: ['ui.screen', 'ui.home', 'scan.handle'],
+    permissions: ['ui.screen', 'ui.home', 'print.template', 'scan.handle'],
     provides: {
       screens: ['gofor.checkin/screen'],
       printBlocks: ['habitRow', 'checkboxGrid'],
@@ -17,6 +18,10 @@ export const checkinPlugin: PluginModule = {
     },
   },
   activate(context) {
+    for (const template of CHECKIN_PRINT_TEMPLATES) {
+      context.registerPrintTemplate(template);
+    }
+
     context.registerScreen({
       id: 'gofor.checkin/screen',
       title: '每日打卡',

@@ -40,6 +40,8 @@ export interface PluginContext {
 
   registerScreen(contribution: ScreenContribution): void;
   registerHomeBlock(contribution: HomeBlockContribution): void;
+  /** 注册打印模板；具体结构由 core/print 提供，契约包不反向依赖 core。 */
+  registerPrintTemplate(template: unknown): void;
   registerCommand(contribution: CommandContribution): void;
   registerSlot(contribution: SlotContribution): void;
   registerTheme(contribution: ThemeContribution): void;

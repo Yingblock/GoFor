@@ -285,12 +285,25 @@ function AppShell() {
   const paper: PaperId = config?.print.paper ?? 'A4';
   const templateId = config?.print.template ?? DEFAULT_PRINT_TEMPLATE;
 
+  const registeredTemplates = useMemo(
+    () => host.printTemplates.map((entry) => entry.template),
+    [host.printTemplates],
+  );
   const printTemplate = useMemo(
-    () => resolvePrintTemplate(templateId, paper, customTemplates),
-    [customTemplates, paper, templateId],
+    () =>
+      resolvePrintTemplate(templateId, paper, registeredTemplates, customTemplates) ?? {
+        id: '__none__',
+        name: '没有可用模板',
+        paper,
+        blocks: [],
+      },
+    [customTemplates, paper, registeredTemplates, templateId],
   );
 
-  const templateChoices = useMemo(() => printTemplateChoices(customTemplates), [customTemplates]);
+  const templateChoices = useMemo(
+    () => printTemplateChoices(registeredTemplates, customTemplates),
+    [registeredTemplates, customTemplates],
+  );
 
   // 纸面数据也必须跟随插件可用性；不能只隐藏区块却继续把数据交给模板。
 
@@ -617,6 +630,7 @@ function AppShell() {
             <ScanCoreScreen
               pluginId="core"
               screenId="scan"
+              templates={registeredTemplates}
               host={{
                 ...host,
                 storage: host.storageFor('core'),
@@ -628,6 +642,7 @@ function AppShell() {
       case 'templates':
         return (
           <TemplateEditorScreen
+            templates={registeredTemplates}
             buildSheetData={buildSheetData}
             initialTemplateId={printTemplate.id}
             initialPaper={paper}

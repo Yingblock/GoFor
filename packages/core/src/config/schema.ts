@@ -24,7 +24,7 @@ export const focusUnitSchema = z.union([z.literal('period'), z.number().int().mi
 /**
  * 默认打印模板的 id。
  *
- * 与 `packages/core/src/print/templates.ts` 的 `BUILTIN_TEMPLATES[0]`（`'day'`）一致。
+ * 默认值；实际模板由插件注册，找不到 `day` 时回退第一个注册模板。
  * 放在这里同时作为 schema 缺省值：**旧版本配置里没有 `print.template` 时，
  * zod 用它补齐而不是让整份配置校验失败**——否则升级后用户的课表、纸张、
  * 扫描阈值会全部退回出厂默认（与 backupSchema 是同一类坑）。

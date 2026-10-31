@@ -1,4 +1,5 @@
 import { PLUGIN_API_VERSION, type PluginModule } from '@gofor/plugin-api';
+import { TIMETABLE_PRINT_TEMPLATES } from './printTemplates.ts';
 
 export const timetablePlugin: PluginModule = {
   manifest: {
@@ -8,7 +9,7 @@ export const timetablePlugin: PluginModule = {
     apiVersion: PLUGIN_API_VERSION,
     description: '学期 / 作息表 / 科目 / 排课规则；周视图与换课。',
     author: 'GoFor',
-    permissions: ['ui.screen', 'ui.home'],
+    permissions: ['ui.screen', 'ui.home', 'print.template'],
     provides: { screens: ['gofor.timetable/screen'], printBlocks: ['schedule'] },
   },
   activate(context) {
@@ -22,6 +23,10 @@ export const timetablePlugin: PluginModule = {
         return { default: module.TimetableHomeBlock };
       },
     });
+
+    for (const template of TIMETABLE_PRINT_TEMPLATES) {
+      context.registerPrintTemplate(template);
+    }
 
     context.registerScreen({
       id: 'gofor.timetable/screen',

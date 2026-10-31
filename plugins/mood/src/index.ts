@@ -1,4 +1,5 @@
 import { PLUGIN_API_VERSION, type PluginModule } from '@gofor/plugin-api';
+import { MOOD_PRINT_TEMPLATES } from './printTemplates.ts';
 import { pluginStore } from '@gofor/plugin-kit/store';
 
 export const moodPlugin: PluginModule = {
@@ -9,7 +10,7 @@ export const moodPlugin: PluginModule = {
     apiVersion: PLUGIN_API_VERSION,
     description: '睡眠 / 心情 / 专注三个 1–5 分，纸上也能勾。',
     author: 'GoFor',
-    permissions: ['ui.screen', 'scan.handle'],
+    permissions: ['ui.screen', 'print.template', 'scan.handle'],
     provides: {
       screens: ['gofor.mood/screen'],
       printBlocks: ['ratingGrid'],
@@ -17,6 +18,10 @@ export const moodPlugin: PluginModule = {
     },
   },
   activate(context) {
+    for (const template of MOOD_PRINT_TEMPLATES) {
+      context.registerPrintTemplate(template);
+    }
+
     context.registerScreen({
       id: 'gofor.mood/screen',
       title: '三格自评',

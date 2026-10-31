@@ -13,12 +13,7 @@
 import type { StoredTemplate } from '../domain/entities.ts';
 import { BLOCK_KINDS } from './blocks.ts';
 import { PAPER_IDS, type PaperId } from './paper.ts';
-import {
-  BUILTIN_TEMPLATES,
-  CALIBRATION_TEMPLATE,
-  type PrintTemplate,
-  paperFor,
-} from './templates.ts';
+import { type PrintTemplate, paperForTemplate } from './templates.ts';
 
 /** 模板下拉里的一项。 */
 export interface PrintTemplateChoice {
@@ -27,12 +22,6 @@ export interface PrintTemplateChoice {
   /** 用户模板（可编辑），内置模板是常量、只读。 */
   custom: boolean;
 }
-
-/** 内置模板 + 校准页。校准页不进 `BUILTIN_TEMPLATES`，但它同样可被选为打印模板。 */
-export const PRINT_TEMPLATE_CONSTANTS: readonly PrintTemplate[] = [
-  ...BUILTIN_TEMPLATES,
-  CALIBRATION_TEMPLATE,
-];
 
 const BLOCK_KIND_SET = new Set<string>(BLOCK_KINDS);
 
@@ -165,14 +154,20 @@ export function parseStoredTemplate(json: string): PrintTemplate | null {
   };
 }
 
-/** 内置模板或校准页的 id（不需要查库就能解析）。 */
-export function isBuiltinTemplateId(id: string): boolean {
-  return PRINT_TEMPLATE_CONSTANTS.some((template) => template.id === id);
+/** 是否存在某个已注册模板（插件注册，不在 core 内置）。 */
+export function isRegisteredTemplateId(
+  id: string,
+  templates: readonly PrintTemplate[],
+): boolean {
+  return templates.some((template) => template.id === id);
 }
 
-/** 下拉列表：内置（含校准页）+ 用户模板；坏数据跳过。 */
-export function printTemplateChoices(customs: StoredTemplate[]): PrintTemplateChoice[] {
-  const builtin: PrintTemplateChoice[] = PRINT_TEMPLATE_CONSTANTS.map((template) => ({
+/** 下拉列表：插件注册模板 + 用户模板；坏数据跳过。 */
+export function printTemplateChoices(
+  templates: readonly PrintTemplate[],
+  customs: StoredTemplate[],
+): PrintTemplateChoice[] {
+  const registered: PrintTemplateChoice[] = templates.map((template) => ({
     id: template.id,
     name: template.name,
     custom: false,
@@ -185,31 +180,30 @@ export function printTemplateChoices(customs: StoredTemplate[]): PrintTemplateCh
     custom.push({ id: parsed.id, name: parsed.name, custom: true });
   }
 
-  return [...builtin, ...custom];
+  return [...registered, ...custom];
 }
 
 /**
  * 按「配置里的模板 id + 配置里的纸张」拿到当前应打印的模板。
  *
- * - 内置 / 校准：走 `paperFor()`，A5 等小纸会自动换精简行数；
- * - 用户模板：JSON 里存的是自己的默认纸张，这里**用配置的纸张覆盖**，
- *   因为纸张是全局打印设置，切换后必须真的重排；
- * - 找不到 / 坏数据：回退到默认「我的一天」，绝不让打印页白屏。
+ * 模板只能来自插件注册或用户模板；core 不再内置任何模板。
+ * 找不到时回退到第一个已注册模板；一个都没有时返回 null。
  */
 export function resolvePrintTemplate(
   templateId: string,
   paper: PaperId,
+  templates: readonly PrintTemplate[],
   customs: StoredTemplate[],
-): PrintTemplate {
-  if (isBuiltinTemplateId(templateId)) {
-    return paperFor(templateId, paper);
-  }
+): PrintTemplate | null {
+  const registered = templates.find((template) => template.id === templateId);
+  if (registered) return paperForTemplate(registered, paper);
 
   const stored = customs.find((template) => template.id === templateId);
   const parsed = stored ? parseStoredTemplate(stored.json) : null;
   if (parsed) return { ...parsed, paper };
 
-  return paperFor(PRINT_TEMPLATE_CONSTANTS[0]?.id ?? 'day', paper);
+  const fallback = templates[0];
+  return fallback ? paperForTemplate(fallback, paper) : null;
 }
 
 /**
@@ -218,8 +212,13 @@ export function resolvePrintTemplate(
  */
 export const CUSTOM_TEMPLATE_PREFIX = 'custom:';
 
-export function editorSelectionId(templateId: string): string {
-  return isBuiltinTemplateId(templateId) ? templateId : `${CUSTOM_TEMPLATE_PREFIX}${templateId}`;
+export function editorSelectionId(
+  templateId: string,
+  templates: readonly PrintTemplate[],
+): string {
+  return isRegisteredTemplateId(templateId, templates)
+    ? templateId
+    : `${CUSTOM_TEMPLATE_PREFIX}${templateId}`;
 }
 
 export function customIdFromSelection(selectionId: string): string | null {

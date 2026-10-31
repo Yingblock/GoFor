@@ -73,17 +73,14 @@ export {
   CUSTOM_TEMPLATE_PREFIX,
   customIdFromSelection,
   editorSelectionId,
-  isBuiltinTemplateId,
-  PRINT_TEMPLATE_CONSTANTS,
+  isRegisteredTemplateId,
   type PrintTemplateChoice,
   parseStoredTemplate,
   printTemplateChoices,
   resolvePrintTemplate,
 } from './templateResolution.ts';
 export {
-  BUILTIN_TEMPLATES,
-  CALIBRATION_TEMPLATE,
   materialize,
   type PrintTemplate,
-  paperFor,
+  paperForTemplate,
 } from './templates.ts';
