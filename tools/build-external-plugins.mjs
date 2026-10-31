@@ -23,7 +23,7 @@ const PLUGINS = [
   { dir: 'wordbook', id: 'gofor.wordbook', name: '单词库', version: '1.0.0', exportName: 'wordbookPlugin' },
   { dir: 'report', id: 'gofor.report', name: '自我周报', version: '1.0.0', exportName: 'reportPlugin' },
   { dir: 'theme', id: 'gofor.theme.sepia', name: '护眼主题', version: '1.0.0', exportName: 'sepiaThemePlugin' },
-  { dir: 'converter', id: 'gofor.converter.text', name: '文本转换', version: '1.0.0', exportName: 'textConverterPlugin' },
+  { dir: 'converter', id: 'gofor.convert', name: '纯文本转换', version: '1.0.0', exportName: 'textConverterPlugin' },
 ];
 
 async function readManifestMetadata(plugin) {

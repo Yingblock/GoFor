@@ -216,6 +216,53 @@ export async function startPluginHost(options: PluginHostOptions): Promise<Plugi
         return;
       }
 
+      // 已安装（包括被禁用）插件：刷新后仍能在插件目录里重新启用。
+      if (request.method === 'GET' && pathname === '/api/plugins/installed') {
+        const pluginsRoot = join(options.userDataDir, 'plugins', 'node_modules');
+        const active = new Set(
+          manager
+            .snapshot()
+            .plugins.filter((plugin) => plugin.state === 'active')
+            .map((plugin) => plugin.packageName),
+        );
+        const installed: unknown[] = [];
+        if (existsSync(pluginsRoot)) {
+          for (const packageName of readdirSync(pluginsRoot)) {
+            try {
+              const manifest = JSON.parse(
+                readFileSync(join(pluginsRoot, packageName, 'package.json'), 'utf8'),
+              ) as {
+                gofor?: {
+                  id?: unknown;
+                  displayName?: unknown;
+                  version?: unknown;
+                  capabilities?: unknown;
+                  permissions?: unknown;
+                  renderer?: unknown;
+                };
+              };
+              const gofor = manifest.gofor;
+              if (typeof gofor?.id !== 'string') continue;
+              installed.push({
+                id: gofor.id,
+                packageName,
+                displayName:
+                  typeof gofor.displayName === 'string' ? gofor.displayName : gofor.id,
+                version: typeof gofor.version === 'string' ? gofor.version : '0.0.0',
+                capabilities: Array.isArray(gofor.capabilities) ? gofor.capabilities : [],
+                permissions: Array.isArray(gofor.permissions) ? gofor.permissions : [],
+                renderer: typeof gofor.renderer === 'string' ? gofor.renderer : null,
+                enabled: active.has(packageName),
+              });
+            } catch {
+              // 忽略坏包
+            }
+          }
+        }
+        json(response, 200, { plugins: installed });
+        return;
+      }
+
       if (request.method === 'POST' && pathname === '/api/plugins/enable') {
         const body = await readJson(request);
         if (

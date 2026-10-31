@@ -75,6 +75,17 @@ interface ExternalCommand {
   pluginId: string;
   packageName: string;
 }
+interface InstalledPlugin {
+  id: string;
+  packageName: string;
+  displayName: string;
+  version: string;
+  capabilities: string[];
+  permissions: string[];
+  renderer: string | null;
+  enabled: boolean;
+}
+
 interface ExternalSnapshot {
   version: number;
   plugins: PluginStatus[];
@@ -384,6 +395,19 @@ async function fetchSnapshot(): Promise<ExternalSnapshot | null> {
   }
 }
 
+async function fetchInstalled(): Promise<InstalledPlugin[]> {
+  try {
+    const response = await fetch(`${externalHostOrigin()}/api/plugins/installed`, {
+      signal: AbortSignal.timeout(800),
+    });
+    if (!response.ok) return [];
+    const body = (await response.json()) as { plugins?: unknown };
+    return Array.isArray(body.plugins) ? (body.plugins as InstalledPlugin[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function externalPluginsEnabled(): boolean {
   try {
     if (new URLSearchParams(window.location.search).get('external') === '1') return true;
@@ -407,6 +431,7 @@ export async function loadExternalPlugins(
   if (!externalPluginsEnabled()) return null;
   const snapshot = await fetchSnapshot();
   if (!snapshot) return null;
+  const installed = await fetchInstalled();
 
   const conflicts: string[] = [];
   const screens: ScreenEntry[] = [];
@@ -460,6 +485,35 @@ export async function loadExternalPlugins(
       packageName: status.packageName,
     });
   }
+
+  const installedIds = new Set(installed.map((plugin) => plugin.id));
+  for (const plugin of installed) {
+    if (activeById.has(plugin.id)) continue;
+    if (plugins.some((info) => info.id === plugin.id)) continue;
+    plugins.push({
+      id: plugin.id,
+      name: plugin.displayName,
+      version: plugin.version,
+      kind: 'installed',
+      enabled: false,
+      permissions: [...plugin.permissions],
+      unknownPermissions: [],
+      activationError: null,
+      blockedReason: null,
+      consumes: [],
+      providesData: [],
+      screens: [],
+      commands: [],
+      contentModules: [],
+      themes: [],
+      converters: [],
+      installedAt: 0,
+      external: true,
+      packageName: plugin.packageName,
+    });
+  }
+  // 宿主可能安装了但快照里没有的插件（例如刚被禁用）；上面的 installed 已覆盖。
+  void installedIds;
 
   // 迁移后的构建期插件：renderer 导出完整 pluginModule，用宿主 PluginContext 原样激活。
   const activated = new Set<string>();
