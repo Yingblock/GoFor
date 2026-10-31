@@ -19,7 +19,7 @@
   `resolvePrintTemplate(id, paper, templates, customs)`、
   `printTemplateChoices(templates, customs)`。
 - App / PrintScreen / TemplateEditor / Scan 全部使用 `host.printTemplates`。
-- 没有任何插件模板时显示“没有可用模板”，打印页为空，不回退到内置模板。
+- 没有任何插件/用户模板时不渲染打印页壳、模板选择器和打印层，只显示空态；不回退到内置模板。
 
 ## 影响
 

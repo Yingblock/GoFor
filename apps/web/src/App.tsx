@@ -24,7 +24,7 @@ import {
   saveSheetManifest,
   sheetManifestId,
 } from '@gofor/store';
-import { cn } from '@gofor/ui';
+import { cn, EmptyState } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   lazy,
@@ -304,6 +304,8 @@ function AppShell() {
     () => printTemplateChoices(registeredTemplates, customTemplates),
     [registeredTemplates, customTemplates],
   );
+  /** 没有任何插件/用户模板时不渲染打印页壳、模板选择器和打印层。 */
+  const hasPrintTemplates = templateChoices.length > 0;
 
   // 纸面数据也必须跟随插件可用性；不能只隐藏区块却继续把数据交给模板。
 
@@ -362,13 +364,7 @@ function AppShell() {
         habits: sheetHabits,
       };
     },
-    [
-      buildSheetData,
-      habitsForDate,
-      host.printBlockOwners,
-      printTemplate,
-      tasksForDate,
-    ],
+    [buildSheetData, habitsForDate, host.printBlockOwners, printTemplate, tasksForDate],
   );
 
   /** 当前打印队列（1 天或连续 N 天）。默认今天，进打印页后会改成明天。 */
@@ -640,6 +636,13 @@ function AppShell() {
           </Suspense>
         );
       case 'templates':
+        if (!hasPrintTemplates) {
+          return (
+            <EmptyState size="md">
+              没有可编辑的打印模板。启用一个提供打印模板的插件后再来。
+            </EmptyState>
+          );
+        }
         return (
           <TemplateEditorScreen
             templates={registeredTemplates}
@@ -650,6 +653,13 @@ function AppShell() {
           />
         );
       case 'print':
+        if (!hasPrintTemplates) {
+          return (
+            <EmptyState size="md">
+              没有插件提供打印模板。启用一个提供打印模板的插件后，打印页才会出现。
+            </EmptyState>
+          );
+        }
         return (
           <PrintScreen
             blocks={selectedSheet.blocks}
@@ -801,7 +811,7 @@ function AppShell() {
       </div>
 
       {/* 打印层必须在 .screen-only 之外，否则打印时被一起隐藏成白纸 */}
-      <PrintLayer paper={paper} sheets={printSheets} />
+      {hasPrintTemplates ? <PrintLayer paper={paper} sheets={printSheets} /> : null}
       <input
         ref={fileInputRef}
         type="file"
