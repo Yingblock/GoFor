@@ -11,7 +11,6 @@
 
 export const PLUGIN_PERMISSIONS = [
   'ui.screen',
-  'print.template',
   'ui.home',
   'ui.slot',
   'ui.theme',
@@ -38,7 +37,6 @@ export type PluginPermission = (typeof PLUGIN_PERMISSIONS)[number];
  */
 export const PERMISSION_LABELS: Readonly<Record<PluginPermission, string>> = {
   'ui.screen': '新增一个自己的页面（出现在侧栏）',
-  'print.template': '注册打印模板（决定纸上印什么）',
   'ui.home': '在首页注册一块内容（可拖拽排序）',
   'ui.slot': '在首页/页头/侧栏的固定位置追加内容',
   'ui.theme': '修改屏幕层的颜色等主题变量（改不到纸上）',

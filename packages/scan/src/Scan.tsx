@@ -6,11 +6,11 @@ import {
   type SheetManifestRecord,
 } from '@gofor/core/domain';
 import {
-  isRegisteredTemplateId,
+  isBuiltinTemplateId,
   materialize,
   PAPER_IDS,
   type PaperId,
-  type PrintTemplate,
+  PRINT_TEMPLATE_CONSTANTS,
   parseStoredTemplate,
   resolvePrintTemplate,
   todayLabel,
@@ -73,12 +73,10 @@ export function ScanScreen({
   applyScan,
   tasksAvailable = true,
   loadTasks,
-  templates,
 }: {
   store: PluginStoreApi;
   onOpenPrint?: () => void;
   tasksAvailable?: boolean;
-  templates: readonly PrintTemplate[];
   loadTasks: () => Promise<import('@gofor/core/domain').Task[]>;
   applyScan: (
     results: readonly import('@gofor/core/domain').ScanResult[],
@@ -239,7 +237,7 @@ export function ScanScreen({
           templateId = record.templateId;
         } else {
           // 清单丢了但模板还在（换了设备、清了库）：短码能反查出模板，后面可以重建。
-          templateId = (await findTemplateIdByToken(store, templates, code.token)) ?? '';
+          templateId = (await findTemplateIdByToken(store, code.token)) ?? '';
           if (templateId === '') {
             setError(
               '条码读出来了，但本机既没有这张纸的坐标记录，也找不到对应模板。' +
@@ -332,7 +330,7 @@ export function ScanScreen({
       }
 
       const customs = await store.listTemplates();
-      if (!isRegisteredTemplateId(missing.templateId, templates)) {
+      if (!isBuiltinTemplateId(missing.templateId)) {
         const stored = customs.find((template) => template.id === missing.templateId);
         if (stored === undefined || parseStoredTemplate(stored.json) === null) {
           setError('找不到这张纸用的模板（可能已经删了），没法重建坐标。重新打印一次再扫。');
@@ -341,11 +339,7 @@ export function ScanScreen({
       }
 
       const paper = missing.paper as PaperId;
-      const template = resolvePrintTemplate(missing.templateId, paper, templates, customs);
-      if (!template) {
-        setError('没有插件提供可用打印模板，没法重建坐标。');
-        return;
-      }
+      const template = resolvePrintTemplate(missing.templateId, paper, customs);
       const tasks = tasksAvailable ? await loadTasks() : [];
       const blocks = materialize(template, {
         date: missing.date,
@@ -616,12 +610,11 @@ export function ScanScreen({
  */
 async function findTemplateIdByToken(
   store: PluginStoreApi,
-  templates: readonly PrintTemplate[],
   token: string,
 ): Promise<string | null> {
   const customs = await store.listTemplates();
   const ids = new Set<string>([
-    ...templates.map((template) => template.id),
+    ...PRINT_TEMPLATE_CONSTANTS.map((template) => template.id),
     ...customs.map((template) => template.id),
   ]);
   const hits = [...ids].filter((id) => sheetCodeToken(id) === token);

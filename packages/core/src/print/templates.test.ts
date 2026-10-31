@@ -11,9 +11,10 @@ import type { PaperId } from './paper.ts';
 import {
   BUILTIN_TEMPLATES,
   CALIBRATION_TEMPLATE,
+  materialize,
+  type PrintTemplate,
   paperFor,
-} from './templates.testFixtures.ts';
-import { materialize, type PrintTemplate } from './templates.ts';
+} from './templates.ts';
 
 const CONTEXT = { date: '2026-03-05', dateLabel: '2026 年 3 月 5 日' };
 

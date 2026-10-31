@@ -106,7 +106,7 @@ core **不再写死首页内容**：任务、打卡、课表、统计、主行�
 
 构建期插件不能 `import '@gofor/store'`；用 `pluginStore(host.store)`（或 `context.store`）
 调用宿主授权的能力。宿主按 pluginId 维护 allowlist，越权调用运行期抛错。
-`pnpm check:boundaries` 检查 47 个插件源文件，发现直接 import store 直接失败。
+`pnpm check:boundaries` 检查 43 个插件源文件，发现直接 import store 直接失败。
 
 - `Task` 与 `@gofor/core/domain` 同形（id/title/subjectId/done/due/optional/subtasks/tags/sortKey/
   createdAt/updatedAt），定义在 `@gofor/contracts`，插件不需要依赖 monorepo 源码。

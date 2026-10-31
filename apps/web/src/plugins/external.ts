@@ -124,7 +124,6 @@ export interface ExternalAdditions {
   printBlockOwners: PrintBlockOwnerInfo[];
   scanPayloadOwners: Record<string, string>;
   plugins: PluginInfo[];
-  printTemplates: import('./types.ts').RegisteredPrintTemplate[];
   dataContracts: DataContractEntry[];
   dataProviders: DataProviderSummary[];
   scanHandlers: Map<string, ScanHandlerContribution>;
@@ -224,19 +223,6 @@ function createExternalContext(
         order: contribution.order ?? 100,
         span: contribution.span ?? 1,
         load: contribution.load,
-      });
-    },
-    registerPrintTemplate(template) {
-      requirePermission('print.template');
-      const candidate = template as { id?: unknown; name?: unknown };
-      if (typeof candidate.id !== 'string' || typeof candidate.name !== 'string') {
-        throw new Error('registerPrintTemplate 参数非法');
-      }
-      additions.printTemplates.push({
-        id: candidate.id,
-        name: candidate.name,
-        pluginId,
-        template: template as import('@gofor/core/print').PrintTemplate,
       });
     },
     registerCommand(contribution) {
@@ -491,7 +477,6 @@ export async function loadExternalPlugins(
   const printBlockOwners: PrintBlockOwnerInfo[] = [];
   const scanPayloadOwners: Record<string, string> = {};
   const plugins: PluginInfo[] = [];
-  const printTemplates: import('./types.ts').RegisteredPrintTemplate[] = [];
   const dataContracts: DataContractEntry[] = [];
   const dataProviders: DataProviderSummary[] = [];
   const scanHandlers = new Map<string, ScanHandlerContribution>();
@@ -584,7 +569,6 @@ export async function loadExternalPlugins(
           printBlockOwners,
           scanPayloadOwners,
           plugins,
-          printTemplates,
           dataContracts,
           dataProviders,
           scanHandlers,
@@ -791,7 +775,6 @@ export async function loadExternalPlugins(
     printBlockOwners,
     scanPayloadOwners,
     plugins,
-    printTemplates,
     dataContracts,
     dataProviders,
     scanHandlers,

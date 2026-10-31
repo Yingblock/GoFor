@@ -2,15 +2,16 @@ import { newId } from '@gofor/core';
 import { dateKey } from '@gofor/core/domain';
 import {
   type Block,
+  BUILTIN_TEMPLATES,
+  CALIBRATION_TEMPLATE,
   isPrintBlockKindAvailable,
-  isRegisteredTemplateId,
   layout,
   materialize,
   PAPER_IDS,
   PAPER_SIZES,
   type PaperId,
   type PrintTemplate,
-  paperForTemplate,
+  paperFor,
   resolvePrintBlocks,
 } from '@gofor/core/print';
 import { db, listTemplates, putTemplate } from '@gofor/store';
@@ -376,8 +377,6 @@ function BlockFields({ block, onChange }: { block: Block; onChange: (next: Block
 }
 
 export interface TemplateEditorScreenProps {
-  /** 插件注册的打印模板；core 不再内置模板。 */
-  templates: readonly PrintTemplate[];
   /** 按日期现算纸面数据（任务/课表/备注/打卡/二维码），与打印页同一份逻辑。 */
   buildSheetData: (date: string, templateId: string) => SheetData;
   /** 配置里当前的模板 id：进页面就选中它，避免「看到的不是要打印的那张」。 */
@@ -393,7 +392,6 @@ export interface TemplateEditorScreenProps {
 
 /** 离线·M3 模板与校准页：选模板、改区块、换纸张、预览、打印。 */
 export function TemplateEditorScreen({
-  templates,
   buildSheetData,
   initialTemplateId,
   initialPaper,
@@ -402,12 +400,7 @@ export function TemplateEditorScreen({
   const today = dateKey(appClock);
   const host = usePluginHost();
   const [previewDate, setPreviewDate] = useState<string>(() => addDays(today, 1));
-  const [selectedId, setSelectedId] = useState<string>(() => {
-    const initial = isRegisteredTemplateId(initialTemplateId, templates)
-      ? initialTemplateId
-      : (templates[0]?.id ?? initialTemplateId);
-    return editorSelectionId(initial, templates);
-  });
+  const [selectedId, setSelectedId] = useState<string>(() => editorSelectionId(initialTemplateId));
   const [paper, setPaper] = useState<PaperId>(initialPaper);
   const [draft, setDraft] = useState<PrintTemplate | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -446,14 +439,14 @@ export function TemplateEditorScreen({
         ? { ...draft, paper }
         : { id: customId ?? 'custom', name: '我的模板', paper, blocks: [] };
     }
-    const selected = templates.find((item) => item.id === selectedId);
-    const fallback = templates[0];
-    const template = selected ?? fallback;
-    if (!template) {
-      return { id: '__none__', name: '没有可用模板', paper, blocks: [] };
+    if (selectedId === CALIBRATION_TEMPLATE.id) {
+      // 校准页也必须跟随纸张选择，否则一直是 A4。
+      return paperFor(CALIBRATION_TEMPLATE.id, paper);
     }
-    return paperForTemplate(template, paper);
-  }, [customId, draft, isCustom, paper, selectedId, templates]);
+    const builtin = BUILTIN_TEMPLATES.find((item) => item.id === selectedId);
+    if (!builtin) return paperFor(BUILTIN_TEMPLATES[0]?.id ?? 'day', paper);
+    return paperFor(builtin.id, paper);
+  }, [customId, draft, isCustom, paper, selectedId]);
 
   /** 预览日期那天的纸面数据：预览与「打卡行占几行」都从同一份数据来。 */
   const previewData = useMemo(
@@ -580,26 +573,35 @@ export function TemplateEditorScreen({
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[180px_minmax(0,1fr)_360px]">
       {/* 左：模板列表 */}
       <aside className="min-w-0 space-y-3 text-sm">
-        <h2 className="text-xs font-medium opacity-50">插件模板</h2>
-        {templates.length === 0 ? (
-          <p className="text-caption opacity-40">没有数据插件注册打印模板。</p>
-        ) : (
-          <ul className="space-y-0.5">
-            {templates.map((template) => (
-              <li key={template.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(template.id)}
-                  className={`w-full rounded px-2 py-1 text-left text-[13px] ${
-                    selectedId === template.id ? 'bg-overlay font-medium' : 'hover:bg-overlay'
-                  }`}
-                >
-                  {template.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <h2 className="text-xs font-medium opacity-50">内置</h2>
+        <ul className="space-y-0.5">
+          {BUILTIN_TEMPLATES.map((template) => (
+            <li key={template.id}>
+              <button
+                type="button"
+                onClick={() => setSelectedId(template.id)}
+                className={`w-full rounded px-2 py-1 text-left text-[13px] ${
+                  selectedId === template.id ? 'bg-overlay font-medium' : 'hover:bg-overlay'
+                }`}
+              >
+                {template.name}
+              </button>
+            </li>
+          ))}
+          <li>
+            <button
+              type="button"
+              onClick={() => setSelectedId(CALIBRATION_TEMPLATE.id)}
+              className={`w-full rounded px-2 py-1 text-left text-[13px] ${
+                selectedId === CALIBRATION_TEMPLATE.id
+                  ? 'bg-overlay font-medium'
+                  : 'hover:bg-overlay'
+              }`}
+            >
+              打印校准页
+            </button>
+          </li>
+        </ul>
 
         <h2 className="pt-2 text-xs font-medium opacity-50">我的模板</h2>
         {customs === undefined ? (
@@ -693,7 +695,7 @@ export function TemplateEditorScreen({
                 onClick={async () => {
                   if (!customId) return;
                   await db.templates.delete(customId);
-                  setSelectedId(templates[0]?.id ?? '');
+                  setSelectedId(BUILTIN_TEMPLATES[0]?.id ?? 'day');
                   setNotice('已删除');
                 }}
                 className="rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600"
@@ -805,7 +807,7 @@ export function TemplateEditorScreen({
           />
           <span className="opacity-50">默认明天；改日期可看当天纸面</span>
         </label>
-        {selectedId === 'calibration' ? (
+        {selectedId === CALIBRATION_TEMPLATE.id ? (
           <p className="text-caption leading-relaxed opacity-45">
             每台打印机第一次使用前打一张：确认有没有被整体缩放、四角有没有被裁掉。
             目前是近似刻度（用行高模拟），精确毫米刻度需要后续新增 ruler 区块。

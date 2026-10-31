@@ -11,9 +11,7 @@
  *
  * ## 校准页现在能做到什么、缺什么
  *
- * 打印模板现在全部由插件注册；本文件只保留类型/materialize/layout，不再内置模板。
-
-校准页由插件注册（使用现有 `Block` 类型实现），因此：
+ * `CALIBRATION_TEMPLATE` 只用现有 `Block` 类型实现，因此：
  * - ✅ 页边距 / 整体缩放：标题与提示行 + linedBox 的边框位置可以肉眼判断；
  * - ✅ 粗刻度：`ROW_HEIGHT_MM`（7mm）的行高，用「10mm」…「50mm」标签近似；
  * - ✅ 版本与日期占位：`footer`；
@@ -27,7 +25,7 @@
  * （共享文件，本次不改）。
  */
 
-import type { Block } from './blocks.ts';
+import type { Block, TitleBlock } from './blocks.ts';
 import { HABIT_ROW_MAX } from './blocks.ts';
 import { type Margin, PAPER_SIZES, type PaperId } from './paper.ts';
 
@@ -35,14 +33,154 @@ export interface PrintTemplate {
   id: string;
   name: string;
   paper: PaperId;
-  /** 纸张密度策略：day 会压缩作业/课表，week 会压缩手写行；未知/静态模板不压缩。 */
-  density?: 'day' | 'week';
   margin?: Margin;
   /** 区块模板；行数等随纸张自适应的部分在 materialize 里决定。 */
   blocks: Block[];
 }
 
 /** 书写提示的默认文案，与 `config.print.hintLine` 的默认值一致。 */
+const DEFAULT_HINT = '深色笔 · 不出框 · 不连笔';
+
+/**
+ * 标题区块的文案留空。
+ * 日期是打印时才知道的，模板里写死某一天会让常量被误当成「今天」。
+ * `materialize()` 用 `context.dateLabel` 填进去。
+ */
+function dateTitle(align: 'left' | 'center'): TitleBlock {
+  return { id: 'title', kind: 'title', span: 12, text: '', align };
+}
+
+/** 整行书写提示。 */
+function hint(text: string): Block {
+  return { id: 'hint', kind: 'hintLine', span: 12, text };
+}
+
+/** 整行手写留白区；模板只需要关心标签与行数。 */
+function linedBox(id: string, label: string, lines: number): Block {
+  return { id, kind: 'linedBox', span: 12, label, lines };
+}
+
+const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'] as const;
+
+/**
+ * 内置模板。
+ *
+ * 这里的行数写的是 **A4 完整版**；更小的纸张由 `materialize()` 换成精简版
+ * （day：清单 10→4、时间登记 2→1；week：每天 3→2 行）。
+ * 其余模板的区块数不随纸张变化，只是行高不变、页边距让内容更紧凑。
+ */
+export const BUILTIN_TEMPLATES: PrintTemplate[] = [
+  {
+    id: 'day',
+    name: '我的一天',
+    paper: 'A4',
+    blocks: [
+      // 标题让出右边 3 列给二维码：二维码不占独立一行，A4 才装得下。
+      { ...dateTitle('left'), span: 9 },
+      // 回填二维码：写死「模板 + 日期 + 纸张」，扫描时据此找回坐标清单（docs/Phase-note/P2/paper-loop.md）。
+      { id: 'qr', kind: 'qrcode', span: 3, sizeMm: 16 },
+      {
+        id: 'tasks',
+        kind: 'checkboxList',
+        span: 12,
+        bind: 'tasks.today',
+        rows: 9,
+        showMeta: [],
+      },
+      // 当日课表排在清单之后：学生先看"今天有什么课"，再对照作业
+      { id: 'schedule', kind: 'schedule', span: 12, rows: 7, title: '今日课表' },
+      { id: 'am', kind: 'timeLog', span: 12, dayPart: 'morning', rows: 2, label: '上午' },
+      { id: 'pm', kind: 'timeLog', span: 12, dayPart: 'afternoon', rows: 2, label: '下午' },
+      { id: 'ev', kind: 'timeLog', span: 12, dayPart: 'evening', rows: 2, label: '晚上' },
+      // 三格自评印成 1–5 的勾选格：手写数字读不回来（docs/Phase-note/P2/paper-loop.md）。
+      {
+        id: 'rating',
+        kind: 'ratingGrid',
+        span: 12,
+        labels: ['睡眠', '心情', '专注'],
+        keys: ['sleep', 'mood', 'focus'],
+        scale: 5,
+      },
+      // 打卡行：一天有几个习惯就印几个勾选框；扫描按坐标回填到 habits。
+      { id: 'habits', kind: 'habitRow', span: 12 },
+      hint(DEFAULT_HINT),
+    ],
+  },
+  {
+    id: 'week',
+    name: '本周计划',
+    paper: 'A4',
+    blocks: [
+      dateTitle('left'),
+      ...WEEKDAY_LABELS.map((label, index) => linedBox(`day-${index + 1}`, label, 3)),
+      hint('周日晚上回看一遍，下周只改一处'),
+    ],
+  },
+  {
+    id: 'checkin',
+    name: '打卡卡',
+    paper: 'A5',
+    blocks: [
+      dateTitle('center'),
+      { id: 'grid', kind: 'checkboxGrid', span: 12, cols: 7, rows: 3 },
+      hint('做到了就打勾，没做到就留空'),
+    ],
+  },
+  {
+    id: 'index-card',
+    name: '口袋卡',
+    paper: 'index-card',
+    blocks: [
+      linedBox('formula', '公式', 3),
+      linedBox('words', '单词', 3),
+      linedBox('todos', '待办', 3),
+    ],
+  },
+  {
+    id: 'countdown',
+    name: '考试倒计时牌',
+    paper: 'A4',
+    blocks: [
+      dateTitle('center'),
+      { id: 'dots', kind: 'progressDots', span: 12, total: 100 },
+      linedBox('days', '距考试还有 ____ 天', 1),
+      hint('每天只写一个数字，划掉昨天'),
+    ],
+  },
+];
+
+/** 校准页的近似刻度：每格 label 对应一行的 7mm 行高，不是精确毫米尺。 */
+const CALIBRATION_MARKS = ['10mm', '20mm', '30mm', '40mm', '50mm'] as const;
+
+/**
+ * 打印校准页（P1-12）：用于确认打印机缩放、边距与裁切。
+ *
+ * 校准页是静态版式，不随日期变化，所以标题写死、不走 `materialize()` 的日期填充。
+ * 局限见文件顶部注释：精确刻度尺 / 四角标记 / 整页边框需要新的 Block 类型。
+ */
+export const CALIBRATION_TEMPLATE: PrintTemplate = {
+  id: 'calibration',
+  name: '打印校准页',
+  paper: 'A4',
+  blocks: [
+    {
+      id: 'title',
+      kind: 'title',
+      span: 12,
+      text: '打印校准页 · 请用实际大小（100%）打印',
+      align: 'center',
+    },
+    hint('下边框应与纸边距对齐；四角标记应完整不裁切'),
+    ...CALIBRATION_MARKS.map((mark) => linedBox(`scale-${mark}`, mark, 1)),
+    {
+      id: 'footer',
+      kind: 'footer',
+      span: 12,
+      text: 'GoFor 打印校准 v1 · 日期 ____',
+    },
+  ],
+};
+
 /** 深拷贝区块；数组字段单独复制，避免复用模板的常量数组。 */
 function cloneBlock(block: Block): Block {
   switch (block.kind) {
@@ -72,8 +210,8 @@ function isFullDensity(paper: PaperId): boolean {
 }
 
 /** 按模板与纸张调整行数；返回新对象，未调整的块原样返回（由 cloneBlock 复制）。 */
-function adaptBlock(block: Block, template: PrintTemplate, full: boolean): Block {
-  if (template.density === 'day') {
+function adaptBlock(block: Block, templateId: string, full: boolean): Block {
+  if (templateId === 'day') {
     switch (block.kind) {
       case 'checkboxList':
         return { ...block, rows: full ? 8 : 4 };
@@ -88,7 +226,7 @@ function adaptBlock(block: Block, template: PrintTemplate, full: boolean): Block
     }
   }
 
-  if (template.density === 'week' && block.kind === 'linedBox') {
+  if (templateId === 'week' && block.kind === 'linedBox') {
     // A5 用 3 行/天会超过 194mm 的可用高度（≈235mm），精简到 2 行。
     return { ...block, lines: full ? 3 : 2 };
   }
@@ -99,12 +237,12 @@ function adaptBlock(block: Block, template: PrintTemplate, full: boolean): Block
 function adaptBlocks(template: PrintTemplate, paper: PaperId): Block[] {
   const full = isFullDensity(paper);
   return template.blocks
-    .map((block) => cloneBlock(adaptBlock(block, template, full)))
+    .map((block) => cloneBlock(adaptBlock(block, template.id, full)))
     .filter((block) => {
       // 「我的一天」在 A5 已经顶满 202mm 可用高度，再塞 7mm 打卡行会翻页；
       // 高度 < 230mm 的小纸（A5/A6/索引卡）上不显示打卡行；A4/B5/Letter 保留。
       const smallPaper = (PAPER_SIZES[paper]?.heightMm ?? 0) < 230;
-      if (template.density === 'day' && smallPaper && block.kind === 'habitRow') return false;
+      if (template.id === 'day' && smallPaper && block.kind === 'habitRow') return false;
       return true;
     });
 }
@@ -132,7 +270,7 @@ export function materialize(
     return { ...block, text: context.dateLabel };
   });
 
-  if (template.density !== 'day' || context.habitCount === undefined) return blocks;
+  if (template.id !== 'day' || context.habitCount === undefined) return blocks;
   const habitRows = Math.max(1, Math.ceil(context.habitCount / HABIT_ROW_MAX));
   const extraRows = habitRows - 1;
   // A5 等小纸本来就不印打卡行（adaptBlocks 已过滤），没有要腾的空间。
@@ -154,8 +292,10 @@ export function materialize(
  * 也可以给模板编辑器做「切纸张实时预览」。
  * 未知模板 id 抛错：静默回退到别的模板会让人打错版面。
  */
-export function paperForTemplate(template: PrintTemplate, paper: PaperId): PrintTemplate {
+export function paperFor(templateId: string, paper: PaperId): PrintTemplate {
+  const template = [...BUILTIN_TEMPLATES, CALIBRATION_TEMPLATE].find(
+    (candidate) => candidate.id === templateId,
+  );
+  if (!template) throw new Error(`未知打印模板：${templateId}`);
   return { ...template, paper, blocks: adaptBlocks(template, paper) };
 }
-
-
