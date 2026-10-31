@@ -13,7 +13,11 @@ import type {
 import { createFileLogger, type PluginLogger } from './logger.js';
 import { parsePluginManifest, resolveInsidePackage, SUPPORTED_API_VERSION } from './manifest.js';
 import type {
+  PluginDataDescriptor,
+  PluginScanHandlerDescriptor,
+  PluginScreenDescriptor,
   PluginSnapshot,
+  PluginThemeDescriptor,
   RegisteredPrintTemplate,
   RunCommandResult,
   TaskStore,
@@ -69,10 +73,23 @@ interface Collected {
   commands: RegisteredCommand[];
   slots: RegisteredSlot[];
   templates: RegisteredPrintTemplate[];
+  screens: PluginScreenDescriptor[];
+  themes: PluginThemeDescriptor[];
+  data: PluginDataDescriptor[];
+  scanHandlers: PluginScanHandlerDescriptor[];
 }
 
 function createCollected(): Collected {
-  return { active: true, commands: [], slots: [], templates: [] };
+  return {
+    active: true,
+    commands: [],
+    slots: [],
+    templates: [],
+    screens: [],
+    themes: [],
+    data: [],
+    scanHandlers: [],
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -85,6 +102,7 @@ export function errorMessage(error: unknown): string {
 }
 
 function componentExportName(component: unknown): string {
+  if (typeof component === 'string') return component.trim() || 'default';
   if (typeof component === 'function') return component.name || 'default';
   if (isRecord(component)) {
     const name = component.displayName ?? component.name;
@@ -151,6 +169,10 @@ export class PluginManager {
   private readonly commands = new Map<string, RegisteredCommand>();
   private readonly templates = new Map<string, RegisteredPrintTemplate>();
   private slots: RegisteredSlot[] = [];
+  private screens: PluginScreenDescriptor[] = [];
+  private themes: PluginThemeDescriptor[] = [];
+  private dataProviders: PluginDataDescriptor[] = [];
+  private scanHandlers: PluginScanHandlerDescriptor[] = [];
   private version = 0;
 
   constructor(options: PluginManagerOptions) {
@@ -205,6 +227,10 @@ export class PluginManager {
     this.commands.clear();
     this.templates.clear();
     this.slots = [];
+    this.screens = [];
+    this.themes = [];
+    this.dataProviders = [];
+    this.scanHandlers = [];
     this.statuses.clear();
     this.bumpVersion();
   }
@@ -235,6 +261,10 @@ export class PluginManager {
         pluginId: template.pluginId,
         packageName: template.packageName,
       })),
+      screens: this.screens.map((screen) => ({ ...screen })),
+      themes: this.themes.map((theme) => ({ ...theme, tokens: { ...theme.tokens } })),
+      data: this.dataProviders.map((provider) => ({ ...provider })),
+      scanHandlers: this.scanHandlers.map((handler) => ({ ...handler })),
     };
   }
 
@@ -308,6 +338,8 @@ export class PluginManager {
       capabilities: [],
       state: 'failed',
       error: null,
+      renderer: null,
+      permissions: [],
       activatedAt: null,
       durationMs: null,
     };
@@ -332,6 +364,8 @@ export class PluginManager {
       status.version = manifest.version;
       status.apiVersion = manifest.apiVersion;
       status.capabilities = [...manifest.capabilities];
+      status.renderer = manifest.renderer ?? null;
+      status.permissions = [...(manifest.permissions ?? [])];
 
       if (manifest.apiVersion !== SUPPORTED_API_VERSION) {
         status.state = 'incompatible';
@@ -430,6 +464,98 @@ export class PluginManager {
         });
       },
 
+      registerScreen: (screen) => {
+        if (skipIfInactive('页面')) return;
+        if (
+          typeof screen.id !== 'string' ||
+          screen.id.trim() === '' ||
+          typeof screen.title !== 'string' ||
+          typeof screen.group !== 'string' ||
+          typeof screen.component !== 'string' ||
+          screen.component.trim() === ''
+        ) {
+          throw new Error('registerScreen 参数非法：需要 id/title/group/component');
+        }
+        assertCapability('screen', '页面');
+        if (
+          this.screens.some((entry) => entry.id === screen.id) ||
+          collected.screens.some((entry) => entry.id === screen.id)
+        ) {
+          throw new Error(`页面 id 冲突：${screen.id}`);
+        }
+        collected.screens.push({
+          ...screen,
+          pluginId: manifest.id,
+          packageName,
+          renderer: manifest.renderer ?? null,
+        });
+      },
+
+      registerTheme: (theme) => {
+        if (skipIfInactive('主题')) return;
+        if (
+          typeof theme.id !== 'string' ||
+          theme.id.trim() === '' ||
+          typeof theme.name !== 'string' ||
+          typeof theme.tokens !== 'object' ||
+          theme.tokens === null
+        ) {
+          throw new Error('registerTheme 参数非法：需要 id/name/tokens');
+        }
+        assertCapability('theme', '主题');
+        if (
+          this.themes.some((entry) => entry.id === theme.id) ||
+          collected.themes.some((entry) => entry.id === theme.id)
+        ) {
+          throw new Error(`主题 id 冲突：${theme.id}`);
+        }
+        collected.themes.push({ ...theme, pluginId: manifest.id, packageName });
+      },
+
+      registerData: (data) => {
+        if (skipIfInactive('数据契约')) return;
+        if (
+          typeof data.id !== 'string' ||
+          data.id.trim() === '' ||
+          !Number.isInteger(data.version) ||
+          typeof data.summary !== 'string'
+        ) {
+          throw new Error('registerData 参数非法：需要 id/version/summary');
+        }
+        assertCapability('data', '数据契约');
+        if (
+          this.dataProviders.some((entry) => entry.id === data.id) ||
+          collected.data.some((entry) => entry.id === data.id)
+        ) {
+          throw new Error(`数据契约 id 冲突：${data.id}`);
+        }
+        collected.data.push({ ...data, pluginId: manifest.id, packageName });
+      },
+
+      registerScanHandler: (handler) => {
+        if (skipIfInactive('扫描处理器')) return;
+        if (
+          typeof handler.id !== 'string' ||
+          handler.id.trim() === '' ||
+          typeof handler.owner !== 'string' ||
+          handler.owner.trim() === ''
+        ) {
+          throw new Error('registerScanHandler 参数非法：需要 id/owner');
+        }
+        assertCapability('scan', '扫描处理器');
+        if (
+          this.scanHandlers.some((entry) => entry.id === handler.id) ||
+          collected.scanHandlers.some((entry) => entry.id === handler.id)
+        ) {
+          throw new Error(`扫描处理器 id 冲突：${handler.id}`);
+        }
+        collected.scanHandlers.push({
+          ...handler,
+          pluginId: manifest.id,
+          packageName,
+        });
+      },
+
       registerViewSlot: (slotId, component) => {
         if (skipIfInactive('视图插槽')) return;
         if (typeof slotId !== 'string' || slotId.trim() === '') {
@@ -493,9 +619,33 @@ export class PluginManager {
     for (const template of collected.templates) {
       if (this.templates.has(template.id)) throw new Error(`打印模板 id 冲突：${template.id}`);
     }
+    for (const screen of collected.screens) {
+      if (this.screens.some((entry) => entry.id === screen.id)) {
+        throw new Error(`页面 id 冲突：${screen.id}`);
+      }
+    }
+    for (const theme of collected.themes) {
+      if (this.themes.some((entry) => entry.id === theme.id)) {
+        throw new Error(`主题 id 冲突：${theme.id}`);
+      }
+    }
+    for (const provider of collected.data) {
+      if (this.dataProviders.some((entry) => entry.id === provider.id)) {
+        throw new Error(`数据契约 id 冲突：${provider.id}`);
+      }
+    }
+    for (const handler of collected.scanHandlers) {
+      if (this.scanHandlers.some((entry) => entry.id === handler.id)) {
+        throw new Error(`扫描处理器 id 冲突：${handler.id}`);
+      }
+    }
     for (const command of collected.commands) this.commands.set(command.id, command);
     for (const template of collected.templates) this.templates.set(template.id, template);
     for (const slot of collected.slots) this.slots.push(slot);
+    for (const screen of collected.screens) this.screens.push(screen);
+    for (const theme of collected.themes) this.themes.push(theme);
+    for (const provider of collected.data) this.dataProviders.push(provider);
+    for (const handler of collected.scanHandlers) this.scanHandlers.push(handler);
   }
 
   private bumpVersion(): void {

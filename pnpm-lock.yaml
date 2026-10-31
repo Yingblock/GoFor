@@ -193,6 +193,9 @@ importers:
       '@capacitor/core':
         specifier: ^8.5.3
         version: 8.5.3
+      '@gofor/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@gofor/core':
         specifier: workspace:*
         version: link:../../packages/core

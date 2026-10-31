@@ -40,12 +40,57 @@ export interface PluginPrintTemplate {
 }
 
 /**
- * 插件能看到的全部宿主能力。**只有这五个方法**。
+ * 插件能看到的宿主能力。
  *
- * 插件不能 import Dexie 或核心内部模块；所有数据读写都走 `getTasks` / `updateTask`。
+ * 基础五方法：命令 / 视图插槽 / 打印模板 / getTasks / updateTask。
+ * v2 增加可序列化声明：页面、主题、数据契约、扫描 handler——真正的组件和
+ * query/handler 在 `gofor.renderer` 里按名字导出，不能通过 IPC 传函数。
+ *
+ * 插件不能 import Dexie 或核心内部模块；数据读写走宿主 API/数据契约。
  */
+export interface PluginScreenRegistration {
+  /** 建议 `<pluginId>/<screenId>`。 */
+  id: string;
+  title: string;
+  group: string;
+  order?: number;
+  icon?: string;
+  layout?: 'content' | 'full';
+  chrome?: 'default' | 'none';
+  /** renderer 入口里导出的组件名；主进程不能传 React 组件。 */
+  component: string;
+}
+
+export interface PluginThemeRegistration {
+  id: string;
+  name: string;
+  /** 只覆盖屏幕层 token；纸面固定白底黑字。 */
+  tokens: Record<string, string>;
+}
+
+export interface PluginDataRegistration {
+  id: string;
+  version: number;
+  summary: string;
+}
+
+export interface PluginScanHandlerRegistration {
+  /** 建议 `<pluginId>/scan`。 */
+  id: string;
+  /** 只接收 owner 等于此值的 ScanResult。 */
+  owner: string;
+}
+
 export interface GoForPluginAPI {
   registerCommand(command: PluginCommand): void;
+  /** 注册完整页面；组件在 `gofor.renderer` 里按名字导出。 */
+  registerScreen(screen: PluginScreenRegistration): void;
+  /** 注册屏幕层主题 token。 */
+  registerTheme(theme: PluginThemeRegistration): void;
+  /** 声明一个只读数据契约；query 在 renderer 里实现。 */
+  registerData(data: PluginDataRegistration): void;
+  /** 声明扫描回填处理器；handler 在 renderer 里实现。 */
+  registerScanHandler(handler: PluginScanHandlerRegistration): void;
   /**
    * 注册视图插槽。
    *

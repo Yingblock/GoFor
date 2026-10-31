@@ -21,9 +21,20 @@
     "apiVersion": "1",
     "capabilities": [
       "view-slot",
-      "command"
+      "command",
+      "screen",
+      "theme",
+      "data",
+      "scan"
     ],
-    "renderer": "./renderer.mjs"
+    "renderer": "./renderer.mjs",
+    "permissions": [
+      "ui.screen",
+      "ui.theme",
+      "ui.slot",
+      "data.provide",
+      "scan.handle"
+    ]
   },
   "dependencies": {
     "@gofor/contracts": "file:../../packages/contracts"

@@ -4,6 +4,7 @@ import { App } from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import './styles.css';
 import { reloadOnceForStaleChunk } from './plugins/staleChunk.ts';
+import './plugins/externalGlobals.ts';
 import { initTheme } from './theme.ts';
 
 initTheme();

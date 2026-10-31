@@ -2,7 +2,11 @@ export type {
   GoForPluginAPI,
   GoForPluginModule,
   PluginCommand,
+  PluginDataRegistration,
   PluginPrintTemplate,
+  PluginScanHandlerRegistration,
+  PluginScreenRegistration,
+  PluginThemeRegistration,
   Subtask,
   Task,
 } from './api.js';

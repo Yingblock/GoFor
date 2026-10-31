@@ -1,6 +1,6 @@
 # gofor-plugin-hello
 
-GoFor 运行时插件最小示例。**这个目录不是 monorepo 的 workspace 成员**，有自己的
+GoFor 运行时插件 v2 示例：页面 + 主题 + 插槽 + 数据契约 + 扫描 handler。**这个目录不是 monorepo 的 workspace 成员**，有自己的
 `package.json` 与锁文件，演示第三方插件的物理形态。
 
 ## 结构
@@ -9,7 +9,7 @@ GoFor 运行时插件最小示例。**这个目录不是 monorepo 的 workspace 
 package.json       插件清单在 gofor 字段（id / main / apiVersion / capabilities / renderer）
 tsconfig.json      只编译主进程入口；Node 20 的 require 需要 CommonJS
 src/index.ts       activate 注册一个命令 + 一个视图插槽
-renderer.mjs       渲染进程入口（ESM，示例零依赖，真实插件这里放 React 组件）
+renderer.mjs       渲染进程入口（ESM）：HelloScreen / 主题 / data / scanHandlers / 插槽组件
 dist/index.js      pnpm build 产物（gofor.main 指向它）
 ```
 

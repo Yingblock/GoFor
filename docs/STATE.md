@@ -23,9 +23,10 @@
    5s 超时、单插件失败隔离、`reloadPlugins()`、日志 `userData/logs/plugins.log`；`@gofor/plugin-cli`
    提供 `gofor plugin add/remove/list`；视图插槽只传元数据，渲染进程按 `gofor.renderer` 懒加载。
    边界见 `DECISIONS/0008`，手册见 `docs/PLUGIN-RUNTIME.md`。
-3. **插件宿主（阶段一）**：`@gofor/plugin-host`，`0.0.0.0:47822` 监听但只响应 loopback，
-   LAN 403；提供 snapshot/reload/run-command/renderer 资源；数据层未接入，PWA 外部插件客户端未接。
-   见 `DECISIONS/0011`、`docs/PLUGIN-HOST.md`。
+3. **插件宿主 + 外部插件 v2**：`@gofor/plugin-host`，`0.0.0.0:47822` 监听但只响应 loopback，
+   LAN 403；提供 snapshot/reload/run-command/renderer 资源与 CORS。PWA 显式启用后
+   （`gofor.externalPlugins=1` / `?external=1`）加载外部插件的页面/主题/插槽/数据/扫描 handler。
+   数据仍在各设备 IndexedDB，宿主数据集中未做。见 `DECISIONS/0011`、`0012`、`docs/PLUGIN-HOST.md`。
 
 **纸面契约留在 core**：打印版式引擎、扫描几何（四角 / 条码 / 区块定位点）、校准、数据与备份、
 插件管理、应用外壳不插件化（见 `DECISIONS/0006`）。打印区块与扫描 handler 按 owner 归属插件：
@@ -36,7 +37,7 @@
 
 验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 浏览器 e2e）：
 
-- ✅ 单测 **576**：core 253 / domain 140 / store 48 / vision 46 / plugin-runtime 17 / plugin-host 2 / plugin-cli 12 / 插件包 58
+- ✅ 单测 **577**：core 253 / domain 140 / store 48 / vision 46 / plugin-runtime 18 / plugin-host 2 / plugin-cli 12 / 插件包 58
 - ✅ e2e 约 **150** 项（`e2e/smoke.mjs` 的 `check()` 断言）
 - ✅ 构建产物：index **756KB**、扫描插件懒加载 chunk **423KB**、CSS **35KB**
 - ✅ monorepo `apps/web` + `apps/desktop` + `packages/{core,domain,store,ui,vision,plugin-api,plugin-kit,plugins,contracts,plugin-runtime,plugin-cli}` + `plugins/*`；
@@ -163,6 +164,10 @@ pnpm exec gofor plugin list --user-data /tmp/gofor-user
 
 ## 最近一次更新
 
+- **2026-10-31 外部插件 v2（分支 feat/plugin-host-v2）**：契约增加页面/主题/数据/扫描声明；
+  `PluginManager` 快照扩展；PWA external client 从 plugin-host 拉 renderer，合并页面/主题/插槽/
+  命令/数据契约/扫描 handler；示例 hello 升级并验证数据、扫描、主题、插槽。外部插件默认关闭，
+  插件目录可启用；4173 本机可用，LAN 仍 403；数据仍在本机。
 - **2026-10-31 插件宿主阶段一**：新增 `@gofor/plugin-host`，默认绑 `0.0.0.0:47822` 但只响应
   loopback，LAN 返回 403；提供 `/health`、snapshot/reload/run-command 与 renderer 资源路由；
   `--allow-lan` 预留，数据层/CORS/鉴权/PWA 客户端未接。见 `DECISIONS/0011`、`docs/PLUGIN-HOST.md`。

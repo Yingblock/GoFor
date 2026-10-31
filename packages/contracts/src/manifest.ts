@@ -12,7 +12,15 @@
 export const PLUGIN_API_VERSION = '1' as const;
 
 /** 插件可以声明的能力。注册未声明的能力会激活失败（见 runtime 的注册检查）。 */
-export const PLUGIN_CAPABILITIES = ['command', 'view-slot', 'print-template'] as const;
+export const PLUGIN_CAPABILITIES = [
+  'command',
+  'view-slot',
+  'print-template',
+  'screen',
+  'theme',
+  'data',
+  'scan',
+] as const;
 
 export type PluginCapability = (typeof PLUGIN_CAPABILITIES)[number];
 
@@ -41,6 +49,8 @@ export interface PluginManifest {
   main: string;
   apiVersion: string;
   capabilities: PluginCapability[];
+  /** 运行时插件声明给宿主的权限（`data.read` / `storage` 等），构建期插件可省略。 */
+  permissions?: string[];
   description?: string;
   author?: string;
   homepage?: string;
@@ -69,6 +79,10 @@ export interface PluginStatus {
   state: PluginState;
   /** 失败原因；成功为 null。只放可序列化的短字符串，不塞堆栈。 */
   error: string | null;
+  /** manifest.gofor.renderer 的相对路径；没有为 null。 */
+  renderer: string | null;
+  /** 声明给宿主的权限；没有声明为空数组。 */
+  permissions: string[];
   /** 成功 activate 的 Unix 毫秒时间戳；未成功为 null。 */
   activatedAt: number | null;
   /** activate 耗时（毫秒）；未成功为 null。 */

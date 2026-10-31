@@ -1,4 +1,12 @@
-import type { PluginPrintTemplate, PluginStatus, Task } from '@gofor/contracts';
+import type {
+  PluginDataRegistration,
+  PluginPrintTemplate,
+  PluginScanHandlerRegistration,
+  PluginScreenRegistration,
+  PluginStatus,
+  PluginThemeRegistration,
+  Task,
+} from '@gofor/contracts';
 
 /**
  * 主进程侧的任务仓储。**必须由宿主注入**：
@@ -28,6 +36,27 @@ export interface PluginCommandDescriptor {
   packageName: string;
 }
 
+export interface PluginScreenDescriptor extends PluginScreenRegistration {
+  pluginId: string;
+  packageName: string;
+  renderer: string | null;
+}
+
+export interface PluginThemeDescriptor extends PluginThemeRegistration {
+  pluginId: string;
+  packageName: string;
+}
+
+export interface PluginDataDescriptor extends PluginDataRegistration {
+  pluginId: string;
+  packageName: string;
+}
+
+export interface PluginScanHandlerDescriptor extends PluginScanHandlerRegistration {
+  pluginId: string;
+  packageName: string;
+}
+
 export interface PluginPrintTemplateDescriptor {
   id: string;
   pluginId: string;
@@ -42,6 +71,10 @@ export interface PluginSnapshot {
   slots: PluginViewSlotDescriptor[];
   commands: PluginCommandDescriptor[];
   printTemplates: PluginPrintTemplateDescriptor[];
+  screens: PluginScreenDescriptor[];
+  themes: PluginThemeDescriptor[];
+  data: PluginDataDescriptor[];
+  scanHandlers: PluginScanHandlerDescriptor[];
 }
 
 export interface RunCommandResult {

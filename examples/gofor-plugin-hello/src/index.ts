@@ -1,16 +1,8 @@
 // 插件入口必须导出 activate(api)；可选 deactivate(api)。
-// 入口会被主进程 require，所以编译成 CommonJS（Electron 33 = Node 20）。
+// 入口会被 plugin-host / Electron main require，所以编译成 CommonJS。
 import type { GoForPluginAPI } from '@gofor/contracts';
 
-/**
- * 主进程无法执行 React 组件，这里只登记一个可序列化的占位对象。
- * runtime 取 `displayName` 作为渲染进程里的导出名（见 gofor.renderer）。
- */
-export const HelloSlot = {
-  displayName: 'HelloSlot',
-  text: '来自 gofor-plugin-hello 的问候',
-} as const;
-
+/** 主进程只登记可序列化声明；renderer 里按名字导出组件/函数。 */
 export function activate(api: GoForPluginAPI): void {
   api.registerCommand({
     id: 'plugin-hello/say-hello',
@@ -20,7 +12,36 @@ export function activate(api: GoForPluginAPI): void {
     },
   });
 
-  api.registerViewSlot('home.after-stats', HelloSlot);
+  api.registerScreen({
+    id: 'plugin-hello/screen',
+    title: 'Hello 外部插件',
+    group: '离线·M3',
+    order: 90,
+    icon: '👋',
+    component: 'HelloScreen',
+  });
+
+  api.registerTheme({
+    id: 'plugin-hello/theme',
+    name: 'Hello 主题',
+    tokens: {
+      '--color-accent': 'oklch(0.58 0.16 20)',
+      '--color-paper': 'oklch(0.98 0.01 30)',
+    },
+  });
+
+  api.registerViewSlot('home.after-stats', 'HelloSlot');
+
+  api.registerData({
+    id: 'hello.entries',
+    version: 1,
+    summary: 'Hello 外部插件的示例数据',
+  });
+
+  api.registerScanHandler({
+    id: 'plugin-hello/scan',
+    owner: 'plugin-hello',
+  });
 }
 
 export function deactivate(): void {

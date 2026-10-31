@@ -12,6 +12,7 @@
   "dependencies": {
     "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
+    "@gofor/contracts": "workspace:*",
     "@gofor/core": "workspace:*",
     "@gofor/domain": "workspace:*",
     "@gofor/plugin-api": "workspace:*",

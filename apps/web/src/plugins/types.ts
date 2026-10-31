@@ -101,6 +101,8 @@ export interface PluginInfo {
   description?: string;
   author?: string;
   kind: 'builtin' | 'installed';
+  /** 运行时外部插件（来自 plugin-host），不能在本页启用/禁用。 */
+  external?: boolean;
   enabled: boolean;
   permissions: string[];
   unknownPermissions: string[];

@@ -3,6 +3,7 @@ import { PLUGIN_API_VERSION, permissionLabel } from '@gofor/plugin-api';
 import { Badge, Button, Card, Chip, EmptyState, Textarea } from '@gofor/ui';
 import { useRef, useState } from 'react';
 import { type ConverterRun, startConverterRun } from '../plugins/converterRunner.ts';
+import { externalPluginsEnabled, setExternalPluginsEnabled } from '../plugins/external.ts';
 import { usePluginHost } from '../plugins/host.tsx';
 import { providerStatusLabel } from '../plugins/providers.ts';
 import { describeCssContribution } from '../plugins/uiExtensions.ts';
@@ -22,6 +23,7 @@ export function PluginDirectoryScreen() {
   const [conversionText, setConversionText] = useState(SAMPLE_MARKDOWN);
   const [job, setJob] = useState<JobState | null>(null);
   const [output, setOutput] = useState('');
+  const [externalEnabled, setExternalEnabled] = useState(externalPluginsEnabled);
   const runRef = useRef<ConverterRun | null>(null);
 
   const runConverter = (workerId: string) => {
@@ -46,6 +48,21 @@ export function PluginDirectoryScreen() {
           功能插件随应用构建（npm 包），通过同一张注册表提供页面、命令、快捷键、主题、
           插槽、打印区块与扫描回填。禁用只改注册表，插件数据保留。
         </p>
+        <div className="flex flex-wrap items-center gap-2 text-caption opacity-50">
+          <span>外部插件来自 userData/plugins，需要先启动 plugin-host（47822）。</span>
+          <button
+            type="button"
+            className="rounded-md border border-line px-2 py-1 text-micro opacity-70 hover:opacity-100"
+            onClick={() => {
+              const next = !externalEnabled;
+              setExternalPluginsEnabled(next);
+              setExternalEnabled(next);
+              window.location.reload();
+            }}
+          >
+            {externalEnabled ? '关闭外部插件' : '启用外部插件'}
+          </button>
+        </div>
       </header>
 
       {host.bootstrapError ? (
@@ -58,7 +75,7 @@ export function PluginDirectoryScreen() {
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="text-section font-medium">已注册插件（{host.plugins.length}）</h3>
           <span className="text-caption opacity-35">
-            插件 API v{PLUGIN_API_VERSION} · 随应用构建，禁用只改注册表
+            插件 API v{PLUGIN_API_VERSION} · 内置随应用构建；运行时插件来自 plugin-host，用 CLI 管理
           </span>
         </div>
         <div className="space-y-2">
@@ -70,7 +87,7 @@ export function PluginDirectoryScreen() {
                   <span className="text-body font-medium">{plugin.name}</span>
                   <span className="font-mono text-micro opacity-35">{plugin.id}</span>
                   <span className="text-micro opacity-35">v{plugin.version}</span>
-                  <Badge tone="neutral">内置</Badge>
+                  <Badge tone="neutral">{plugin.external ? '运行时' : '内置'}</Badge>
                   <Badge tone={plugin.enabled ? 'ok' : 'warn'}>
                     {plugin.enabled ? '启用中' : '已禁用'}
                   </Badge>
@@ -118,14 +135,22 @@ export function PluginDirectoryScreen() {
                 ) : null}
 
                 <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <Button
-                    variant={plugin.enabled ? 'secondary' : 'primary'}
-                    aria-label={`${plugin.enabled ? '禁用' : '启用'} ${plugin.name}`}
-                    onClick={() => void host.setPluginEnabled(plugin.id, !plugin.enabled)}
-                  >
-                    {plugin.enabled ? '禁用' : '启用'}
-                  </Button>
-                  <span className="text-micro opacity-30">禁用 / 重装都不会清插件数据</span>
+                  {plugin.external ? (
+                    <span className="text-micro opacity-30">
+                      运行时插件 · 用 gofor plugin remove 卸载；重载请重启或 reloadPlugins()
+                    </span>
+                  ) : (
+                    <>
+                      <Button
+                        variant={plugin.enabled ? 'secondary' : 'primary'}
+                        aria-label={`${plugin.enabled ? '禁用' : '启用'} ${plugin.name}`}
+                        onClick={() => void host.setPluginEnabled(plugin.id, !plugin.enabled)}
+                      >
+                        {plugin.enabled ? '禁用' : '启用'}
+                      </Button>
+                      <span className="text-micro opacity-30">禁用 / 重装都不会清插件数据</span>
+                    </>
+                  )}
                 </div>
               </Card>
             );

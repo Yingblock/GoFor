@@ -71,7 +71,7 @@ pnpm --filter @gofor/plugin-cli build
 pnpm exec gofor plugin list --user-data /tmp/gofor-user
 ```
 
-单测当前规模：**576 条**（core 253、domain 140、store 48、vision 46、plugin-runtime 17、plugin-host 2、plugin-cli 12、插件包 58）；e2e 约 **150 项**（`check()` 断言）
+单测当前规模：**577 条**（core 253、domain 140、store 48、vision 46、plugin-runtime 18、plugin-host 2、plugin-cli 12、插件包 58）；e2e 约 **150 项**（`check()` 断言）
 （条数会随当天数据的分支略有浮动）。
 
 打印时请确认：**缩放 100% · 关闭页眉页脚 · 勾选「背景图形」**。
@@ -116,6 +116,20 @@ PORT=4174 ./plugin-test.sh --preview   # 可选：纯 node + Vite 直连构建�
 ```
 
 细节见 [`docs/PLUGIN-TEST.md`](docs/PLUGIN-TEST.md)。
+
+## 外部插件（运行时）
+
+外部插件是装在 `userData/plugins` 的 pnpm 包，由本地 plugin-host 加载；页面/主题/数据/扫描
+都由插件的 `gofor.renderer` 提供。
+
+```bash
+pnpm --filter @gofor/plugin-runtime build
+pnpm --filter @gofor/plugin-host build
+pnpm plugin:host                      # 0.0.0.0:47822，阶段一只接受 loopback
+# 4173 → 插件与扩展 → 启用外部插件（或 ?external=1）
+```
+
+详见 [`docs/PLUGIN-HOST.md`](docs/PLUGIN-HOST.md)。
 
 ## 平台策略
 

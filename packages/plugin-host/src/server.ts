@@ -55,6 +55,15 @@ export function isLoopbackAddress(address: string | undefined): boolean {
   );
 }
 
+function isAllowedOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return ['127.0.0.1', 'localhost', '[::1]', '::1'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 const unsupportedTaskStore: TaskStore = {
   async getTasks() {
     throw new Error('插件宿主数据层尚未接入（阶段一：仅绑定与只读 snapshot）');
@@ -153,6 +162,20 @@ export async function startPluginHost(options: PluginHostOptions): Promise<Plugi
 
       const url = new URL(request.url ?? '/', 'http://127.0.0.1');
       const pathname = decodeURIComponent(url.pathname);
+
+      // PWA 在 4173、宿主在 47822，属于跨 origin；renderer 动态 import 需要 CORS。
+      const origin = request.headers.origin;
+      if (origin !== undefined && isAllowedOrigin(origin)) {
+        response.setHeader('Access-Control-Allow-Origin', origin);
+        response.setHeader('Vary', 'Origin');
+        response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      }
+      if (request.method === 'OPTIONS') {
+        response.writeHead(204);
+        response.end();
+        return;
+      }
 
       if (request.method === 'GET' && pathname === '/health') {
         json(response, 200, {

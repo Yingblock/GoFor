@@ -4,7 +4,15 @@ import type { PluginCapability, PluginManifest } from '@gofor/contracts';
 /** 核心支持的 API 版本。与 `@gofor/contracts` 的 `PLUGIN_API_VERSION` 由单测钉住。 */
 export const SUPPORTED_API_VERSION = '1';
 
-export const KNOWN_CAPABILITIES = ['command', 'view-slot', 'print-template'] as const;
+export const KNOWN_CAPABILITIES = [
+  'command',
+  'view-slot',
+  'print-template',
+  'screen',
+  'theme',
+  'data',
+  'scan',
+] as const;
 
 const ID_PATTERN = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 
@@ -80,6 +88,13 @@ export function parsePluginManifest(raw: unknown, packageName: string): PluginMa
     apiVersion: requireString(raw, 'apiVersion'),
     capabilities: parseCapabilities(raw.capabilities),
   };
+
+  if (raw.permissions !== undefined) {
+    if (!Array.isArray(raw.permissions) || !raw.permissions.every((item) => typeof item === 'string')) {
+      throw new Error('gofor.permissions 必须是字符串数组');
+    }
+    manifest.permissions = [...raw.permissions];
+  }
 
   const description = optionalString(raw, 'description');
   if (description !== undefined) manifest.description = description;

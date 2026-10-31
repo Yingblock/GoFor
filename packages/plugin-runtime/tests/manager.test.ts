@@ -136,6 +136,51 @@ describe('PluginManager 加载', () => {
     await manager.dispose();
   });
 
+  it('v2：登记页面/主题/数据/扫描声明并进入快照', async () => {
+    const fixture = createFixture(['gofor-plugin-v2']);
+    writePlugin(fixture, {
+      packageName: 'gofor-plugin-v2',
+      gofor: {
+        capabilities: ['screen', 'theme', 'data', 'scan'],
+        permissions: ['ui.screen', 'ui.theme', 'data.provide', 'scan.handle'],
+        renderer: './renderer.mjs',
+      },
+      body: `
+        exports.activate = (api) => {
+          api.registerScreen({
+            id: 'plugin-v2/screen',
+            title: 'V2',
+            group: '离线·M3',
+            component: 'V2Screen',
+          });
+          api.registerTheme({
+            id: 'plugin-v2/theme',
+            name: 'V2 主题',
+            tokens: { '--color-accent': '#f00' },
+          });
+          api.registerData({ id: 'v2.entries', version: 1, summary: 'V2 数据' });
+          api.registerScanHandler({ id: 'plugin-v2/scan', owner: 'plugin-v2' });
+        };
+      `,
+    });
+
+    const snapshot = await createManager(fixture).loadAll();
+    expect(snapshot.plugins[0]?.permissions).toEqual([
+      'ui.screen',
+      'ui.theme',
+      'data.provide',
+      'scan.handle',
+    ]);
+    expect(snapshot.screens[0]).toMatchObject({
+      id: 'plugin-v2/screen',
+      component: 'V2Screen',
+      renderer: './renderer.mjs',
+    });
+    expect(snapshot.themes[0]?.tokens).toEqual({ '--color-accent': '#f00' });
+    expect(snapshot.data[0]?.id).toBe('v2.entries');
+    expect(snapshot.scanHandlers[0]?.owner).toBe('plugin-v2');
+  });
+
   it('单个插件 activate 抛错不影响其他插件', async () => {
     const fixture = createFixture(['gofor-plugin-bad', 'gofor-plugin-good']);
     writePlugin(fixture, {

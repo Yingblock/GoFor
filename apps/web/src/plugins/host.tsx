@@ -56,6 +56,7 @@ import {
 } from 'react';
 import { appClock } from '../clock.ts';
 import { buildNav, CORE_NAV, flattenNav, type NavGroup } from '../nav.ts';
+import { loadExternalPlugins } from './external.ts';
 import { createPluginStorage } from './pluginStorage.ts';
 import { notConfiguredAi, notConfiguredOcr } from './providers.ts';
 import type {
@@ -825,8 +826,49 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
       activeModulesRef.current = result.activeModules;
       scanHandlersRef.current = result.scanHandlers;
       pluginNamesRef.current = result.pluginNames;
+
+      // 外部插件（plugin-host）可选：宿主不在线时 PWA 继续只跑内置插件。
+      const external = await loadExternalPlugins().catch((error: unknown) => {
+        console.warn('[external] 加载失败', error);
+        return null;
+      });
+      let snapshot = result.snapshot;
+      if (external) {
+        for (const [owner, handler] of external.scanHandlers) {
+          scanHandlersRef.current.set(owner, handler);
+        }
+        pluginNamesRef.current = new Map([
+          ...pluginNamesRef.current,
+          ...external.plugins.map((plugin) => [plugin.id, plugin.name] as const),
+        ]);
+        entriesRef.current = [...entriesRef.current, ...external.dataContracts];
+        const screens = [...result.snapshot.screens, ...external.screens];
+        snapshot = {
+          ...result.snapshot,
+          plugins: [...result.snapshot.plugins, ...external.plugins],
+          screens,
+          nav: buildNav(
+            screens
+              .filter((screen) => screen.kind === 'plugin')
+              .map((screen) => ({
+                id: screen.id,
+                title: screen.title,
+                group: screen.group,
+                pluginId: screen.pluginId ?? '',
+                ...(screen.icon === undefined ? {} : { icon: screen.icon }),
+                ...(screen.order === undefined ? {} : { order: screen.order }),
+              })),
+          ),
+          commands: [...result.snapshot.commands, ...external.commands],
+          slots: [...result.snapshot.slots, ...external.slots],
+          themes: [...result.snapshot.themes, ...external.themes],
+          dataProviders: [...result.snapshot.dataProviders, ...external.dataProviders],
+          conflicts: [...result.snapshot.conflicts, ...external.conflicts],
+          activeTheme: result.snapshot.activeTheme ?? external.themes[0] ?? null,
+        };
+      }
       versionRef.current += 1;
-      setSnapshot({ ...result.snapshot, version: versionRef.current });
+      setSnapshot({ ...snapshot, version: versionRef.current });
     } catch (error) {
       setSnapshot((previous) => ({
         ...previous,

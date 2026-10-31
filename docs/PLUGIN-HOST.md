@@ -1,16 +1,20 @@
-# 插件宿主（阶段一）
+# 插件宿主（阶段一 + v2 垂直切片）
 
-> 决策：`DECISIONS/0011`。这是给 4173/PWA 与后续 LAN 外部插件用的 Node 服务，
-> 不是 Electron 主进程；Electron 继续用 `apps/desktop` 的 `PluginManager`。
+> 决策：`DECISIONS/0011`（绑定/loopback）、`DECISIONS/0012`（外部插件 v2）。
+> 这是给 4173/PWA 用的 Node 服务，不是 Electron 主进程；Electron 继续用
+> `apps/desktop` 的 `PluginManager`。
 
 ## 现在能做什么
 
 - 绑定 `0.0.0.0:47822`（默认端口）；
 - **只响应 loopback（127.0.0.1 / ::1）**；LAN 请求一律 403；
-- 读 `userData/plugins`，跑 `PluginManager`，提供只读插件快照；
+- 读 `userData/plugins`，跑 `PluginManager`，提供插件快照；
 - 提供 renderer 资源路由 `/plugins/<包名>/<相对路径>`；
-- 数据层**未接入**：`getTasks/updateTask` 明确报未接入；
-- 没有 CORS / 鉴权 / TLS；这些都留给 LAN 阶段。
+- 对 loopback origin 提供 CORS（4173/5173/47821）；
+- v2：快照包含外部插件的 screens/themes/data/scanHandlers；PWA 可拉取并加载；
+- 数据层**未集中**：`getTasks/updateTask` 明确报未接入；外部插件页面用本地
+  `host.data` / `host.storage`；
+- 没有 LAN CORS / 鉴权 / TLS；`--allow-lan` 只是预留。
 
 ## 启动
 
@@ -41,6 +45,24 @@ pnpm plugin:host
 | POST | `/api/plugins/run-command` | body `{ id }` |
 | GET | `/plugins/<pkg>/<path>` | 插件包内文件（MIME + 路径穿越校验） |
 
+## 外部插件在 4173 怎么用
+
+1. 启动宿主：
+
+```bash
+pnpm --filter @gofor/plugin-runtime build
+pnpm --filter @gofor/plugin-host build
+pnpm plugin:host
+```
+
+2. 在 4173 的「插件与扩展」页点「启用外部插件」（或打开
+   `http://127.0.0.1:4173/?external=1`）；
+3. 刷新。外部插件的页面/主题/插槽/数据/扫描 handler 会合并进宿主注册表。
+
+默认关闭是为了避免没有启动 plugin-host 时每个页面都产生一条
+`ERR_CONNECTION_REFUSED`。外部插件 renderer 通过
+`/plugins/<包名>/<renderer>?v=<快照版本>` 加载，版本变化会换 URL，避免模块缓存。
+
 ## 为什么先绑 0.0.0.0 却不处理 LAN
 
 用户 2026-10-31 确认：数据最终集中到插件宿主，但现阶段只做绑定，
@@ -52,10 +74,9 @@ pnpm plugin:host
 
 ## 还没做
 
-- PWA 侧 external plugin client（拉 snapshot / import renderer / 合并注册表）；
-- 外部插件 v2 契约（页面/主题/数据/扫描 handler 的 renderer 导出）；
-- 数据集中（SQLite/JSON）与 `getTasks/updateTask`；
-- LAN CORS、令牌、TLS、多设备数据会话；
+- 宿主数据集中（SQLite/JSON）与 `getTasks/updateTask`；当前外部插件数据仍在各设备 IndexedDB；
+- LAN CORS、令牌、TLS、多设备数据会话（手机外部插件仍是 403）；
+- 外部 print template 在打印层的集成；
 - 4173 systemd 增加 `gofor-plugin-host.service`。
 
 ## 验收

@@ -79,16 +79,28 @@ export function deactivate(api: GoForPluginAPI): void | Promise<void> {}
 ## 4 GoForPluginAPI（只有五个方法）
 
 ```ts
+// 基础
 registerCommand(command: { id: string; title: string; handler: () => void | Promise<void> }): void;
 registerViewSlot(slotId: string, component: unknown): void;
 registerPrintTemplate(template: { id: string; render: (task: Task) => string }): void;
 getTasks(): Promise<Task[]>;
 updateTask(id: string, patch: Partial<Task>): Promise<void>;
+
+// v2 声明（组件/query/handler 在 gofor.renderer 里实现）
+registerScreen({ id, title, group, order?, icon?, layout?, chrome?, component }): void;
+registerTheme({ id, name, tokens }): void;
+registerData({ id, version, summary }): void;
+registerScanHandler({ id, owner }): void;
 ```
+
+v2 的 manifest 增加 `permissions` 与 `renderer`；capabilities 可取
+`command | view-slot | print-template | screen | theme | data | scan`。
 
 - `Task` 与 `@gofor/core/domain` 同形（id/title/subjectId/done/due/optional/subtasks/tags/sortKey/
   createdAt/updatedAt），定义在 `@gofor/contracts`，插件不需要依赖 monorepo 源码。
-- 插件**不能** import Dexie、`@gofor/store`、`@gofor/core`；所有数据走 `getTasks/updateTask`。
+- 插件**不能** import Dexie、`@gofor/store`、`@gofor/core`；数据走宿主 API / 数据契约。
+- 外部插件页面/主题/数据 query/扫描 handler 都在 `gofor.renderer` 里按名字导出；
+  主进程只登记可序列化声明，不能通过 IPC 传函数。
 - `registerViewSlot` 的 `component` 在主进程只用于取导出名：
   `component.displayName ?? component.name ?? 'default'`。组件本身由渲染进程加载。
 - 注册是**事务性**的：`activate` 抛错/超时时，这个插件已登记的东西全部丢弃，不会半截生效。
