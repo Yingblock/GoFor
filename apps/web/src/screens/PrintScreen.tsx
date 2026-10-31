@@ -202,12 +202,19 @@ export function PrintScreen({
     });
   }, [templateId, date, paper, blocks, blockOwners, tasks, data.habits]);
 
-  // 下拉里必须能选中当前值：模板被删/坏数据回退时，至少还有「我的一天」兜底。
+  // 下拉里必须能选中当前值；没有模板时不要伪造一个「我的一天」的内置兜底。
   const options = useMemo(() => {
     if (templates.some((template) => template.id === templateId)) return templates;
     return [
       ...templates,
-      { id: templateId, name: `${templateName}（已失效，回退「我的一天」）`, custom: false },
+      {
+        id: templateId,
+        name:
+          templates.length === 0
+            ? '没有插件提供打印模板'
+            : `${templateName}（已失效，回退「${templates[0]?.name ?? '第一个模板'}」）`,
+        custom: false,
+      },
     ];
   }, [templateId, templateName, templates]);
 
