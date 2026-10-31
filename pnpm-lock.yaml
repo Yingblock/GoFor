@@ -306,25 +306,6 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@26.6.5)(vite@7.3.7(@types/node@26.6.5))
 
-  packages/plugin-host:
-    dependencies:
-      '@gofor/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@gofor/plugin-runtime':
-        specifier: workspace:*
-        version: link:../plugin-runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.6.5
-        version: 26.6.5
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: ^5.0.5
-        version: 5.0.5(@types/node@26.6.5)(vite@7.3.7(@types/node@26.6.5))
-
   packages/plugin-kit:
     dependencies:
       '@gofor/core':

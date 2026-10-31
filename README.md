@@ -71,7 +71,7 @@ pnpm --filter @gofor/plugin-cli build
 pnpm exec gofor plugin list --user-data /tmp/gofor-user
 ```
 
-单测当前规模：**576 条**（core 253、domain 140、store 48、vision 46、plugin-runtime 17、plugin-host 2、plugin-cli 12、插件包 58）；e2e 约 **150 项**（`check()` 断言）
+单测当前规模：**574 条**（core 253、domain 140、store 48、vision 46、plugin-runtime 17、plugin-cli 12、插件包 58）；e2e 约 **150 项**（`check()` 断言）
 （条数会随当天数据的分支略有浮动）。
 
 打印时请确认：**缩放 100% · 关闭页眉页脚 · 勾选「背景图形」**。
@@ -90,7 +90,6 @@ packages/plugins  聚合层（@gofor/plugins）：只汇总 13 个构建期插�
 plugins/*         13 个独立构建期插件包（gofor-plugin-*，各自 package.json）
 packages/contracts 运行时插件契约（GoForPluginAPI / PluginManifest / PluginStatus，零依赖）
 packages/plugin-runtime 主进程运行时加载器（userData/plugins、超时、隔离、日志、IPC）
-packages/plugin-host   本地插件宿主（阶段一：0.0.0.0:47822，仅 loopback；PWA/LAN 后续接）
 packages/plugin-cli    `gofor plugin add/remove/list`
 apps/desktop      最小 Electron 主进程（运行时插件宿主；PWA 仍是主渠道）
 examples/gofor-plugin-hello 独立示例插件（不在 workspace）

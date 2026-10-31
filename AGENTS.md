@@ -51,7 +51,6 @@ packages/plugins  聚合层（`@gofor/plugins`）：汇总 13 个构建期插件
 plugins/*         13 个独立构建期插件包（`gofor-plugin-*`，各自 package.json/tsconfig）；单插件逻辑跟包走
 packages/contracts 运行时插件契约（GoForPluginAPI / PluginManifest / PluginStatus，零依赖）
 packages/plugin-runtime 主进程运行时加载器（userData/plugins、5s 超时、隔离、reload、logs、IPC）
-packages/plugin-host   本地插件宿主（阶段一：绑 0.0.0.0:47822，仅 loopback；snapshot/renderer 资源）
 packages/plugin-cli    `gofor plugin add/remove/list`
 apps/desktop      最小 Electron 主进程（运行时插件宿主骨架；PWA 仍是主渠道）
 e2e/              真实浏览器冒烟（Playwright），产物在 e2e/out/（已 ignore）
