@@ -2,6 +2,7 @@ import { type AppConfig, DEFAULT_PRINT_TEMPLATE, mergeConfig } from '@gofor/core
 import {
   type CourseNote,
   dateKey,
+  type HabitLog,
   type StoredTemplate,
   type Subject,
   type Task,
@@ -11,17 +12,14 @@ import { materialize, type PaperId, resolvePrintBlocks } from '@gofor/core/print
 import { buildSheetManifest } from '@gofor/core/scan';
 import { type Habit, isHabitActiveOn } from '@gofor/domain/habits';
 import { occurrencesOn, parseTimetable } from '@gofor/domain/timetable';
+import { useHostData } from '@gofor/plugin-kit';
 import {
   currentConfigOrDefault,
   db,
   ensureSubjects,
   exportAll,
   importAll,
-  listHabits,
-  listSubjects,
-  listTasks,
   listTemplates,
-  loadTimetable,
   saveConfig,
   saveSheetManifest,
   sheetManifestId,
@@ -66,7 +64,6 @@ import { PrintScreen } from './screens/PrintScreen.tsx';
 import { TemplateEditorScreen } from './screens/TemplateEditor.tsx';
 
 /** 与课表页共用同一个库内 id；P1 只有一个学期。 */
-const TIMETABLE_ID = 'default';
 
 /** 折叠态持久化用的 key：刷新/重开都要保持用户上次的选择。 */
 const SIDEBAR_COLLAPSED_KEY = 'gofor.ui.sidebarCollapsed';
@@ -155,31 +152,45 @@ function AppShell() {
    */
   const configRef = useRef<AppConfig | null>(null);
 
-  const tasks = useLiveQuery(() => listTasks(db), [], [] as Task[]);
+  interface HabitPrintPayload {
+    habits: Habit[];
+    logs: HabitLog[];
+  }
+  interface TimetablePrintPayload {
+    timetable: unknown;
+    subjects: Subject[];
+    courseNotes: CourseNote[];
+  }
+  const EMPTY_HABITS: HabitPrintPayload = { habits: [], logs: [] };
+  const EMPTY_TIMETABLE: TimetablePrintPayload = {
+    timetable: undefined,
+    subjects: [],
+    courseNotes: [],
+  };
+
+  const tasks = useHostData<Task[]>(host, 'tasks.all', {}, []);
+  const habitPayload = useHostData<HabitPrintPayload>(host, 'habits.all', {}, EMPTY_HABITS);
+  const timetablePayload = useHostData<TimetablePrintPayload>(
+    host,
+    'timetable.current',
+    {},
+    EMPTY_TIMETABLE,
+  );
   /** 用户模板：配置里的 template 可能指向它们，打印层 / 打印页下拉都从这里取。 */
   const customTemplates = useLiveQuery(() => listTemplates(db), [], [] as StoredTemplate[]);
-  /** 今天该做的打卡项：打印到纸上的「打卡行」，扫描后按 habit id 回填。 */
-  const habits = useLiveQuery(() => listHabits(db), [], [] as Habit[]);
-  const tasksAvailable = host.data.available('tasks.all');
-  const habitsAvailable = host.data.available('habits.range');
-  const timetableAvailable = host.plugins.some(
-    (plugin) => plugin.id === 'gofor.timetable' && plugin.enabled,
-  );
-
-  // 课表存在 Dexie 里是 `unknown`（导入可能带进坏数据），用上面的守卫收窄。
-  const timetable = useLiveQuery(() => loadTimetable(db, TIMETABLE_ID), [], undefined);
+  const habits = habitPayload.habits;
+  const timetable = timetablePayload.timetable;
+  const subjects = timetablePayload.subjects;
   /** 所有课程备注：按日期分组，任意打印日期都能取到自己那天的备注。 */
-  const allCourseNotes = useLiveQuery(() => db.courseNotes.toArray(), [], [] as CourseNote[]);
   const notesByDate = useMemo(() => {
     const map = new Map<string, Map<string, string>>();
-    for (const note of allCourseNotes) {
+    for (const note of timetablePayload.courseNotes) {
       const day = map.get(note.date) ?? new Map<string, string>();
       day.set(`${note.courseId}@${note.startMinute}`, note.text);
       map.set(note.date, day);
     }
     return map;
-  }, [allCourseNotes]);
-  const subjects = useLiveQuery(() => listSubjects(db), [], [] as Subject[]);
+  }, [timetablePayload.courseNotes]);
 
   /**
    * 任意一天的课表：从 Dexie 一路算到纸面的一行。
@@ -189,7 +200,6 @@ function AppShell() {
    */
   const scheduleForDate = useCallback(
     (date: string): ScheduleEntry[] => {
-      if (!timetableAvailable) return [];
       const data = parseTimetable(timetable);
       if (!data) return [];
 
@@ -218,7 +228,7 @@ function AppShell() {
         return [];
       }
     },
-    [notesByDate, subjects, timetable, timetableAvailable],
+    [notesByDate, subjects, timetable],
   );
 
   useEffect(() => {
@@ -287,20 +297,18 @@ function AppShell() {
   /** 某一天纸上的任务：今天延续原行为（全部任务），其它日期只取该日到期的。 */
   const tasksForDate = useCallback(
     (date: string) => {
-      if (!tasksAvailable) return [] as Task[];
       return date === today ? tasks : tasks.filter((task) => task.due === date);
     },
-    [tasks, tasksAvailable, today],
+    [tasks, today],
   );
   /** 某一天该做的打卡。 */
   const habitsForDate = useCallback(
     (date: string) => {
-      if (!habitsAvailable) return [];
       return habits
         .filter((habit) => isHabitActiveOn(habit, date))
         .map((habit) => ({ id: habit.id, name: habit.name }));
     },
-    [habits, habitsAvailable],
+    [habits],
   );
 
   /** 某一天的纸面数据（不含 blocks）：任务/课表/备注/打卡/二维码。 */
@@ -344,12 +352,9 @@ function AppShell() {
     [
       buildSheetData,
       habitsForDate,
-      habitsAvailable,
       host.printBlockOwners,
       printTemplate,
       tasksForDate,
-      tasksAvailable,
-      timetableAvailable,
     ],
   );
 

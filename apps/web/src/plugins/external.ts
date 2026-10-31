@@ -148,8 +148,36 @@ function createExternalContext(
   additions: ExternalAdditions,
 ): PluginContext {
   const pluginId = plugin.manifest.id;
-  const storage = host.storageFor(pluginId);
+  const storage = plugin.manifest.permissions.includes('storage')
+    ? host.storageFor(pluginId)
+    : {
+        async get() {
+          throw new Error(`插件 ${pluginId} 没有声明 storage 权限`);
+        },
+        async put() {
+          throw new Error(`插件 ${pluginId} 没有声明 storage 权限`);
+        },
+        async list() {
+          throw new Error(`插件 ${pluginId} 没有声明 storage 权限`);
+        },
+        async delete() {
+          throw new Error(`插件 ${pluginId} 没有声明 storage 权限`);
+        },
+        async clear() {
+          throw new Error(`插件 ${pluginId} 没有声明 storage 权限`);
+        },
+      };
   const store = host.storeFor(pluginId);
+  const data = plugin.manifest.permissions.includes('data.read')
+    ? host.data
+    : {
+        ...host.data,
+        available: () => false,
+        query: async () => null,
+        revision: async () => null,
+        watch: () => () => {},
+        status: () => ({ status: 'missing' as const, reason: 'not-installed' as const }),
+      };
   const requirePermission = (permission: string): void =>
     permissionCheck(plugin.manifest, permission);
   const requireNamespaced = (id: string): void => {
@@ -162,7 +190,7 @@ function createExternalContext(
     pluginId,
     manifest: plugin.manifest,
     permissions: plugin.manifest.permissions,
-    data: host.data,
+    data,
     storage,
     store,
     now: () => appClock.now(),

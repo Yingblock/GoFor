@@ -17,6 +17,7 @@ import {
   listSubjects,
   listTasks,
   listToolboxRuns,
+  loadTimetable,
 } from './repositories.ts';
 
 /**
@@ -124,6 +125,41 @@ export function createBuiltinDataProviders(database: GoForDb): BuiltinDataProvid
       },
       async revision() {
         return fingerprint([await listHabits(database), await database.habitLogs.toArray()]);
+      },
+    },
+    {
+      id: 'habits.all',
+      owner: 'gofor.checkin',
+      version: 1,
+      summary: '全部打卡项与全部打卡记录',
+      async query() {
+        return {
+          habits: (await listHabits(database)) as Habit[],
+          logs: await database.habitLogs.toArray(),
+        };
+      },
+      async revision() {
+        return fingerprint([await listHabits(database), await database.habitLogs.toArray()]);
+      },
+    },
+    {
+      id: 'timetable.current',
+      owner: 'gofor.timetable',
+      version: 1,
+      summary: '当前学期课表、全部科目与课程备注',
+      async query() {
+        return {
+          timetable: await loadTimetable(database, 'default'),
+          subjects: await listSubjects(database),
+          courseNotes: await database.courseNotes.toArray(),
+        };
+      },
+      async revision() {
+        return fingerprint([
+          await loadTimetable(database, 'default'),
+          await listSubjects(database),
+          await database.courseNotes.toArray(),
+        ]);
       },
     },
     {

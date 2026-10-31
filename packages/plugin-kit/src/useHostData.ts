@@ -1,4 +1,6 @@
 import type { DataAvailability, PluginScreenHost } from '@gofor/plugin-api';
+
+type DataHost = Pick<PluginScreenHost, 'data'>;
 import { useEffect, useRef, useState } from 'react';
 
 /**
@@ -8,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
  * 只用页面 props 里的 `host`。这样视图可以搬到 npm 包里，不反向 import 宿主。
  */
 export function useHostData<T>(
-  host: PluginScreenHost,
+  host: DataHost,
   contractId: string,
   input: unknown,
   fallback: T,
@@ -37,7 +39,7 @@ export function useHostData<T>(
 }
 
 /** 数据契约是否可用；缺失时界面必须显示「未安装」，不能当 0。 */
-export function useHostAvailability(host: PluginScreenHost, contractId: string): DataAvailability {
+export function useHostAvailability(host: DataHost, contractId: string): DataAvailability {
   void host.data;
   return host.data.status(contractId);
 }

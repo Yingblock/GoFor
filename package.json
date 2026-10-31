@@ -10,7 +10,7 @@
   "scripts": {
     "build": "pnpm --filter @gofor/web build",
     "check": "biome check --write .",
-    "check:boundaries": "node tools/check-plugin-boundaries.mjs",
+    "check:boundaries": "node tools/check-plugin-boundaries.mjs && node tools/check-core-data-boundaries.mjs",
     "dev": "pnpm --filter @gofor/web dev",
     "e2e": "node e2e/smoke.mjs",
     "e2e:external": "node e2e/external-smoke.mjs",

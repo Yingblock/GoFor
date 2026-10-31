@@ -164,6 +164,10 @@ pnpm exec gofor plugin list --user-data /tmp/gofor-user
 
 ## 最近一次更新
 
+- **2026-10-31 数据访问单一入口**：`App` 不再直接读 tasks/habits/timetable，改用
+  `tasks.all` / `habits.all` / `timetable.current` provider；core 边界检查脚本加入
+  `pnpm check:boundaries`。见 `DECISIONS/0018`。
+
 - **2026-10-31 打印数据门控**：插件禁用后 `tasksForDate`/`habitsForDate`/`scheduleForDate`
   返回空，打印页和模板页不再读到任务/打卡/课表数据。见 `DECISIONS/0017`。
 

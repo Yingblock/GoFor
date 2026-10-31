@@ -163,6 +163,24 @@ function toEntry(
   };
 }
 
+function createCoreDataEntries(ownerIds: ReadonlySet<string>): DataContractEntry[] {
+  return createBuiltinDataProviders(db)
+    .filter((provider) => provider.owner === undefined || ownerIds.has(provider.owner))
+    .map((provider) =>
+      toEntry(
+        {
+          id: provider.id,
+          version: provider.version,
+          summary: provider.summary,
+          query: (value) => provider.query(value),
+          revision: () => provider.revision(),
+        },
+        'core',
+        'core',
+      ),
+    );
+}
+
 /**
  * 取一个数据 provider（不含版本校验）。
  *
@@ -249,6 +267,17 @@ const FORBIDDEN_STORAGE: PluginStorage = {
     throw new Error('插件没有声明 storage 权限');
   },
 };
+
+function restrictedData(data: DataClient): DataClient {
+  return {
+    ...data,
+    available: () => false,
+    query: async () => null,
+    revision: async () => null,
+    watch: () => () => {},
+    status: () => ({ status: 'missing', reason: 'not-installed' }),
+  };
+}
 
 function assertContractId(id: string): void {
   if (!/^[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+$/.test(id)) {
@@ -371,6 +400,7 @@ interface BuildResult {
   activeModules: PluginModule[];
   scanHandlers: Map<string, ScanHandlerContribution>;
   pluginNames: Map<string, string>;
+  enabledPluginIds: Set<string>;
 }
 
 async function buildPluginHost(input: {
@@ -378,9 +408,10 @@ async function buildPluginHost(input: {
   coreCommands: readonly HostCommand[];
   entriesRef: { current: DataContractEntry[] };
   data: DataClient;
+  dataFor: (pluginId: string) => DataClient;
   storageFor: (pluginId: string) => PluginStorage;
 }): Promise<BuildResult> {
-  const { previousActive, coreCommands, entriesRef, data, storageFor } = input;
+  const { previousActive, coreCommands, entriesRef, data, dataFor, storageFor } = input;
   const now = appClock.now();
 
   await ensureBuiltinPlugins(
@@ -439,21 +470,7 @@ async function buildPluginHost(input: {
   const enabledPluginIds = new Set(
     records.filter((record) => record.enabled).map((record) => record.id),
   );
-  const entries: DataContractEntry[] = createBuiltinDataProviders(db)
-    .filter((provider) => provider.owner === undefined || enabledPluginIds.has(provider.owner))
-    .map((provider) =>
-      toEntry(
-        {
-          id: provider.id,
-          version: provider.version,
-          summary: provider.summary,
-          query: (value) => provider.query(value),
-          revision: () => provider.revision(),
-        },
-        'core',
-        'core',
-      ),
-    );
+  const entries = createCoreDataEntries(enabledPluginIds);
   entriesRef.current = entries;
 
   const collected = new Map<string, Collected>();
@@ -574,7 +591,7 @@ async function buildPluginHost(input: {
       }
       const runContext: CommandRunContext = {
         navigate: navigateToScreen,
-        data,
+        data: dataFor(pluginId),
         storage: storageFor(pluginId),
         now: () => appClock.now(),
         newId: createId,
@@ -805,6 +822,7 @@ async function buildPluginHost(input: {
     activeModules,
     scanHandlers,
     pluginNames,
+    enabledPluginIds,
     snapshot: {
       ready: true,
       bootstrapError: null,
@@ -868,6 +886,14 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
   const rebuildingRef = useRef(false);
   const versionRef = useRef(0);
   const data = useMemo(() => createDataClient(entriesRef), []);
+  const dataFor = useCallback(
+    (pluginId: string): DataClient => {
+      const info = snapshot.plugins.find((plugin) => plugin.id === pluginId);
+      if (pluginId === 'gofor.pomodoro') console.log('DATA-FOR', info?.permissions);
+      return info?.permissions.includes('data.read') ? data : restrictedData(data);
+    },
+    [data, snapshot.plugins],
+  );
 
   const storageFor = useCallback(
     (pluginId: string) => createPluginStorage(db, pluginId, () => appClock.now()),
@@ -884,6 +910,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
         coreCommands: coreCommandsRef.current,
         entriesRef,
         data,
+        dataFor,
         storageFor,
       });
       activeModulesRef.current = result.activeModules;
@@ -913,6 +940,20 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
           ...pluginNamesRef.current,
           ...external.plugins.map((plugin) => [plugin.id, plugin.name] as const),
         ]);
+        const activeExternalPluginIds = external.plugins
+          .filter((plugin) => plugin.enabled)
+          .map((plugin) => plugin.id);
+        const coreEntries = createCoreDataEntries(
+          new Set([...result.enabledPluginIds, ...activeExternalPluginIds]),
+        );
+        entriesRef.current = [...coreEntries, ...external.dataContracts];
+        const coreProviders = coreEntries.map((entry) => ({
+          id: entry.id,
+          version: entry.version,
+          summary: BUILTIN_CONTRACT_SUMMARIES[entry.id] ?? 'core 提供的数据',
+          providerId: entry.providerId,
+          source: entry.source,
+        }));
         for (const plugin of external.plugins) externalPluginsRef.current.set(plugin.id, plugin);
         const activeExternalIds = new Set(external.plugins.map((plugin) => plugin.id));
         const disabledExternal = [...externalPluginsRef.current.values()]
@@ -961,7 +1002,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
           content: [...result.snapshot.content, ...external.content],
           converters: [...result.snapshot.converters, ...external.converters],
           connectors: [...result.snapshot.connectors, ...external.connectors],
-          dataProviders: [...result.snapshot.dataProviders, ...external.dataProviders],
+          dataProviders: [...coreProviders, ...external.dataProviders],
           printBlockOwners: [
             ...result.snapshot.printBlockOwners,
             ...external.printBlockOwners,
@@ -1122,6 +1163,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
       ...snapshot,
       activeTheme: safeTheme,
       data,
+      dataFor,
       applyScan,
       navigate,
       back,

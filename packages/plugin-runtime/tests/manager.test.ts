@@ -359,40 +359,21 @@ describe('PluginManager 生命周期', () => {
 });
 
 describe('PluginManager 宿主能力', () => {
-  it('getTasks/updateTask 走注入的 TaskStore', async () => {
+  it('外部插件不能直接读任务数据', async () => {
     const fixture = createFixture(['gofor-plugin-task']);
-    const task: Task = {
-      id: 't1',
-      title: '数学卷子',
-      subjectId: null,
-      done: false,
-      due: null,
-      sortKey: 1,
-      createdAt: 1,
-      updatedAt: 1,
-    };
     writePlugin(fixture, {
       packageName: 'gofor-plugin-task',
       body: `
-        const fs = require('node:fs');
         exports.activate = async (api) => {
-          const tasks = await api.getTasks();
-          fs.writeFileSync(${JSON.stringify(fixture.callsPath)}, JSON.stringify(tasks));
-          await api.updateTask('t1', { done: true });
+          await api.getTasks();
         };
       `,
     });
 
-    const { store, updates } = createTaskStore([task]);
-    const manager = new PluginManager({
-      userDataDir: fixture.root,
-      taskStore: store,
-      logger: silentLogger,
-    });
-    await manager.loadAll();
-
-    expect(JSON.parse(readFileSync(fixture.callsPath, 'utf8'))).toEqual([task]);
-    expect(updates).toEqual([{ id: 't1', patch: { done: true } }]);
+    const manager = createManager(fixture);
+    const snapshot = await manager.loadAll();
+    expect(snapshot.plugins[0]?.state).toBe('failed');
+    expect(snapshot.plugins[0]?.error).toContain('不能直接读取任务数据');
   });
 
   it('runCommand 返回结构化结果，未知命令不抛', async () => {

@@ -205,6 +205,7 @@ export interface HostSnapshot {
  */
 export interface PluginHostApi extends HostSnapshot {
   data: DataClient;
+  dataFor(pluginId: string): DataClient;
   /** 扫描回填：按结果 owner 路由到插件处理器；缺插件时明确返回 missing。 */
   applyScan(results: readonly ScanResult[], date: string): Promise<ScanDispatchSummary>;
   navigate(screenId: string): void;

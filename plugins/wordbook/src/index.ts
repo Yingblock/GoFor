@@ -18,7 +18,7 @@ export const wordbookPlugin: PluginModule = {
     apiVersion: PLUGIN_API_VERSION,
     description: '导入 CSV/TSV 词表，按词或标签查找。不属于复习功能。',
     author: 'GoFor',
-    permissions: ['ui.screen', 'ui.home', 'data.provide', 'storage'],
+    permissions: ['ui.screen', 'ui.home', 'data.read', 'data.provide', 'storage'],
     provides: {
       screens: ['gofor.wordbook/screen'],
       data: [{ id: 'wordbook.entries', version: 1, summary: '单词库全部词条（可按词/标签过滤）' }],

@@ -14,7 +14,7 @@ export const pomodoroPlugin: PluginModule = {
     apiVersion: PLUGIN_API_VERSION,
     description: '可自定义时长、全屏专注、分心记录与放弃确认。',
     author: 'GoFor',
-    permissions: ['ui.screen', 'ui.home'],
+    permissions: ['ui.screen', 'ui.home', 'data.read'],
     provides: { screens: ['gofor.pomodoro/screen'] },
   },
   activate(context) {

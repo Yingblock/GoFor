@@ -85,6 +85,7 @@ function HomeBlockView({
   const blockHost = useMemo(
     () => ({
       ...host,
+      data: host.dataFor(block.pluginId),
       storage: host.storageFor(block.pluginId),
       store: host.storeFor(block.pluginId),
     }),

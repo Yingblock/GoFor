@@ -161,7 +161,6 @@ export class PluginManager {
   private readonly timeoutMs: number;
   private readonly now: () => number;
   private readonly logger: PluginLogger;
-  private readonly taskStore: TaskStore;
   private readonly pluginRequire: NodeRequire;
 
   private readonly loaded = new Map<string, LoadedPlugin>();
@@ -181,7 +180,6 @@ export class PluginManager {
     this.logPath = join(options.userDataDir, 'logs', 'plugins.log');
     this.timeoutMs = options.timeoutMs ?? DEFAULT_ACTIVATE_TIMEOUT_MS;
     this.now = options.now ?? Date.now;
-    this.taskStore = options.taskStore;
     this.logger = options.logger ?? createFileLogger(this.logPath, { now: this.now });
     // 用 plugins/package.json 作为解析基准：插件依赖就装在这个目录。
     this.pluginRequire = createRequire(join(this.pluginsDir, 'package.json'));
@@ -598,15 +596,15 @@ export class PluginManager {
 
       getTasks: async () => {
         if (!collected.active) throw new Error('插件已停用');
-        return await this.taskStore.getTasks();
+        throw new Error('外部插件不能直接读取任务数据；请使用渲染进程数据契约');
       },
 
-      updateTask: async (id: string, patch: Partial<Task>) => {
+      updateTask: async (id: string, _patch: Partial<Task>) => {
         if (!collected.active) throw new Error('插件已停用');
         if (typeof id !== 'string' || id.trim() === '') {
           throw new Error('updateTask: id 必须是非空字符串');
         }
-        await this.taskStore.updateTask(id, patch);
+        throw new Error('外部插件不能直接写任务数据；请使用渲染进程数据契约');
       },
     };
   }
