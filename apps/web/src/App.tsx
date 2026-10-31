@@ -198,7 +198,6 @@ function AppShell() {
     },
     [notesByDate, subjects, timetable],
   );
-  const schedule = useMemo(() => scheduleForDate(today), [scheduleForDate, today]);
 
   useEffect(() => {
     void currentConfigOrDefault(db).then((result) => {
@@ -562,27 +561,11 @@ function AppShell() {
 
   const body: ReactNode = (() => {
     if (!entry) return null;
-    if (entry.kind === 'plugin') return <PluginScreenView entry={entry} />;
+    if (entry.kind === 'plugin') return <PluginScreenView key={entry.id} entry={entry} />;
 
     switch (entry.id) {
-      case 'home': {
-        // 数据可用性由插件启用状态决定：作业/打卡插件禁用后首页不展示对应数据。
-        const tasksAvailable = host.data.available('tasks.all');
-        const habitsAvailable = host.data.available('habits.range');
-        const timetableAvailable = host.plugins.some(
-          (plugin) => plugin.id === 'gofor.timetable' && plugin.enabled,
-        );
-        return (
-          <Home
-            tasks={tasksAvailable ? tasks : []}
-            tasksAvailable={tasksAvailable}
-            habitsAvailable={habitsAvailable}
-            timetableAvailable={timetableAvailable}
-            schedule={timetableAvailable ? schedule : []}
-            onNavigate={navigate}
-          />
-        );
-      }
+      case 'home':
+        return <Home />;
       case 'templates':
         return (
           <TemplateEditorScreen

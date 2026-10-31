@@ -7,9 +7,10 @@ import {
   isHabitActiveOn,
   isHabitCheckableOn,
 } from '@gofor/domain/habits';
+import type { PluginScreenProps } from '@gofor/plugin-api';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '@gofor/plugin-kit';
-import { db, deleteHabit, listHabitLogs, listHabits, saveHabit, setHabitLog } from '@gofor/store';
+import { pluginStore } from '@gofor/plugin-kit/store';
 import {
   Badge,
   Button,
@@ -282,16 +283,17 @@ function HistoryGrid({ habit, today, historyFrom, doneKeys }: HistoryGridProps) 
  * 不落库——排期一旦单独存一份，改规则时必然和规则本身不一致。
  * 写入只有一条路径：`setHabitLog(db, habitId, today, done, now)`。
  */
-export function CheckinScreen() {
+export function CheckinScreen({ host }: PluginScreenProps) {
+  const store = pluginStore(host.store);
   const today = dateKey(appClock);
   const historyFrom = useMemo(() => addDays(today, -(HISTORY_DAYS - 1)), [today]);
   const logFrom = useMemo(() => addDays(today, -(STREAK_LOOKBACK_DAYS - 1)), [today]);
 
-  const habits = useLiveQuery(() => listHabits(db), [], [] as Habit[]);
+  const habits = useLiveQuery(() => store.listHabits(), [store], [] as Habit[]);
   // 右端写死为今天：即使库里有未来的脏记录，界面也不会把它当成"已打过"。
   const logs = useLiveQuery(
-    () => listHabitLogs(db, logFrom, today),
-    [logFrom, today],
+    () => store.listHabitLogs(logFrom, today),
+    [store, logFrom, today],
     [] as HabitLog[],
   );
 
@@ -351,7 +353,7 @@ export function CheckinScreen() {
   const toggleToday = useCallback(
     async (habit: Habit) => {
       const next = !doneKeys.has(logKey(habit.id, today));
-      await setHabitLog(db, habit.id, today, next, appClock.now());
+      await store.setHabitLog(habit.id, today, next, appClock.now());
     },
     [doneKeys, today],
   );
@@ -360,7 +362,7 @@ export function CheckinScreen() {
     async (habitId: string | null, draft: HabitDraft) => {
       const now = appClock.now();
       const existing = habitId === null ? undefined : habits.find((item) => item.id === habitId);
-      await saveHabit(db, {
+      await store.saveHabit({
         // 编辑保留原 id：日志主键是 `${habitId}@${date}`，换 id 等于把历史全丢掉。
         id: existing?.id ?? newId(),
         name: draft.name.trim(),
@@ -379,7 +381,7 @@ export function CheckinScreen() {
 
   const removeHabit = useCallback(async (habit: Habit) => {
     // 仓储在事务里连带清掉 habitLogs：孤儿历史留着没有意义。
-    await deleteHabit(db, habit.id);
+    await store.deleteHabit(habit.id);
     setPendingDeleteId(null);
     setFormTarget((current) => (current !== null && current.habitId === habit.id ? null : current));
   }, []);

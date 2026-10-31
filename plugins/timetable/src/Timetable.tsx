@@ -14,17 +14,10 @@ import {
   validateRules,
   weekDatesOf,
 } from '@gofor/domain/timetable';
+import type { PluginScreenProps } from '@gofor/plugin-api';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '@gofor/plugin-kit';
-import {
-  createSubject,
-  db,
-  deleteSubject,
-  listSubjects,
-  loadTimetable,
-  renameSubject,
-  saveTimetable,
-} from '@gofor/store';
+import { pluginStore } from '@gofor/plugin-kit/store';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CoursesSection } from './sections/CoursesSection.tsx';
 import { TermSection } from './sections/TermSection.tsx';
@@ -81,7 +74,8 @@ function formatClock(epochMs: number): string {
  * 删科目不级联删规则（那是静默丢数据），改为行内二次确认 + 明确后果说明；
  * 旧数据的 courseId 查不到时降级显示「未知科目（已删除）」，不崩、也不偷改规则。
  */
-export function TimetableScreen() {
+export function TimetableScreen({ host }: PluginScreenProps) {
+  const store = pluginStore(host.store);
   const [data, setData] = useState<TimetableData | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subjectError, setSubjectError] = useState<string | null>(null);
@@ -108,13 +102,13 @@ export function TimetableScreen() {
 
   /** 科目是全局数据，每次写完都重新拉一遍，保证改名/删除立刻反映到规则和周视图。 */
   const refreshSubjects = useCallback(async () => {
-    setSubjects(await listSubjects(db));
+    setSubjects(await store.listSubjects());
   }, []);
 
   useEffect(() => {
     void (async () => {
       await refreshSubjects();
-      const raw = await loadTimetable(db, TERM_ID);
+      const raw = await store.loadTimetable(TERM_ID);
       if (raw === undefined) {
         setData(defaultTimetable(TERM_ID, dateKey(appClock)));
         return;
@@ -177,7 +171,7 @@ export function TimetableScreen() {
       setSaveState({ kind: 'saving' });
       try {
         const now = appClock.now();
-        await saveTimetable(db, TERM_ID, current, now);
+        await store.saveTimetable(TERM_ID, current, now);
         if (!aliveRef.current) return;
         // 保存期间又改过：dirty 保持 true，那次改动已经排了新的防抖，由它再写一次。
         if (revisionRef.current === revision) {
@@ -271,7 +265,7 @@ export function TimetableScreen() {
       if (current === null || !dirtyRef.current) return;
       if (collectErrors(current).length > 0) return;
       dirtyRef.current = false;
-      void saveTimetable(db, TERM_ID, current, appClock.now()).catch(() => {
+      void store.saveTimetable(TERM_ID, current, appClock.now()).catch(() => {
         // 已经离开页面，没地方展示错误；不要让未处理的 rejection 冒到控制台以外。
       });
     };
@@ -292,17 +286,17 @@ export function TimetableScreen() {
   );
 
   const handleCreateSubject = useCallback(
-    async (name: string) => runSubjectWrite(() => createSubject(db, name)),
+    async (name: string) => runSubjectWrite(() => store.createSubject(name)),
     [runSubjectWrite],
   );
 
   const handleRenameSubject = useCallback(
-    async (id: string, name: string) => runSubjectWrite(() => renameSubject(db, id, name)),
+    async (id: string, name: string) => runSubjectWrite(() => store.renameSubject(id, name)),
     [runSubjectWrite],
   );
 
   const handleDeleteSubject = useCallback(
-    async (id: string) => runSubjectWrite(() => deleteSubject(db, id)),
+    async (id: string) => runSubjectWrite(() => store.deleteSubject(id)),
     [runSubjectWrite],
   );
 

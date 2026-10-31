@@ -1,4 +1,5 @@
 import type { DataClient, DataContract } from './data.ts';
+import type { PluginStoreLike } from './store.ts';
 
 /**
  * 结构化组件类型（零 React 依赖）。
@@ -56,6 +57,7 @@ export interface PluginScreenHost {
   newId(): string;
   data: DataClient;
   storage: PluginStorage;
+  store: PluginStoreLike;
   /** 扫描回填：按结果 owner 分发给各插件；缺插件时返回 missing。 */
   applyScan(results: readonly ScanHandlerResult[], date: string): Promise<ScanDispatchSummary>;
 }
@@ -108,6 +110,36 @@ export interface CommandContribution {
    */
   shortcut?: string;
   run(context: CommandRunContext): void | Promise<void>;
+}
+
+/* ------------------------------------------------------------ 首页块 */
+
+/** 首页内容块的宿主能力。 */
+export interface HomeBlockProps {
+  pluginId: string;
+  blockId: string;
+  host: PluginScreenHost;
+}
+
+export interface HomeBlockModule {
+  default: PluginComponent<HomeBlockProps>;
+}
+
+/**
+ * 首页内容贡献项。
+ *
+ * 首页不再写死任务/打卡/课表/统计；core 只负责按 order + 用户拖拽顺序排列。
+ * 每个块的标题由插件给，右侧拖拽手柄由 core 渲染。
+ */
+export interface HomeBlockContribution {
+  /** 必须是 `<pluginId>/<blockId>`。 */
+  id: string;
+  title: string;
+  /** 默认排序，小的在前。 */
+  order?: number;
+  /** 1/2 列；首页网格在窄屏仍是一列。 */
+  span?: 1 | 2;
+  load: () => Promise<HomeBlockModule>;
 }
 
 /* ------------------------------------------------------------- 插槽 */

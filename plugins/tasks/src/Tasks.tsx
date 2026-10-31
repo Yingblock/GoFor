@@ -6,19 +6,8 @@ import {
   type TagPool,
   type Task,
 } from '@gofor/core/domain';
-import {
-  createTask,
-  db,
-  deleteTagPool,
-  deleteTask,
-  ensureSubjects,
-  listSubjects,
-  listTagPools,
-  listTasks,
-  saveTagPool,
-  setTaskDone,
-  updateTask,
-} from '@gofor/store';
+import type { PluginScreenProps } from '@gofor/plugin-api';
+import { type PluginStoreApi, pluginStore } from '@gofor/plugin-kit/store';
 import { Badge, Button, Card, Checkbox, Chip, EmptyState, focusRing, Input } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -27,15 +16,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 type TaskView = ReturnType<typeof normalizeTask>;
 
 /** 交换相邻两条任务的 sortKey，实现"上移/下移"。 */
-async function moveTask(tasks: Task[], index: number, delta: -1 | 1, now: number): Promise<void> {
+async function moveTask(
+  store: PluginStoreApi,
+  tasks: Task[],
+  index: number,
+  delta: -1 | 1,
+  now: number,
+): Promise<void> {
   const target = index + delta;
   if (target < 0 || target >= tasks.length) return;
   const current = tasks[index];
   const other = tasks[target];
   if (!current || !other) return;
 
-  await updateTask(db, current.id, { sortKey: other.sortKey }, now);
-  await updateTask(db, other.id, { sortKey: current.sortKey }, now);
+  await store.updateTask(current.id, { sortKey: other.sortKey }, now);
+  await store.updateTask(other.id, { sortKey: current.sortKey }, now);
 }
 
 /**
@@ -45,12 +40,13 @@ async function moveTask(tasks: Task[], index: number, delta: -1 | 1, now: number
  * 这里点名的字段，updatedAt 由仓储统一维护，不自己拼一次 Dexie 写入。
  */
 async function patchTaskTags(
+  store: PluginStoreApi,
   id: string,
   tags: string[],
   subjectId: string | null,
   now: number,
 ): Promise<void> {
-  await updateTask(db, id, { tags, subjectId }, now);
+  await store.updateTask(id, { tags, subjectId }, now);
 }
 
 /** 科目池是虚拟池（标签名 = 科目名），按名字反查科目，用来同步 subjectId。 */
@@ -190,6 +186,7 @@ function TagPanel({ task, pools, subjects, onToggle, onCreate }: TagPanelProps) 
 interface TagManagerProps {
   subjects: Subject[];
   pools: TagPool[];
+  store: PluginStoreApi;
 }
 
 /**
@@ -198,7 +195,7 @@ interface TagManagerProps {
  * 删除池刻意不级联清除任务上的同名标签：任务标签是用户自己打的，
  * 静默删除等于数据丢失；所以这里先明确提示，让用户自己去摘。
  */
-function TagManager({ subjects, pools }: TagManagerProps) {
+function TagManager({ subjects, pools, store }: TagManagerProps) {
   const customPools = pools.filter((pool) => pool.id !== SUBJECT_TAG_POOL_ID);
   const [open, setOpen] = useState(false);
   const [poolName, setPoolName] = useState('');
@@ -209,7 +206,7 @@ function TagManager({ subjects, pools }: TagManagerProps) {
     const name = poolName.trim();
     if (name === '') return;
     // id 用 newId()：池名不是主键，允许重名，下次改名/删池都不会串数据。
-    await saveTagPool(db, newId(), name, []);
+    await store.saveTagPool(newId(), name, []);
     setPoolName('');
   }, [poolName]);
 
@@ -218,21 +215,23 @@ function TagManager({ subjects, pools }: TagManagerProps) {
       const tag = (tagDrafts[pool.id] ?? '').trim();
       if (tag === '') return;
       if (!pool.tags.includes(tag)) {
-        await saveTagPool(db, pool.id, pool.name, [...pool.tags, tag]);
+        await store.saveTagPool(pool.id, pool.name, [...pool.tags, tag]);
       }
       setTagDrafts((current) => ({ ...current, [pool.id]: '' }));
     },
     [tagDrafts],
   );
 
-  const removePoolTag = useCallback(async (pool: TagPool, tag: string) => {
-    await saveTagPool(
-      db,
-      pool.id,
-      pool.name,
-      pool.tags.filter((item) => item !== tag),
-    );
-  }, []);
+  const removePoolTag = useCallback(
+    async (pool: TagPool, tag: string) => {
+      await store.saveTagPool(
+        pool.id,
+        pool.name,
+        pool.tags.filter((item) => item !== tag),
+      );
+    },
+    [store],
+  );
 
   return (
     <Card as="section" padding="none">
@@ -293,7 +292,7 @@ function TagManager({ subjects, pools }: TagManagerProps) {
                           variant="danger"
                           size="sm"
                           onClick={() => {
-                            void deleteTagPool(db, pool.id);
+                            void store.deleteTagPool(pool.id);
                             setPendingDeleteId(null);
                           }}
                         >
@@ -349,9 +348,9 @@ function TagManager({ subjects, pools }: TagManagerProps) {
 }
 
 /** 离线·M2 作业清单：截止时间、必做/选做、步骤、标签池、排序。 */
-export function Tasks() {
-  // 页面自己取任务：作为插件页面时，宿主不再替它传 props。
-  const tasks = useLiveQuery(() => listTasks(db), [], [] as Task[]);
+export function Tasks({ host }: PluginScreenProps) {
+  const store = pluginStore(host.store);
+  const tasks = useLiveQuery(() => store.listTasks(), [store], [] as Task[]);
   const [draft, setDraft] = useState('');
   const [optional, setOptional] = useState(false);
   const [due, setDue] = useState('');
@@ -379,12 +378,12 @@ export function Tasks() {
     if (subtaskOpenTaskId !== null) subtaskInputRef.current?.focus();
   }, [subtaskOpenTaskId]);
 
-  const subjects = useLiveQuery(() => listSubjects(db), [], [] as Subject[]);
-  const customPools = useLiveQuery(() => listTagPools(db), [], [] as TagPool[]);
+  const subjects = useLiveQuery(() => store.listSubjects(), [store], [] as Subject[]);
+  const customPools = useLiveQuery(() => store.listTagPools(), [store], [] as TagPool[]);
 
   useEffect(() => {
-    void ensureSubjects(db);
-  }, []);
+    void store.ensureSubjects();
+  }, [store]);
 
   /**
    * 科目池是虚拟池：标签直接取科目名，绝不写 tagPools 表——
@@ -413,16 +412,16 @@ export function Tasks() {
     const subject = draftTags
       .map((tag) => subjectForTag(subjects, tag))
       .find((item): item is Subject => item !== undefined);
-    const task = await createTask(db, {
+    const task = await store.createTask({
       id: newId(),
       title,
       due: due === '' ? null : due,
       now,
       subjectId: subject?.id ?? null,
     });
-    if (optional) await updateTask(db, task.id, { optional: true }, now);
+    if (optional) await store.updateTask(task.id, { optional: true }, now);
     // createTask 不接受 tags，标签走一次字段级补丁；没选就不写，保持旧数据的空标签语义。
-    if (draftTags.length > 0) await updateTask(db, task.id, { tags: draftTags }, now);
+    if (draftTags.length > 0) await store.updateTask(task.id, { tags: draftTags }, now);
     setDraft('');
     // 截止与选做是"这一条"的属性，不清空会悄悄带到下一条作业。
     setDue('');
@@ -461,7 +460,7 @@ export function Tasks() {
         const tags = task.tags.includes(tag)
           ? task.tags.filter((item) => item !== tag)
           : [...task.tags, tag];
-        await patchTaskTags(task.id, tags, task.subjectId, now);
+        await patchTaskTags(store, task.id, tags, task.subjectId, now);
         return;
       }
 
@@ -476,6 +475,7 @@ export function Tasks() {
         (subject !== undefined && subject.id === task.subjectId) || task.tags.includes(tag);
       if (selected) {
         await patchTaskTags(
+          store,
           task.id,
           task.tags.filter((item) => item !== tag),
           null,
@@ -487,7 +487,7 @@ export function Tasks() {
       // 科目单选：换科目时顺手摘掉其它科目标签，一个任务只挂一个科目。
       const subjectNames = new Set(subjects.map((item) => item.name));
       const tags = [...task.tags.filter((item) => !subjectNames.has(item)), tag];
-      await patchTaskTags(task.id, tags, subject?.id ?? null, now);
+      await patchTaskTags(store, task.id, tags, subject?.id ?? null, now);
     },
     [subjects],
   );
@@ -498,19 +498,18 @@ export function Tasks() {
       if (!pool) return;
       const now = Date.now();
       if (!pool.tags.includes(tag)) {
-        await saveTagPool(db, pool.id, pool.name, [...pool.tags, tag]);
+        await store.saveTagPool(pool.id, pool.name, [...pool.tags, tag]);
       }
       // 新标签建完顺手打到当前任务上，省一次点击。
       if (!task.tags.includes(tag)) {
-        await patchTaskTags(task.id, [...task.tags, tag], task.subjectId, now);
+        await patchTaskTags(store, task.id, [...task.tags, tag], task.subjectId, now);
       }
     },
     [customPools],
   );
 
   const toggleSubtask = useCallback(async (task: TaskView, subtaskId: string) => {
-    await updateTask(
-      db,
+    await store.updateTask(
       task.id,
       {
         subtasks: task.subtasks.map((item) =>
@@ -526,8 +525,7 @@ export function Tasks() {
       if (subtaskDraft === null || subtaskDraft.taskId !== task.id) return;
       const title = subtaskDraft.value.trim();
       if (title === '') return;
-      await updateTask(
-        db,
+      await store.updateTask(
         task.id,
         { subtasks: [...task.subtasks, { id: newId(), title, done: false }] },
         Date.now(),
@@ -641,7 +639,7 @@ export function Tasks() {
                       aria-label={`完成 ${task.title}`}
                       checked={task.done}
                       onChange={(event) =>
-                        void setTaskDone(db, task.id, event.target.checked, Date.now())
+                        void store.setTaskDone(task.id, event.target.checked, Date.now())
                       }
                     />
                     <span
@@ -673,7 +671,7 @@ export function Tasks() {
                       <button
                         type="button"
                         aria-label="上移"
-                        onClick={() => void moveTask(normalized, index, -1, Date.now())}
+                        onClick={() => void moveTask(store, normalized, index, -1, Date.now())}
                         className={`px-1 text-small opacity-50 transition-opacity duration-fast hover:opacity-80 ${focusRing}`}
                       >
                         ↑
@@ -681,7 +679,7 @@ export function Tasks() {
                       <button
                         type="button"
                         aria-label="下移"
-                        onClick={() => void moveTask(normalized, index, 1, Date.now())}
+                        onClick={() => void moveTask(store, normalized, index, 1, Date.now())}
                         className={`px-1 text-small opacity-50 transition-opacity duration-fast hover:opacity-80 ${focusRing}`}
                       >
                         ↓
@@ -711,7 +709,7 @@ export function Tasks() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => void deleteTask(db, task.id)}
+                        onClick={() => void store.deleteTask(task.id)}
                         className={`px-1 text-small opacity-50 transition-opacity duration-fast hover:opacity-80 ${focusRing}`}
                       >
                         删除
@@ -787,7 +785,7 @@ export function Tasks() {
         </Card>
       )}
 
-      <TagManager subjects={subjects} pools={pools} />
+      <TagManager subjects={subjects} pools={pools} store={store} />
     </div>
   );
 }

@@ -113,6 +113,7 @@
 /* @gofor/ui 在 node_modules 之外：v4 的自动扫描不会进 pnpm 的软链接包，
  * 必须显式 @source，否则组件里的类名不会生成 CSS。 */
 @source "../../../packages/ui/src";
+@source "../../../plugins";
 
 /*
  * 深色主题（P2-2.16）。

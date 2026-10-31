@@ -8,10 +8,21 @@ export const timetablePlugin: PluginModule = {
     apiVersion: PLUGIN_API_VERSION,
     description: '学期 / 作息表 / 科目 / 排课规则；周视图与换课。',
     author: 'GoFor',
-    permissions: ['ui.screen'],
+    permissions: ['ui.screen', 'ui.home'],
     provides: { screens: ['gofor.timetable/screen'], printBlocks: ['schedule'] },
   },
   activate(context) {
+    context.registerHomeBlock({
+      id: 'gofor.timetable/home',
+      title: '今日课表',
+      order: 20,
+      span: 2,
+      load: async () => {
+        const module = await import('./TimetableHomeBlock.tsx');
+        return { default: module.TimetableHomeBlock };
+      },
+    });
+
     context.registerScreen({
       id: 'gofor.timetable/screen',
       title: '课程表',

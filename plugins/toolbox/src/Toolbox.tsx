@@ -1,6 +1,7 @@
 import { newId } from '@gofor/core';
+import type { PluginScreenProps } from '@gofor/plugin-api';
 import { appClock } from '@gofor/plugin-kit';
-import { addToolboxRun, db } from '@gofor/store';
+import { type PluginStoreApi, pluginStore } from '@gofor/plugin-kit/store';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EXERCISES, type Exercise, progressAt, totalSeconds } from './wellbeing.ts';
 
@@ -21,7 +22,8 @@ function durationLabel(seconds: number): string {
  * `progressAt(exercise, elapsedMs)` 算出。暂停 = 停止累计已过毫秒，
  * 恢复时把暂停时长扣掉；所以切后台被节流、锁屏再回来都不会算错。
  */
-export function ToolboxScreen() {
+export function ToolboxScreen({ host }: PluginScreenProps) {
+  const store = pluginStore(host.store);
   const [active, setActive] = useState<{ key: string; exercise: Exercise } | null>(null);
 
   return (
@@ -63,6 +65,7 @@ export function ToolboxScreen() {
         <ExerciseSession
           key={active.key}
           exercise={active.exercise}
+          store={store}
           onExit={() => setActive(null)}
         />
       ) : null}
@@ -72,11 +75,12 @@ export function ToolboxScreen() {
 
 interface ExerciseSessionProps {
   exercise: Exercise;
+  store: PluginStoreApi;
   onExit: () => void;
 }
 
 /** 一次练习的引导界面。key 由父级换新，重开时状态自然重置。 */
-function ExerciseSession({ exercise, onExit }: ExerciseSessionProps) {
+function ExerciseSession({ exercise, store, onExit }: ExerciseSessionProps) {
   const [paused, setPaused] = useState(false);
   const [finished, setFinished] = useState<'completed' | 'stopped' | null>(null);
   const [savedSeconds, setSavedSeconds] = useState<number | null>(null);
@@ -118,7 +122,7 @@ function ExerciseSession({ exercise, onExit }: ExerciseSessionProps) {
       setSavedSeconds(seconds);
 
       try {
-        await addToolboxRun(db, {
+        await store.addToolboxRun({
           id: newId(),
           exercise: exercise.id,
           startedAt: startedWallRef.current,

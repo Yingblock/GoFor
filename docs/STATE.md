@@ -37,7 +37,7 @@
 
 验证（`pnpm verify` 全绿 = typecheck + 单测 + build + 浏览器 e2e）：
 
-- ✅ 单测 **577**：core 253 / domain 140 / store 48 / vision 46 / plugin-runtime 18 / plugin-host 2 / plugin-cli 12 / 插件包 58
+- ✅ 单测 **580**：core 253 / domain 140 / store 48 / vision 46 / plugin-runtime 18 / plugin-host 2 / plugin-cli 12 / 插件包 58 / web 3
 - ✅ e2e 约 **150** 项（`e2e/smoke.mjs` 的 `check()` 断言）
 - ✅ 构建产物：index **756KB**、扫描插件懒加载 chunk **423KB**、CSS **35KB**
 - ✅ monorepo `apps/web` + `apps/desktop` + `packages/{core,domain,store,ui,vision,plugin-api,plugin-kit,plugins,contracts,plugin-runtime,plugin-cli}` + `plugins/*`；
@@ -164,6 +164,10 @@ pnpm exec gofor plugin list --user-data /tmp/gofor-user
 
 ## 最近一次更新
 
+- **2026-10-31 首页内容块 + 构建期插件权限边界**：首页不再写死任务/打卡/课表/统计/主行动，
+  全部由插件 `registerHomeBlock` 注册；core 只排序，右侧手柄可拖拽并持久化。构建期插件移除
+  `@gofor/store` 依赖，统一走 `host.store` 的 pluginId allowlist；`pnpm check:boundaries` 拦截回退。
+  扫描归属改由 manifest `provides.scanPayloads` 汇总。见 `DECISIONS/0014`。
 - **2026-10-31 插件数据归属**：内置数据 provider 增加 owner；作业/打卡/课表禁用后，
   首页对应区块消失；番茄钟不再提供任务绑定；扫描不再读取任务标签；e2e 覆盖。
 - **2026-10-31 外部插件 v2（分支 feat/plugin-host-v2）**：契约增加页面/主题/数据/扫描声明；

@@ -18,7 +18,7 @@ export const wordbookPlugin: PluginModule = {
     apiVersion: PLUGIN_API_VERSION,
     description: '导入 CSV/TSV 词表，按词或标签查找。不属于复习功能。',
     author: 'GoFor',
-    permissions: ['ui.screen', 'ui.slot', 'data.provide', 'storage'],
+    permissions: ['ui.screen', 'ui.home', 'data.provide', 'storage'],
     provides: {
       screens: ['gofor.wordbook/screen'],
       data: [{ id: 'wordbook.entries', version: 1, summary: '单词库全部词条（可按词/标签过滤）' }],
@@ -40,14 +40,14 @@ export const wordbookPlugin: PluginModule = {
       },
     });
 
-    // 首页统计区后面加一张小卡：插件被禁用时这块自然消失。
-    context.registerSlot({
-      id: 'gofor.wordbook/home-card',
-      slot: 'home.after-stats',
-      order: 10,
+    // 首页内容块：插件被禁用时这块自然消失。
+    context.registerHomeBlock({
+      id: 'gofor.wordbook/home',
+      title: '单词库',
+      order: 60,
       load: async () => {
         const module = await import('./HomeSlot.tsx');
-        return { default: module.WordbookHomeSlot };
+        return { default: module.WordbookHomeBlock };
       },
     });
 

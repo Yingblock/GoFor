@@ -68,6 +68,8 @@ export interface PluginManifest {
      * 纸面几何仍由 core 计算，插件只声明"归属"，不能改坐标。
      */
     printBlocks?: string[];
+    /** 旧纸没有 owner 时的 payload 前缀（例如 task/habit/mood）；由插件自己声明。 */
+    scanPayloads?: string[];
   };
   /** 本插件依赖哪些数据能力（跨插件读数据的唯一方式）。 */
   consumes?: {

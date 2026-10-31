@@ -7,9 +7,15 @@ describe('scanResultOwner', () => {
   });
 
   it('旧清单按 payload 前缀回退', () => {
-    expect(scanResultOwner({ payload: 'task:t1' })).toBe('gofor.tasks');
-    expect(scanResultOwner({ payload: 'habit:h1' })).toBe('gofor.checkin');
-    expect(scanResultOwner({ payload: 'mood:sleep' })).toBe('gofor.mood');
+    expect(scanResultOwner({ payload: 'task:t1' }, { task: 'gofor.tasks' })).toBe(
+      'gofor.tasks',
+    );
+    expect(scanResultOwner({ payload: 'habit:h1' }, { habit: 'gofor.checkin' })).toBe(
+      'gofor.checkin',
+    );
+    expect(scanResultOwner({ payload: 'mood:sleep' }, { mood: 'gofor.mood' })).toBe(
+      'gofor.mood',
+    );
   });
 
   it('不认识的 payload / 空值返回 null，而不是乱塞给某个插件', () => {

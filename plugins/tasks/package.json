@@ -13,7 +13,7 @@
   "dependencies": {
     "@gofor/core": "workspace:*",
     "@gofor/plugin-api": "workspace:*",
-    "@gofor/store": "workspace:*",
+    "@gofor/plugin-kit": "workspace:*",
     "@gofor/ui": "workspace:*",
     "dexie-react-hooks": "^4.4.0"
   },

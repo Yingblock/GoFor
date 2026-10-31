@@ -4,6 +4,7 @@ import type { PrintBlockOwnerRule } from '@gofor/core/print';
 import type {
   AiProvider,
   CommandContribution,
+  HomeBlockContribution,
   ContentModuleContribution,
   ContentModuleKind,
   CssContribution,
@@ -17,6 +18,7 @@ import type {
   SlotName,
   ThemeContribution,
 } from '@gofor/plugin-api';
+import type { PluginStoreLike } from '@gofor/plugin-api';
 import type { ComponentType } from 'react';
 import type { NavGroup } from '../nav.ts';
 
@@ -47,6 +49,15 @@ export interface HostCommand {
   /** `core` 或插件 id。 */
   source: string;
   run(): void | Promise<void>;
+}
+
+export interface RegisteredHomeBlock {
+  id: string;
+  title: string;
+  pluginId: string;
+  order: number;
+  span: 1 | 2;
+  load: HomeBlockContribution['load'];
 }
 
 export interface RegisteredSlot {
@@ -166,6 +177,7 @@ export interface HostSnapshot {
   shortcuts: ShortcutConflict[];
   /** 注册冲突 / 数据 provider 冲突等需要告诉用户的问题。 */
   conflicts: string[];
+  homeBlocks: RegisteredHomeBlock[];
   slots: RegisteredSlot[];
   themes: RegisteredTheme[];
   css: RegisteredCss[];
@@ -176,6 +188,8 @@ export interface HostSnapshot {
   dataProviders: DataProviderSummary[];
   /** 打印区块归属：kind → 插件（含被禁用的，用于"缺失插件"警告）。 */
   printBlockOwners: PrintBlockOwnerInfo[];
+  /** 旧纸 payload 前缀 → 插件归属；由启用插件的 manifest 汇总。 */
+  scanPayloadOwners: Record<string, string>;
   ocr: OcrProvider;
   ai: AiProvider;
 }
@@ -195,6 +209,7 @@ export interface PluginHostApi extends HostSnapshot {
   now(): number;
   newId(): string;
   storageFor(pluginId: string): PluginStorage;
+  storeFor(pluginId: string): PluginStoreLike;
   registerCoreCommands(commands: HostCommand[]): void;
   setPluginEnabled(id: string, enabled: boolean): Promise<void>;
   reloadPlugins(): Promise<void>;

@@ -64,3 +64,7 @@ export {
   permissionLabel,
   unknownPermissions,
 } from './permissions.ts';
+
+export type { HomeBlockContribution, HomeBlockModule, HomeBlockProps } from './contributions.ts';
+
+export type { PluginStoreLike } from './store.ts';

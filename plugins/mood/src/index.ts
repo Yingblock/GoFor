@@ -1,5 +1,5 @@
 import { PLUGIN_API_VERSION, type PluginModule } from '@gofor/plugin-api';
-import { applyScanResults, db } from '@gofor/store';
+import { pluginStore } from '@gofor/plugin-kit/store';
 
 export const moodPlugin: PluginModule = {
   manifest: {
@@ -10,7 +10,11 @@ export const moodPlugin: PluginModule = {
     description: '睡眠 / 心情 / 专注三个 1–5 分，纸上也能勾。',
     author: 'GoFor',
     permissions: ['ui.screen', 'scan.handle'],
-    provides: { screens: ['gofor.mood/screen'], printBlocks: ['ratingGrid'] },
+    provides: {
+      screens: ['gofor.mood/screen'],
+      printBlocks: ['ratingGrid'],
+      scanPayloads: ['mood'],
+    },
   },
   activate(context) {
     context.registerScreen({
@@ -34,7 +38,11 @@ export const moodPlugin: PluginModule = {
           (result) => result.selected && (result.payload ?? '').startsWith('mood:'),
         );
         if (subset.length === 0) return { handled: 0, skipped: 0 };
-        const summary = await applyScanResults(db, subset, scanContext.date, scanContext.now());
+        const summary = await pluginStore(context.store).applyMoodScan(
+          subset,
+          scanContext.date,
+          scanContext.now(),
+        );
         return { handled: summary.moodSaved ? 1 : 0, skipped: summary.skipped };
       },
     });

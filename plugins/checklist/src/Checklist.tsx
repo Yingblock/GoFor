@@ -1,16 +1,9 @@
 import { newId } from '@gofor/core';
 import { type Checklist, type ChecklistLog, dateKey } from '@gofor/core/domain';
 import { addDays } from '@gofor/domain/stats';
+import type { PluginScreenProps } from '@gofor/plugin-api';
 import { appClock } from '@gofor/plugin-kit';
-import {
-  db,
-  deleteChecklist,
-  getChecklistLog,
-  listChecklistLogs,
-  listChecklists,
-  saveChecklist,
-  setChecklistLog,
-} from '@gofor/store';
+import { type PluginStoreApi, pluginStore } from '@gofor/plugin-kit/store';
 import { Button, Card, Checkbox, EmptyState, focusRing, Input, Section } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useState } from 'react';
@@ -25,9 +18,10 @@ const HISTORY_DAYS = 30;
  * 勾选状态按天存在 `checklistLogs`（主键 `${id}@${date}`），条目本身只存文字。
  * 完成率是现算的，不落库——存两份必然会在改条目之后对不上。
  */
-export function ChecklistScreen() {
+export function ChecklistScreen({ host }: PluginScreenProps) {
+  const store = pluginStore(host.store);
   const today = dateKey(appClock);
-  const checklists = useLiveQuery(() => listChecklists(db), [], [] as Checklist[]);
+  const checklists = useLiveQuery(() => store.listChecklists(), [store], [] as Checklist[]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
@@ -53,7 +47,7 @@ export function ChecklistScreen() {
     setError(null);
     const checklist: Checklist = { id: newId(), name, items: [], createdAt: appClock.now() };
     try {
-      await saveChecklist(db, checklist);
+      await store.saveChecklist(checklist);
       setNewName('');
       setCreating(false);
       setSelectedId(checklist.id);
@@ -147,7 +141,7 @@ export function ChecklistScreen() {
 
           <div>
             {selected ? (
-              <ChecklistDetail key={selected.id} checklist={selected} today={today} />
+              <ChecklistDetail key={selected.id} checklist={selected} today={today} store={store} />
             ) : null}
           </div>
         </div>
@@ -160,10 +154,11 @@ interface ChecklistDetailProps {
   checklist: Checklist;
   /** 'YYYY-MM-DD'。由父级算好传入：详情只关心"勾哪一天"，不重复读时钟。 */
   today: string;
+  store: PluginStoreApi;
 }
 
 /** 选中清单的详情：改名、编辑条目、勾今天、看历史完成率。 */
-function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
+function ChecklistDetail({ checklist, today, store }: ChecklistDetailProps) {
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(checklist.name);
   const [newItem, setNewItem] = useState('');
@@ -178,16 +173,16 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
   }, [checklist.name]);
 
   const log = useLiveQuery(
-    () => getChecklistLog(db, checklist.id, today),
-    [checklist.id, today],
+    () => store.getChecklistLog(checklist.id, today),
+    [store, checklist.id, today],
     undefined,
   );
 
   const historyFrom = useMemo(() => addDays(today, -HISTORY_DAYS), [today]);
   const historyTo = useMemo(() => addDays(today, -1), [today]);
   const history = useLiveQuery(
-    () => listChecklistLogs(db, historyFrom, historyTo),
-    [historyFrom, historyTo],
+    () => store.listChecklistLogs(historyFrom, historyTo),
+    [store, historyFrom, historyTo],
     [] as ChecklistLog[],
   );
 
@@ -214,7 +209,7 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
   const writeItems = async (items: string[]) => {
     setError(null);
     try {
-      await saveChecklist(db, { ...checklist, items });
+      await store.saveChecklist({ ...checklist, items });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '保存条目失败');
     }
@@ -228,7 +223,7 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
     }
     setError(null);
     try {
-      await saveChecklist(db, { ...checklist, name });
+      await store.saveChecklist({ ...checklist, name });
       setRenaming(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '改名失败');
@@ -263,12 +258,12 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
     const items = checklist.items.map((item, cursor) => (cursor === index ? next : item));
     setError(null);
     try {
-      await saveChecklist(db, { ...checklist, items });
+      await store.saveChecklist({ ...checklist, items });
       if (log?.done.includes(old)) {
         const done = log.done
           .map((item) => (item === old ? next : item))
           .filter((item) => items.includes(item));
-        await setChecklistLog(db, checklist.id, today, done, appClock.now());
+        await store.setChecklistLog(checklist.id, today, done, appClock.now());
       }
       setEditingIndex(null);
     } catch (caught) {
@@ -282,11 +277,10 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
     const items = checklist.items.filter((_, cursor) => cursor !== index);
     setError(null);
     try {
-      await saveChecklist(db, { ...checklist, items });
+      await store.saveChecklist({ ...checklist, items });
       // 今天已勾的这一条也要从日志里拿掉，不然完成数会大于条目数。
       if (log?.done.includes(removed)) {
-        await setChecklistLog(
-          db,
+        await store.setChecklistLog(
           checklist.id,
           today,
           log.done.filter((item) => item !== removed),
@@ -311,7 +305,7 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
     setPending(true);
     setError(null);
     try {
-      await setChecklistLog(db, checklist.id, today, done, appClock.now());
+      await store.setChecklistLog(checklist.id, today, done, appClock.now());
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '保存勾选失败');
     } finally {
@@ -322,7 +316,7 @@ function ChecklistDetail({ checklist, today }: ChecklistDetailProps) {
   const removeChecklist = async () => {
     setError(null);
     try {
-      await deleteChecklist(db, checklist.id);
+      await store.deleteChecklist(checklist.id);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '删除清单失败');
     }

@@ -5,6 +5,7 @@ import type {
   ContentModuleContribution,
   ConverterContribution,
   CssContribution,
+  HomeBlockContribution,
   OcrProvider,
   ScanHandlerContribution,
   ScreenContribution,
@@ -12,6 +13,7 @@ import type {
   ThemeContribution,
 } from './contributions.ts';
 import type { DataClient, DataContract } from './data.ts';
+import type { PluginStoreLike } from './store.ts';
 import type { PluginManifest } from './manifest.ts';
 
 /**
@@ -29,12 +31,15 @@ export interface PluginContext {
   readonly data: DataClient;
   /** 插件自己的键值存储（命名空间由宿主按 pluginId 隔离）。 */
   readonly storage: PluginStorageLike;
+  /** 按 pluginId 授权的数据能力；直接 import store 在构建边界检查里禁止。 */
+  readonly store: PluginStoreLike;
   /** 注入的时钟；插件不允许直接 `Date.now()`。 */
   readonly now: () => number;
   /** 注入的 id 生成器；插件不要自己写 Math.random。 */
   readonly newId: () => string;
 
   registerScreen(contribution: ScreenContribution): void;
+  registerHomeBlock(contribution: HomeBlockContribution): void;
   registerCommand(contribution: CommandContribution): void;
   registerSlot(contribution: SlotContribution): void;
   registerTheme(contribution: ThemeContribution): void;

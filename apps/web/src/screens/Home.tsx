@@ -1,406 +1,203 @@
-import {
-  dateKey,
-  type HabitLog,
-  type StudySession,
-  type Subject,
-  type Task,
-} from '@gofor/core/domain';
-import { type Habit, isHabitActiveOn } from '@gofor/domain/habits';
-import { dayTotal, minutesOf, streakDays } from '@gofor/domain/stats';
-import {
-  db,
-  listHabitLogs,
-  listHabits,
-  listSubjects,
-  saveCourseNote,
-  setHabitLog,
-  setTaskDone,
-} from '@gofor/store';
-import { Card, Checkbox, EmptyState, Section, StatCard } from '@gofor/ui';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useMemo, useState } from 'react';
-import { appClock } from '../clock.ts';
-import { PluginSlot } from '../plugins/components.tsx';
-
-/** 首页要能跳到打卡页和课表页，所以这两个 id 也进联合类型。 */
-type HomeTarget =
-  | 'print'
-  | 'gofor.scan/screen'
-  | 'gofor.pomodoro/screen'
-  | 'gofor.tasks/screen'
-  | 'gofor.checkin/screen'
-  | 'gofor.timetable/screen';
-
-/** 当日课表的一行：起止时间 + 科目名，由 App 从真实课表算好后传进来。 */
-export interface HomeScheduleEntry {
-  time: string;
-  end: string;
-  label: string;
-  /** 课表里的课程 id 与开始分钟：备注按「日期 + 课程 + 节次」定位。 */
-  courseId: string;
-  startMinute: number;
-  /** 当天这一节的备注（P2-2.15），空串表示没写。 */
-  note: string;
-}
-
-/**
- * 课表行的「备注」输入框。
- *
- * 保存时机是失焦/回车，不是每敲一个字就写库：备注是低频编辑，
- * 逐字写会让 liveQuery 反复刷新整页，输入体验反而变差。
- */
-function ScheduleNoteInput({ entry, date }: { entry: HomeScheduleEntry; date: string }) {
-  const [draft, setDraft] = useState(entry.note);
-  useEffect(() => setDraft(entry.note), [entry.note]);
-
-  const commit = () => {
-    if (draft.trim() === entry.note.trim()) return;
-    void saveCourseNote(
-      db,
-      {
-        date,
-        courseId: entry.courseId,
-        startMinute: entry.startMinute,
-        text: draft,
-      },
-      appClock.now(),
-    );
-  };
-
-  /*
-   * field-sizing: content 让输入框宽度跟着内容走；max-w 才是"占满可用空间后裁断"，
-   * 超出部分在失焦时以省略号显示。Chromium/Electron 支持；其他内核退化成默认宽度。
-   */
-  return (
-    <input
-      value={draft}
-      placeholder="备注"
-      aria-label={`${entry.label} 备注`}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={commit}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') event.currentTarget.blur();
-      }}
-      title={draft === '' ? '添加课程备注' : draft}
-      className="min-w-16 max-w-full shrink rounded border-b border-line bg-transparent px-1 py-0.5 text-caption text-ellipsis outline-none transition-colors duration-fast placeholder:opacity-25 focus:border-accent [field-sizing:content]"
-    />
-  );
-}
-
-export interface HomeProps {
-  tasks: Task[];
-  /** 作业清单插件是否启用；禁用时首页不展示任何任务数据。 */
-  tasksAvailable: boolean;
-  /** 打卡插件是否启用；禁用时首页不展示任何打卡项。 */
-  habitsAvailable: boolean;
-  /** 课表插件是否启用；禁用时首页不展示课表和入口。 */
-  timetableAvailable: boolean;
-  /** 当天课表；空数组表示今天没课或还没排课表。 */
-  schedule: readonly HomeScheduleEntry[];
-  onNavigate: (screen: HomeTarget) => void;
-}
-
-const STREAK_WINDOW_DAYS = 60;
-
-/** 首页右上角那种「去某某页 →」文字动作：不加按钮壳，视觉上仍是链接。 */
-const LINK_ACTION = 'text-small opacity-40 transition-opacity duration-fast hover:opacity-70';
-
-/** 'YYYY-MM-DD' 往前推 n 天。 */
-function shiftDate(date: string, days: number): string {
-  const [year, month, day] = date.split('-').map(Number);
-  const base = Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1);
-  return new Date(base + days * 86_400_000).toISOString().slice(0, 10);
-}
+import type { HomeBlockProps } from '@gofor/plugin-api';
+import { EmptyState } from '@gofor/ui';
+import { type ComponentType, useEffect, useMemo, useState } from 'react';
+import { usePluginHost } from '../plugins/host.tsx';
+import type { PluginHostApi, RegisteredHomeBlock } from '../plugins/types.ts';
 
 /**
  * 首页。
  *
- * 结构由用户规定（DESIGN §2）：顶部两个主行动 → 统计 → 任务提示。
- * 统计全部来自真实数据；没有数据就显示 0 并注明原因，不编数字。
+ * core 不再写死任何内容：任务、打卡、课表、统计、主行动都由插件注册成
+ * `homeBlocks`。core 只做两件事：
+ *   1. 按插件默认 order + 用户拖拽顺序排序；
+ *   2. 给每块渲染标题和右侧拖拽手柄。
+ *
+ * 顺序存 localStorage（设备本地）；新增块默认追加到末尾。
  */
-export function Home({
-  tasks,
-  tasksAvailable,
-  habitsAvailable,
-  timetableAvailable,
-  schedule,
-  onNavigate,
-}: HomeProps) {
-  const today = dateKey(appClock);
-  const since = useMemo(() => shiftDate(today, -STREAK_WINDOW_DAYS), [today]);
+const ORDER_KEY = 'gofor.home.blockOrder';
 
-  const sessions = useLiveQuery(
-    () => db.sessions.where('date').between(since, today, true, true).toArray(),
-    [since, today],
-    [] as StudySession[],
-  );
-  const subjects = useLiveQuery(() => listSubjects(db), [], [] as Subject[]);
+function readOrder(): string[] {
+  try {
+    const raw = window.localStorage.getItem(ORDER_KEY);
+    if (raw === null) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.every((item) => typeof item === 'string') ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
-  const habits = useLiveQuery(
-    () => (habitsAvailable ? listHabits(db) : Promise.resolve([])),
-    [habitsAvailable],
-    [] as Habit[],
-  );
-  /*
-   * 只取今天的日志：首页只需要回答"这项今天打了没有"，
-   * 历史网格和连续天数在打卡页看。区间两端都写 today，
-   * 未来日期的记录也就不会被误当成"今天已完成"。
-   */
-  const todayLogs = useLiveQuery(
-    () => (habitsAvailable ? listHabitLogs(db, today, today) : Promise.resolve([])),
-    [habitsAvailable, today],
-    [] as HabitLog[],
-  );
+function writeOrder(order: readonly string[]): void {
+  try {
+    window.localStorage.setItem(ORDER_KEY, JSON.stringify(order));
+  } catch {
+    // 隐私模式写不进去；本次拖拽仍然生效，只是下次打开恢复默认。
+  }
+}
 
-  const visibleTasks = tasksAvailable ? tasks : [];
-  const done = visibleTasks.filter((task) => task.done).length;
-  const pending = visibleTasks.length - done;
+function blockSignature(blocks: readonly RegisteredHomeBlock[]): string {
+  return blocks.map((block) => block.id).join('\u0000');
+}
 
-  const todayTotal = useMemo(() => dayTotal(sessions, today).minutes, [sessions, today]);
-  const streak = useMemo(() => streakDays(sessions, today), [sessions, today]);
-  const todaySessions = useMemo(
-    () => sessions.filter((session) => session.date === today),
-    [sessions, today],
-  );
+function defaultOrder(blocks: readonly RegisteredHomeBlock[]): string[] {
+  return [...blocks]
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+    .map((block) => block.id);
+}
 
-  // 该不该打卡完全由 isHabitActiveOn 现算，不落库——排期存两份必然不一致。
-  const activeHabits = useMemo(
-    () => habits.filter((habit) => isHabitActiveOn(habit, today)),
-    [habits, today],
-  );
-  const doneHabitIds = useMemo(
-    () => new Set(todayLogs.filter((log) => log.done).map((log) => log.habitId)),
-    [todayLogs],
-  );
-  const pendingHabits = activeHabits.filter((habit) => !doneHabitIds.has(habit.id));
-  const habitsDoneCount = activeHabits.length - pendingHabits.length;
+function HomeBlockView({
+  block,
+  host,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  onDrop,
+}: {
+  block: RegisteredHomeBlock;
+  host: PluginHostApi;
+  dragging: string | null;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
+  onDrop: (targetId: string) => void;
+}) {
+  const [Component, setComponent] = useState<ComponentType<HomeBlockProps> | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const unfinished = visibleTasks.filter((task) => !task.done).slice(0, 5);
-  const subjectName = (id: string | null): string =>
-    id === null ? '未分类' : (subjects.find((item) => item.id === id)?.name ?? '未分类');
+  useEffect(() => {
+    let alive = true;
+    setComponent(null);
+    setError(null);
+    void block
+      .load()
+      .then((module) => {
+        if (!alive) return;
+        setComponent(() => module.default as unknown as ComponentType<HomeBlockProps>);
+      })
+      .catch((cause: unknown) => {
+        if (!alive) return;
+        setError(cause instanceof Error ? cause.message : String(cause));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [block]);
+
+  const blockHost = useMemo(
+    () => ({
+      ...host,
+      storage: host.storageFor(block.pluginId),
+      store: host.storeFor(block.pluginId),
+    }),
+    [host, block.pluginId],
+  );
 
   return (
-    <div className="space-y-8">
-      <div className="grid gap-3 sm:grid-cols-2">
+    <section
+      aria-label={block.title}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault();
+        onDrop(block.id);
+      }}
+      className={`rounded-xl border border-line bg-card-soft p-4 shadow-card transition ${
+        dragging === block.id ? 'opacity-40' : 'opacity-100'
+      } ${block.span === 2 ? 'md:col-span-2' : ''}`}
+    >
+      <header className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-medium opacity-60">{block.title}</h2>
         <button
           type="button"
-          onClick={() => onNavigate('gofor.scan/screen')}
-          className="flex items-center gap-3 rounded-lg border border-line bg-card-soft px-4 py-4 text-left shadow-card transition duration-base ease-standard hover:bg-card"
+          draggable
+          aria-label={`拖动 ${block.title}`}
+          title="拖动排序"
+          onDragStart={(event) => {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', block.id);
+            onDragStart(block.id);
+          }}
+          onDragEnd={onDragEnd}
+          className="cursor-grab select-none rounded px-1 text-lg leading-none opacity-30 transition hover:opacity-70 active:cursor-grabbing"
         >
-          <span className="text-2xl">📷</span>
-          <span>
-            <span className="block text-body font-medium">拍照录入</span>
-            <span className="block text-caption opacity-45">把纸上勾的扫回来 · 二维码定位</span>
-          </span>
+          ⠿
         </button>
+      </header>
+      {error !== null ? (
+        <p className="text-caption text-danger">内容加载失败：{error}</p>
+      ) : Component === null ? (
+        <p className="text-caption opacity-30">加载中…</p>
+      ) : (
+        <Component pluginId={block.pluginId} blockId={block.id} host={blockHost} />
+      )}
+    </section>
+  );
+}
 
-        <button
-          type="button"
-          onClick={() => onNavigate('print')}
-          className="flex items-center gap-3 rounded-lg border border-line bg-card-soft px-4 py-4 text-left shadow-card transition duration-base ease-standard hover:bg-card"
-        >
-          <span className="text-2xl">🖨</span>
-          <span>
-            <span className="block text-body font-medium">打印 checklist</span>
-            <span className="block text-caption opacity-45">今日一张纸，带去学校</span>
-          </span>
-        </button>
-      </div>
+export function Home() {
+  const host = usePluginHost();
+  const [order, setOrder] = useState<string[]>(readOrder);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const signature = blockSignature(host.homeBlocks);
 
-      {/* 今日课表：课表页排好就直接出现在这里，不用再点进去看今天上什么课 */}
-      {timetableAvailable ? (
-        <Section
-          title="今日课表"
-          actions={
-            <button
-              type="button"
-              onClick={() => onNavigate('gofor.timetable/screen')}
-              className={LINK_ACTION}
-            >
-              去排课表 →
-            </button>
-          }
-        >
-          {schedule.length === 0 ? (
-            <EmptyState>今天没有课</EmptyState>
-          ) : (
-            <Card padding="none" className="overflow-hidden">
-              <ul className="divide-y divide-line">
-                {schedule.map((entry) => (
-                  <li
-                    key={`${entry.time}-${entry.label}`}
-                    className="flex min-w-0 items-center gap-3 overflow-hidden px-4 py-2 text-body"
-                  >
-                    <span className="w-11 shrink-0 tabular-nums opacity-45">{entry.time}</span>
-                    {/* 科目名至少保留 4rem：备注再长也不能把课程名挤没。 */}
-                    <span className="min-w-16 flex-1 truncate">{entry.label}</span>
-                    <ScheduleNoteInput entry={entry} date={today} />
-                    <span className="shrink-0 text-caption tabular-nums opacity-30">
-                      – {entry.end}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </Section>
-      ) : null}
+  // 块集合变化时合并顺序：已有的保留，新增的按插件默认 order 追加。
+  useEffect(() => {
+    setOrder((previous) => {
+      const known = previous.filter((id) => host.homeBlocks.some((block) => block.id === id));
+      const added = defaultOrder(host.homeBlocks).filter((id) => !known.includes(id));
+      const next = [...known, ...added];
+      if (next.join('\u0000') === previous.join('\u0000')) return previous;
+      writeOrder(next);
+      return next;
+    });
+  }, [signature, host.homeBlocks]);
 
-      {/* 打卡提示：与番茄钟无关，数据只来自 habitLogs（见 DESIGN §9） */}
-      {habitsAvailable ? (
-        <Section
-          title="打卡提示"
-          actions={
-            <>
-              {activeHabits.length > 0 ? (
-                <span className="text-caption tabular-nums opacity-35">
-                  {habitsDoneCount}/{activeHabits.length}
-                </span>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => onNavigate('gofor.checkin/screen')}
-                className={LINK_ACTION}
-              >
-                去打卡页 →
-              </button>
-            </>
-          }
-        >
-          {activeHabits.length === 0 ? (
-            <EmptyState>
-              {habits.length === 0 ? '还没有打卡项，去打卡页新建一个' : '今天没有安排打卡'}
-            </EmptyState>
-          ) : pendingHabits.length === 0 ? (
-            <EmptyState>今天的打卡都完成了</EmptyState>
-          ) : (
-            <Card padding="none" className="overflow-hidden">
-              <ul className="divide-y divide-line">
-                {pendingHabits.map((habit) => (
-                  <li key={habit.id} className="flex items-center gap-3 px-4 py-2.5 text-body">
-                    {/*
-                    首页只列「今天还没打」的项，所以勾选后直接写 done=true；
-                    habitLogs 的 liveQuery 会刷新，这条自动消失，无需本地状态。
-                  */}
-                    <Checkbox
-                      aria-label={`打卡 ${habit.name}`}
-                      checked={false}
-                      onChange={() => void setHabitLog(db, habit.id, today, true, appClock.now())}
-                    />
-                    <span className="min-w-0 flex-1 break-words">{habit.name}</span>
-                    <span className="text-micro opacity-30">待打卡</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </Section>
-      ) : null}
+  const blocks = useMemo(() => {
+    const index = new Map(order.map((id, position) => [id, position]));
+    return [...host.homeBlocks].sort((a, b) => {
+      const ai = index.get(a.id);
+      const bi = index.get(b.id);
+      if (ai !== undefined && bi !== undefined) return ai - bi;
+      if (ai !== undefined) return -1;
+      if (bi !== undefined) return 1;
+      return a.order - b.order || a.id.localeCompare(b.id);
+    });
+  }, [host.homeBlocks, order]);
 
-      <Section title="统计">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {tasksAvailable ? (
-            <>
-              <StatCard label="今日作业" value={`${done}/${visibleTasks.length}`} />
-              <StatCard label="待办" value={String(pending)} />
-            </>
-          ) : null}
-          <StatCard
-            label="今日专注"
-            value={`${todayTotal} 分`}
-            note={todayTotal === 0 ? '还没有番茄记录' : undefined}
-          />
-          {/*
-            这个指标以前叫「连续打卡」，但它是用学习记录（sessions）算的——
-            和打卡项是两回事。打卡是"我承诺做某事并对自己负责"，
-            学习时长是"我花了多少时间"。混用会让两个数字互相污染。
-            所以这里明确改名「连续学习」，打卡的连续天数在打卡页里算。
-          */}
-          <StatCard
-            label="连续学习"
-            value={`${streak} 天`}
-            note={streak === 0 ? '今天还没有学习记录' : '按番茄钟/纸面记录计算'}
-          />
-        </div>
-      </Section>
+  const dropOn = (targetId: string) => {
+    if (dragging === null || dragging === targetId) {
+      setDragging(null);
+      return;
+    }
+    setOrder((previous) => {
+      const next = previous.filter((id) => id !== dragging);
+      const target = next.indexOf(targetId);
+      next.splice(target < 0 ? next.length : target, 0, dragging);
+      writeOrder(next);
+      return next;
+    });
+    setDragging(null);
+  };
 
-      {/* 命名插槽：插件可以在统计区后面加一块内容（例如单词库）。空则什么都不渲染。 */}
-      <PluginSlot name="home.after-stats" />
+  if (host.homeBlocks.length === 0) {
+    return (
+      <EmptyState size="md">
+        还没有插件注册首页内容。启用一个带「首页内容」权限的插件后，它会出现在这里。
+      </EmptyState>
+    );
+  }
 
-      {todaySessions.length > 0 ? (
-        <Section title="今日记录">
-          <Card padding="none" className="overflow-hidden">
-            <ul className="divide-y divide-line">
-              {todaySessions.map((session) => (
-                <li key={session.id} className="flex items-center gap-3 px-4 py-2 text-body">
-                  <span className="tabular-nums opacity-45">
-                    {String(Math.floor((session.start % 1440) / 60)).padStart(2, '0')}:
-                    {String(session.start % 60).padStart(2, '0')}
-                  </span>
-                  <span className="min-w-0 flex-1 break-words">
-                    {subjectName(session.subjectId)}
-                  </span>
-                  <span className="tabular-nums opacity-45">{minutesOf(session)} 分</span>
-                  <span className="text-micro opacity-30">
-                    {session.source === 'appTimer' ? '番茄钟' : '纸面'}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </Section>
-      ) : null}
-
-      {tasksAvailable ? (
-        <Section
-          title="任务提示"
-          actions={
-            <>
-              <button
-                type="button"
-                onClick={() => onNavigate('gofor.pomodoro/screen')}
-                className={LINK_ACTION}
-              >
-                开始专注 →
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate('gofor.tasks/screen')}
-                className={LINK_ACTION}
-              >
-                去作业清单 →
-              </button>
-            </>
-          }
-        >
-          {unfinished.length === 0 ? (
-            <EmptyState size="md">
-              {tasks.length === 0 ? '还没有作业，先加一条' : '今天的作业都完成了'}
-            </EmptyState>
-          ) : (
-            <Card padding="none" className="overflow-hidden">
-              <ul className="divide-y divide-line">
-                {unfinished.map((task) => (
-                  <li key={task.id} className="flex items-center gap-3 px-4 py-2.5 text-body">
-                    {/*
-                    这里只列未完成任务，所以勾选后直接写 done=true；
-                    写完 tasks 的 liveQuery 会刷新，这一条自动从列表里消失，
-                    因此不需要维护本地 checked 状态。
-                  */}
-                    <Checkbox
-                      aria-label={`完成 ${task.title}`}
-                      checked={false}
-                      onChange={() => void setTaskDone(db, task.id, true, Date.now())}
-                    />
-                    <span className="min-w-0 flex-1 break-words">{task.title}</span>
-                    {task.due ? <span className="text-caption opacity-40">{task.due}</span> : null}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </Section>
-      ) : null}
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {blocks.map((block) => (
+        <HomeBlockView
+          key={block.id}
+          block={block}
+          host={host}
+          dragging={dragging}
+          onDragStart={setDragging}
+          onDragEnd={() => setDragging(null)}
+          onDrop={dropOn}
+        />
+      ))}
     </div>
   );
 }

@@ -22,12 +22,14 @@ import {
   type CssContribution,
   type DataClient,
   type DataContract,
+  type HomeBlockContribution,
   type OcrProvider,
   PLUGIN_API_VERSION,
   type PluginContext,
   type PluginManifest,
   type PluginModule,
   type PluginStorage,
+  type PluginStoreLike,
   type ScanHandlerContribution,
   type ScreenContribution,
   type SlotContribution,
@@ -58,6 +60,7 @@ import { appClock } from '../clock.ts';
 import { buildNav, CORE_NAV, flattenNav, type NavGroup } from '../nav.ts';
 import { loadExternalPlugins } from './external.ts';
 import { createPluginStorage } from './pluginStorage.ts';
+import { createPluginStore } from './pluginStore.ts';
 import { notConfiguredAi, notConfiguredOcr } from './providers.ts';
 import type {
   DataProviderSummary,
@@ -70,6 +73,7 @@ import type {
   RegisteredContent,
   RegisteredConverter,
   RegisteredCss,
+  RegisteredHomeBlock,
   RegisteredSlot,
   RegisteredTheme,
   ScreenEntry,
@@ -79,6 +83,7 @@ import { sanitizeThemeTokens, scopePluginCss } from './uiExtensions.ts';
 /** 每个插件在 activate 期间登记的东西；activate 抛错就整份丢弃。 */
 interface Collected {
   screens: ScreenContribution[];
+  homeBlocks: HomeBlockContribution[];
   commands: CommandContribution[];
   slots: SlotContribution[];
   themes: ThemeContribution[];
@@ -95,6 +100,7 @@ interface Collected {
 function emptyCollected(): Collected {
   return {
     screens: [],
+    homeBlocks: [],
     commands: [],
     slots: [],
     themes: [],
@@ -120,6 +126,7 @@ function emptySnapshot(): HostSnapshot {
     version: 0,
     plugins: [],
     screens: [],
+    homeBlocks: [],
     nav: buildNav([]),
     commands: [],
     shortcuts: [],
@@ -133,6 +140,7 @@ function emptySnapshot(): HostSnapshot {
     activeTheme: null,
     dataProviders: [],
     printBlockOwners: [],
+    scanPayloadOwners: {},
     ocr: notConfiguredOcr,
     ai: notConfiguredAi,
   };
@@ -254,8 +262,9 @@ function createPluginContext(input: {
   collector: Collected;
   data: DataClient;
   storage: PluginStorage;
+  store: PluginStoreLike;
 }): PluginContext {
-  const { pluginId, manifest, collector, data, storage } = input;
+  const { pluginId, manifest, collector, data, storage, store } = input;
 
   const requirePermission = (permission: string): void => {
     if (!(manifest.permissions as readonly string[]).includes(permission)) {
@@ -274,12 +283,19 @@ function createPluginContext(input: {
     permissions: manifest.permissions,
     data,
     storage,
+    store,
     now: () => appClock.now(),
     newId: createId,
     registerScreen(contribution) {
       requirePermission('ui.screen');
       requireNamespaced(contribution.id);
       collector.screens.push(contribution);
+    },
+    registerHomeBlock(contribution) {
+      requirePermission('ui.home');
+      requireNamespaced(contribution.id);
+      if (contribution.title.trim() === '') throw new Error('首页块 title 不能为空');
+      collector.homeBlocks.push(contribution);
     },
     registerCommand(contribution) {
       requirePermission('command');
@@ -467,6 +483,7 @@ async function buildPluginHost(input: {
               status: () => ({ status: 'missing', reason: 'not-installed' }),
             },
         storage,
+        store: createPluginStore(id),
       });
       await module.activate(context);
       collected.set(id, collector);
@@ -583,6 +600,7 @@ async function buildPluginHost(input: {
     }));
 
   // 7. 插槽 / 主题 / CSS / 内容模块 / 转换器。
+  const homeBlocks: RegisteredHomeBlock[] = [];
   const slots: RegisteredSlot[] = [];
   const themes: RegisteredTheme[] = [];
   const css: RegisteredCss[] = [];
@@ -594,6 +612,20 @@ async function buildPluginHost(input: {
   const aiProviders: AiProvider[] = [];
 
   for (const [pluginId, collector] of collected) {
+    for (const block of collector.homeBlocks) {
+      if (homeBlocks.some((entry) => entry.id === block.id)) {
+        conflicts.push(`首页块 id ${block.id} 重复，已忽略「${pluginId}」的注册`);
+        continue;
+      }
+      homeBlocks.push({
+        id: block.id,
+        title: block.title,
+        pluginId,
+        order: block.order ?? 100,
+        span: block.span ?? 1,
+        load: block.load,
+      });
+    }
     for (const slot of collector.slots) {
       slots.push({
         id: slot.id,
@@ -707,6 +739,17 @@ async function buildPluginHost(input: {
   // 10. 打印区块归属：从**所有**记录（含禁用）的 manifest 读取，禁用后仍知道
   //     这个 kind 属于谁，才能给出「缺失 XX 插件」而不是悄悄按 core 渲染。
   const printBlockOwners: PrintBlockOwnerInfo[] = [];
+  const scanPayloadOwners: Record<string, string> = {};
+  for (const pluginId of collected.keys()) {
+    const module = modules.get(pluginId);
+    for (const prefix of module?.manifest.provides?.scanPayloads ?? []) {
+      if (Object.hasOwn(scanPayloadOwners, prefix)) {
+        conflicts.push(`扫描前缀 ${prefix} 重复，已忽略「${pluginId}」`);
+        continue;
+      }
+      scanPayloadOwners[prefix] = pluginId;
+    }
+  }
   const ownerByKind = new Map<string, string>();
   for (const record of records) {
     if (!modules.has(record.id)) continue;
@@ -764,6 +807,7 @@ async function buildPluginHost(input: {
       commands,
       shortcuts: findShortcutConflicts(bindings),
       conflicts,
+      homeBlocks,
       slots,
       themes,
       css,
@@ -773,6 +817,7 @@ async function buildPluginHost(input: {
       activeTheme,
       dataProviders,
       printBlockOwners,
+      scanPayloadOwners,
       ocr: ocrProviders[0] ?? notConfiguredOcr,
       ai: aiProviders[0] ?? notConfiguredAi,
     },
@@ -819,6 +864,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
     (pluginId: string) => createPluginStorage(db, pluginId, () => appClock.now()),
     [],
   );
+  const storeFor = useCallback((pluginId: string) => createPluginStore(pluginId), []);
 
   const rebuild = useCallback(async () => {
     if (rebuildingRef.current) return;
@@ -959,7 +1005,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
 
     for (const result of results) {
       if (!result.selected) continue;
-      const owner = scanResultOwner(result);
+      const owner = scanResultOwner(result, snapshot.scanPayloadOwners);
       if (owner === null) {
         skipped += 1;
         continue;
@@ -992,7 +1038,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
     }
 
     return { handled, skipped, parts, missing, errors };
-  }, []);
+  }, [snapshot.scanPayloadOwners]);
 
   const api = useMemo<PluginHostApi>(() => {
     // 主题 token 在展示前再过滤一次：即使插件 manifest 里写了怪值也到不了纸面。
@@ -1010,6 +1056,7 @@ export function PluginHostProvider({ children }: { children: ReactNode }) {
       now,
       newId: createId,
       storageFor,
+      storeFor,
       registerCoreCommands,
       setPluginEnabled,
       reloadPlugins,

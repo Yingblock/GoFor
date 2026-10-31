@@ -1,6 +1,8 @@
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
+import type { Task } from '@gofor/core/domain';
 import type { PluginScreenProps } from '@gofor/plugin-api';
-import { appClock } from '@gofor/plugin-kit';
+import { appClock, useHostData } from '@gofor/plugin-kit';
+import { pluginStore } from '@gofor/plugin-kit/store';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatClock, progress, remainingMs } from './machine.ts';
 import { MAX_MINUTES, MIN_MINUTES, type PomodoroController, usePomodoro } from './usePomodoro.ts';
@@ -24,6 +26,7 @@ const ABANDON_HOLD_MS = 5000;
  * 绝不累加 tick——和番茄钟剩余时间的做法一致，被后台节流也不会算错。
  */
 const ABANDON_HOLD_REFRESH_MS = 50;
+const EMPTY_TASKS: Task[] = [];
 
 const chipBase = 'rounded-full px-3 py-1.5 text-xs transition';
 const chipOn = 'bg-[var(--color-strong)] text-on-strong';
@@ -42,8 +45,10 @@ const overlayGhost = `${overlayButtonBase} border border-line bg-card-soft hover
  * 两态互斥：有 `run` → 全屏遮罩；没有 `run` → 设置页。
  */
 export function Pomodoro({ host }: PluginScreenProps) {
+  const store = pluginStore(host.store);
   const tasksAvailable = host.data.available('tasks.all');
-  const controller = usePomodoro(tasksAvailable);
+  const tasks = useHostData<Task[]>(host, 'tasks.all', {}, EMPTY_TASKS);
+  const controller = usePomodoro(store, tasksAvailable, tasks);
   return controller.run ? (
     <FocusSession controller={controller} />
   ) : (

@@ -5,13 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./clock": "./src/clock.ts"
+    "./clock": "./src/clock.ts",
+    "./store": "./src/store.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@gofor/core": "workspace:*",
+    "@gofor/domain": "workspace:*",
     "@gofor/plugin-api": "workspace:*"
   },
   "peerDependencies": {

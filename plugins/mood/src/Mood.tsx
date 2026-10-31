@@ -1,7 +1,8 @@
 import { dateKey, type MoodLog } from '@gofor/core/domain';
 import { addDays } from '@gofor/domain/stats';
+import type { PluginScreenProps } from '@gofor/plugin-api';
 import { appClock } from '@gofor/plugin-kit';
-import { db, getMoodLog, listMoodLogs, saveMoodLog } from '@gofor/store';
+import { pluginStore } from '@gofor/plugin-kit/store';
 import { Slider } from '@gofor/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -63,10 +64,11 @@ function MoodSlider({ label, value, onChange }: MoodSliderProps) {
  * 读走 `liveQuery`（只读），写只在事件处理器里做——`liveQuery` 里写会抛
  * `ReadOnlyError` 白屏（见 AGENTS「存储约定」）。
  */
-export function MoodScreen() {
+export function MoodScreen({ host }: PluginScreenProps) {
+  const store = pluginStore(host.store);
   const today = dateKey(appClock);
 
-  const log = useLiveQuery(() => getMoodLog(db, today), [today], undefined);
+  const log = useLiveQuery(() => store.getMoodLog(today), [store, today], undefined);
   const [values, setValues] = useState<MoodValues>(DEFAULT_VALUES);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -94,7 +96,7 @@ export function MoodScreen() {
     setSaving(true);
     setError(null);
     try {
-      await saveMoodLog(db, { date: today, ...values }, appClock.now());
+      await store.saveMoodLog({ date: today, ...values }, appClock.now());
       dirtyRef.current = false;
       setSaved(true);
     } catch (caught) {
@@ -105,7 +107,11 @@ export function MoodScreen() {
   };
 
   const from = useMemo(() => addDays(today, -(RECENT_DAYS - 1)), [today]);
-  const logs = useLiveQuery(() => listMoodLogs(db, from, today), [from, today], [] as MoodLog[]);
+  const logs = useLiveQuery(
+    () => store.listMoodLogs(from, today),
+    [store, from, today],
+    [] as MoodLog[],
+  );
   const byDate = useMemo(() => new Map(logs.map((entry) => [entry.date, entry])), [logs]);
   const recentDates = useMemo(
     () => Array.from({ length: RECENT_DAYS }, (_, index) => addDays(today, -index)),

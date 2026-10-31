@@ -71,7 +71,7 @@ pnpm --filter @gofor/plugin-cli build
 pnpm exec gofor plugin list --user-data /tmp/gofor-user
 ```
 
-单测当前规模：**577 条**（core 253、domain 140、store 48、vision 46、plugin-runtime 18、plugin-host 2、plugin-cli 12、插件包 58）；e2e 约 **150 项**（`check()` 断言）
+单测当前规模：**580 条**（core 253、domain 140、store 48、vision 46、plugin-runtime 18、plugin-host 2、plugin-cli 12、插件包 58、web 3）；e2e 约 **150 项**（`check()` 断言）
 （条数会随当天数据的分支略有浮动）。
 
 打印时请确认：**缩放 100% · 关闭页眉页脚 · 勾选「背景图形」**。

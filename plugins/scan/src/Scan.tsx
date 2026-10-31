@@ -24,17 +24,7 @@ import {
 } from '@gofor/core/scan';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '@gofor/plugin-kit';
-import {
-  db,
-  getSheetManifest,
-  listScanBatches,
-  listTasks,
-  listTemplates,
-  saveScanBatch,
-  saveSheetManifest,
-  sheetManifestId,
-  updateScanBatchStatus,
-} from '@gofor/store';
+import type { PluginStoreApi } from '@gofor/plugin-kit/store';
 import { Badge, Button, Card, EmptyState, Section } from '@gofor/ui';
 import { binarize, detectPageQuad, type ImageDataLike, type Quad, toGray } from '@gofor/vision';
 import { useCallback, useEffect, useState } from 'react';
@@ -78,12 +68,16 @@ interface MissingManifest {
  * 任何一步失败都停在原地给原因，不自动跳到下一步，也不自动写数据。
  */
 export function ScanScreen({
+  store,
   onOpenPrint,
   applyScan,
   tasksAvailable = true,
+  loadTasks,
 }: {
+  store: PluginStoreApi;
   onOpenPrint?: () => void;
   tasksAvailable?: boolean;
+  loadTasks: () => Promise<import('@gofor/core/domain').Task[]>;
   applyScan: (
     results: readonly import('@gofor/core/domain').ScanResult[],
     date: string,
@@ -102,7 +96,7 @@ export function ScanScreen({
   const [fiducialQuad, setFiducialQuad] = useState<Quad | null>(null);
 
   const refreshRecent = useCallback(async () => {
-    setRecent(await listScanBatches(db, 8));
+    setRecent(await store.listScanBatches(8));
   }, []);
 
   useEffect(() => {
@@ -188,7 +182,7 @@ export function ScanScreen({
       source: input.source,
       manifestSource: input.manifestSource,
     };
-    await saveScanBatch(db, next);
+    await store.saveScanBatch(next);
     setBatch(next);
     setMissing(null);
     await refreshRecent();
@@ -230,7 +224,7 @@ export function ScanScreen({
         paper = code.paper;
         // 条码只带模板短码：在当天、同纸张的清单里按短码反查。
         // 不按「模板 + 日期 + 纸张」直接取，是因为短码本来就是为了不让纸上写全 id。
-        const sameDay = await db.sheetManifests.where('date').equals(date).toArray();
+        const sameDay = await store.listSheetManifestsByDate(date);
         const hits = sameDay.filter(
           (item) => item.paper === paper && sheetCodeToken(item.templateId) === code.token,
         );
@@ -243,7 +237,7 @@ export function ScanScreen({
           templateId = record.templateId;
         } else {
           // 清单丢了但模板还在（换了设备、清了库）：短码能反查出模板，后面可以重建。
-          templateId = (await findTemplateIdByToken(code.token)) ?? '';
+          templateId = (await findTemplateIdByToken(store, code.token)) ?? '';
           if (templateId === '') {
             setError(
               '条码读出来了，但本机既没有这张纸的坐标记录，也找不到对应模板。' +
@@ -256,7 +250,7 @@ export function ScanScreen({
         templateId = sheet.link.templateId;
         date = sheet.link.date;
         paper = sheet.link.paper;
-        record = await getSheetManifest(db, templateId, date, paper);
+        record = await store.getSheetManifest(templateId, date, paper);
       }
 
       if (record === undefined) {
@@ -335,7 +329,7 @@ export function ScanScreen({
         return;
       }
 
-      const customs = await listTemplates(db);
+      const customs = await store.listTemplates();
       if (!isBuiltinTemplateId(missing.templateId)) {
         const stored = customs.find((template) => template.id === missing.templateId);
         if (stored === undefined || parseStoredTemplate(stored.json) === null) {
@@ -346,7 +340,7 @@ export function ScanScreen({
 
       const paper = missing.paper as PaperId;
       const template = resolvePrintTemplate(missing.templateId, paper, customs);
-      const tasks = tasksAvailable ? await listTasks(db) : [];
+      const tasks = tasksAvailable ? await loadTasks() : [];
       const blocks = materialize(template, {
         date: missing.date,
         dateLabel: todayLabel(missing.date),
@@ -361,8 +355,8 @@ export function ScanScreen({
       });
 
       // 存下来：下次扫同一张纸就不用再重建，也留下"这份坐标是什么时候算的"。
-      await saveSheetManifest(db, {
-        id: sheetManifestId(template.id, missing.date, paper),
+      await store.saveSheetManifest({
+        id: store.sheetManifestId(template.id, missing.date, paper),
         templateId: template.id,
         date: missing.date,
         paper,
@@ -524,6 +518,7 @@ export function ScanScreen({
         >
           <ScanReview
             batch={batch}
+            store={store}
             applyScan={applyScan}
             onSettled={() => {
               void refreshRecent();
@@ -580,7 +575,7 @@ export function ScanScreen({
                           <button
                             type="button"
                             onClick={() =>
-                              void updateScanBatchStatus(db, item.id, 'pending', appClock.now())
+                              void store.updateScanBatchStatus(item.id, 'pending', appClock.now())
                             }
                             className="text-caption opacity-40 transition-opacity duration-fast hover:opacity-70"
                           >
@@ -613,8 +608,11 @@ export function ScanScreen({
  * 短码有 30 位，正常不会撞；真撞了（同一短码对上两个模板）就返回 null，
  * 让调用方提示重打，而不是猜一个。
  */
-async function findTemplateIdByToken(token: string): Promise<string | null> {
-  const customs = await listTemplates(db);
+async function findTemplateIdByToken(
+  store: PluginStoreApi,
+  token: string,
+): Promise<string | null> {
+  const customs = await store.listTemplates();
   const ids = new Set<string>([
     ...PRINT_TEMPLATE_CONSTANTS.map((template) => template.id),
     ...customs.map((template) => template.id),

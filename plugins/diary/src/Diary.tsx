@@ -1,8 +1,9 @@
 import { newId } from '@gofor/core';
 import { type DiaryEntry, dateKey } from '@gofor/core/domain';
 import { addDays } from '@gofor/domain/stats';
+import type { PluginScreenProps } from '@gofor/plugin-api';
 import { appClock } from '@gofor/plugin-kit';
-import { db, deleteDiaryEntry, listDiaryEntries, saveDiaryEntry } from '@gofor/store';
+import { pluginStore } from '@gofor/plugin-kit/store';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
 
@@ -67,13 +68,14 @@ const chipOff = 'rounded-full border border-line bg-card-soft px-2.5 py-1 text-[
  * 标签同时提供「从已有标签点选」和「新输入」两条路：只让输入会逼用户记拼写，
  * 只让点选又没法加新标签。
  */
-export function DiaryScreen() {
+export function DiaryScreen({ host }: PluginScreenProps) {
+  const store = pluginStore(host.store);
   const today = dateKey(appClock);
   const from = useMemo(() => addDays(today, -(RECENT_DAYS - 1)), [today]);
 
   const entries = useLiveQuery(
-    () => listDiaryEntries(db, from, today),
-    [from, today],
+    () => store.listDiary(from, today),
+    [store, from, today],
     [] as DiaryEntry[],
   );
 
@@ -169,7 +171,7 @@ export function DiaryScreen() {
     setSaving(true);
     setError(null);
     try {
-      await saveDiaryEntry(db, {
+      await store.saveDiaryEntry({
         id: newId(),
         date: today,
         text: trimmed,
@@ -192,7 +194,7 @@ export function DiaryScreen() {
   const onDelete = async (id: string) => {
     setError(null);
     try {
-      await deleteDiaryEntry(db, id);
+      await store.deleteDiaryEntry(id);
       setPendingDeleteId(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '删除失败');

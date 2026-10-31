@@ -43,7 +43,7 @@ export {
 } from './manifest.ts';
 export {
   type OwnableScanResult,
-  SCAN_PAYLOAD_OWNERS,
+  type ScanPayloadOwners,
   scanResultOwner,
 } from './owner.ts';
 

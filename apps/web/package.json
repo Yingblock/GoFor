@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -35,6 +36,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "tailwindcss": "^4.1.14",
     "typescript": "^7.0.2",
-    "vite": "^7.1.9"
+    "vite": "^7.1.9",
+    "vitest": "^5.0.5"
   }
 }

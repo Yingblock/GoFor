@@ -403,6 +403,30 @@ try {
   check('首页有今日课表区块', (await page.getByText('今日课表').count()) > 0);
   check('首页有打卡提示区块', (await page.getByText('打卡提示').count()) > 0);
 
+  // 首页内容块全部由插件注册；core 只排序，右侧手柄可拖动。
+  const homeHandles = page.getByRole('button', { name: /^拖动 / });
+  check('首页每个内容块都有拖拽手柄', (await homeHandles.count()) >= 5);
+  const homeLabels = async () =>
+    page
+      .locator('section[aria-label]')
+      .evaluateAll((sections) => sections.map((section) => section.getAttribute('aria-label')));
+  const beforeDrag = await homeLabels();
+  await page
+    .getByRole('button', { name: '拖动 学习统计' })
+    .dragTo(page.locator('section[aria-label="作业清单"]'));
+  await page.waitForTimeout(400);
+  const afterDrag = await homeLabels();
+  check(
+    '首页块可拖动排序',
+    afterDrag.indexOf('学习统计') < afterDrag.indexOf('作业清单'),
+    afterDrag.join(' > '),
+  );
+  check('拖动确实改变了顺序', afterDrag.join('|') !== beforeDrag.join('|'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(800);
+  const afterReload = await homeLabels();
+  check('拖拽顺序刷新后保持', afterReload.join('|') === afterDrag.join('|'));
+
   // 课程备注（P2-2.15）：首页课表行可以直接写备注，打印页应印在科目名后面。
   let noteWritten = false;
   const noteInputs = page.locator('input[aria-label$="备注"]');
@@ -683,7 +707,14 @@ try {
 
   // 首页命名插槽
   await page.locator('#app-sidebar button[aria-label="GoFor"]').click();
-  await page.waitForSelector('text=单词库', { timeout: 8000 });
+  await page.waitForSelector('[data-plugin-surface="gofor.wordbook"]', { timeout: 8000 });
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-plugin-surface="gofor.wordbook"]')
+        ?.textContent?.includes('2 个词') ?? false,
+    { timeout: 8000 },
+  );
   check('首页出现单词库插件卡', (await page.getByText('2 个词').count()) > 0);
 
   // 周报通过数据契约读到单词库（report 插件不 import @gofor/store）

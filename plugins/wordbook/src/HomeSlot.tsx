@@ -1,13 +1,8 @@
-import type { PluginSlotProps, WordbookEntry } from '@gofor/plugin-api';
+import type { HomeBlockProps, WordbookEntry } from '@gofor/plugin-api';
 import { useEffect, useState } from 'react';
 
-/**
- * 首页统计区后面的"单词库"小卡。
- *
- * 它属于单词库插件：插件被禁用时整块消失（而不是显示 0 个词）。
- * 数据通过 `host.data` 走契约读取，不直接碰 IndexedDB。
- */
-export function WordbookHomeSlot({ host }: PluginSlotProps) {
+/** 首页「单词库」内容块；数据通过 `host.data` 契约读取。 */
+export function WordbookHomeBlock({ host }: HomeBlockProps) {
   const [entries, setEntries] = useState<WordbookEntry[] | null>(null);
 
   useEffect(() => {
@@ -17,11 +12,7 @@ export function WordbookHomeSlot({ host }: PluginSlotProps) {
   }, [host]);
 
   return (
-    <section
-      data-plugin-surface="gofor.wordbook"
-      className="rounded-xl border border-line bg-card-faint px-4 py-3"
-      aria-label="单词库"
-    >
+    <div data-plugin-surface="gofor.wordbook" aria-label="单词库">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-2">
           <span className="text-sm">📚 单词库</span>
@@ -40,6 +31,6 @@ export function WordbookHomeSlot({ host }: PluginSlotProps) {
       <p className="mt-1 text-micro leading-relaxed opacity-35">
         插件提供 · 导入 CSV/TSV 即可；数据会随备份一起导出
       </p>
-    </section>
+    </div>
   );
 }

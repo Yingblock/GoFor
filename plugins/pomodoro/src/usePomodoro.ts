@@ -1,20 +1,9 @@
 import { newId } from '@gofor/core';
-import { resolveUnitMinutes } from '@gofor/core/config';
+import { type AppConfig, resolveUnitMinutes } from '@gofor/core/config';
 import { dateKey, type Subject, type Task } from '@gofor/core/domain';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '@gofor/plugin-kit';
-import {
-  addSession,
-  currentConfigOrDefault,
-  db,
-  deleteFocusRun,
-  ensureSubjects,
-  listActiveFocusRuns,
-  listSubjects,
-  listTasks,
-  saveFocusRun,
-  sessionFromRun,
-} from '@gofor/store';
+import type { PluginStoreApi } from '@gofor/plugin-kit/store';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addInterruption,
@@ -84,7 +73,11 @@ export interface PomodoroController {
  * `remainingMs(run, appClock)` 现算。绝对不能用 tick 累加——
  * 浏览器在后台会节流定时器，25 分钟会被拖成 40 分钟。
  */
-export function usePomodoro(tasksAvailable = true): PomodoroController {
+export function usePomodoro(
+  store: PluginStoreApi,
+  tasksAvailable: boolean,
+  initialTasks: Task[],
+): PomodoroController {
   const [run, setRun] = useState<PomodoroRun | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -103,33 +96,36 @@ export function usePomodoro(tasksAvailable = true): PomodoroController {
   // 用闸门挡住 tick 与手动点击造成的重复结算（否则会写两条学习记录）。
   const settlingRef = useRef(false);
 
-  const settle = useCallback(async (target: PomodoroRun, status: 'finished' | 'abandoned') => {
-    if (settlingRef.current) return;
-    if (target.status !== 'running' && target.status !== 'paused') return;
-    settlingRef.current = true;
+  const settle = useCallback(
+    async (target: PomodoroRun, status: 'finished' | 'abandoned') => {
+      if (settlingRef.current) return;
+      if (target.status !== 'running' && target.status !== 'paused') return;
+      settlingRef.current = true;
 
-    const settled = settleRun(target, appClock, status);
-    try {
-      await saveFocusRun(db, settled);
-      // 放弃是用户主动中止，不是学习记录；只有真正完成才计入今日专注。
-      if (status === 'finished') {
-        await addSession(db, sessionFromRun(settled, dateKey(appClock)));
-      }
-    } finally {
-      // 写记录失败也必须清掉运行态，否则界面会永远停在"已结算"。
+      const settled = settleRun(target, appClock, status);
       try {
-        await deleteFocusRun(db, target.id);
+        await store.saveFocusRun(settled);
+        // 放弃是用户主动中止，不是学习记录；只有真正完成才计入今日专注。
+        if (status === 'finished') {
+          await store.addSession(store.sessionFromRun(settled, dateKey(appClock)));
+        }
       } finally {
-        // 立刻清掉 ref：定时器可能在下一次 passive effect 之前又跑一轮，
-        // 若它还指着旧的 running run，就会重复结算。
-        runRef.current = null;
-        setRun(null);
-        // 这一条大概率已经做完了，下一次专注不该继续绑在它上面。
-        setSelectedTaskId(null);
-        settlingRef.current = false;
+        // 写记录失败也必须清掉运行态，否则界面会永远停在"已结算"。
+        try {
+          await store.deleteFocusRun(target.id);
+        } finally {
+          // 立刻清掉 ref：定时器可能在下一次 passive effect 之前又跑一轮，
+          // 若它还指着旧的 running run，就会重复结算。
+          runRef.current = null;
+          setRun(null);
+          // 这一条大概率已经做完了，下一次专注不该继续绑在它上面。
+          setSelectedTaskId(null);
+          settlingRef.current = false;
+        }
       }
-    }
-  }, []);
+    },
+    [store],
+  );
 
   /** tick 与回到前台时调用：到点就自动结算为完成。 */
   const checkComplete = useCallback(() => {
@@ -141,25 +137,24 @@ export function usePomodoro(tasksAvailable = true): PomodoroController {
 
   useEffect(() => {
     runRef.current = run;
-  }, [run]);
+  }, [run, store]);
 
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
       // 首次启动播种默认科目；已有数据时是空操作。
-      await ensureSubjects(db);
-      const [configResult, subjectRows, taskRows, activeRuns] = await Promise.all([
-        currentConfigOrDefault(db),
-        listSubjects(db),
-        tasksAvailable ? listTasks(db) : Promise.resolve([] as Task[]),
-        listActiveFocusRuns(db),
+      await store.ensureSubjects();
+      const [configResult, subjectRows, activeRuns] = await Promise.all([
+        store.currentConfig(),
+        store.listSubjects(),
+        store.listActiveFocusRuns(),
       ]);
       if (cancelled) return;
 
-      setUnitMinutes(resolveUnitMinutes(configResult.config));
+      setUnitMinutes(resolveUnitMinutes(configResult.config as AppConfig));
       setSubjects(subjectRows);
-      setTasks(taskRows);
+      setTasks(initialTasks);
       if (!tasksAvailable) setSelectedTaskId(null);
 
       // 正常运行中最多只有一条未结算的 run；若真有多条，只恢复最近开始的。
@@ -184,7 +179,7 @@ export function usePomodoro(tasksAvailable = true): PomodoroController {
     return () => {
       cancelled = true;
     };
-  }, [settle, tasksAvailable]);
+  }, [settle, store, tasksAvailable, initialTasks]);
 
   // 每秒只触发一次重渲染并顺手检查是否到点；后台节流不会让计时变慢，
   // 因为剩余时间始终由 `remainingMs(run, appClock)` 现算。
@@ -244,30 +239,30 @@ export function usePomodoro(tasksAvailable = true): PomodoroController {
       appClock.now(),
     );
     setRun(next);
-    void saveFocusRun(db, next);
-  }, [minutes, run, selectedTaskId, subjectId, tasksAvailable]);
+    void store.saveFocusRun(next);
+  }, [minutes, run, selectedTaskId, subjectId, store, tasksAvailable]);
 
   const pause = useCallback(() => {
     if (run?.status !== 'running') return;
     const next = pauseRun(run, appClock);
     setRun(next);
-    void saveFocusRun(db, next);
-  }, [run]);
+    void store.saveFocusRun(next);
+  }, [run, store]);
 
   const resume = useCallback(() => {
     if (run?.status !== 'paused') return;
     // 两个锚点的成对刷新由 core 的 resumeRun 负责，这里不要再补
     const next = resumeRun(run, appClock, appClock.now());
     setRun(next);
-    void saveFocusRun(db, next);
-  }, [run]);
+    void store.saveFocusRun(next);
+  }, [run, store]);
 
   const addDistraction = useCallback(() => {
     if (!run) return;
     const next = addInterruption(run);
     setRun(next);
-    void saveFocusRun(db, next);
-  }, [run]);
+    void store.saveFocusRun(next);
+  }, [run, store]);
 
   const finish = useCallback(() => {
     if (!run) return;

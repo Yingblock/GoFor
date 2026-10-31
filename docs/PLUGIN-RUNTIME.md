@@ -96,9 +96,23 @@ registerScanHandler({ id, owner }): void;
 v2 的 manifest 增加 `permissions` 与 `renderer`；capabilities 可取
 `command | view-slot | print-template | screen | theme | data | scan`。
 
+### 首页内容块
+
+插件用 `registerHomeBlock({ id, title, order, span, load })` 注册首页块（需要 `ui.home`）。
+core **不再写死首页内容**：任务、打卡、课表、统计、主行动、单词库都是插件块；
+`Home` 只排序并渲染拖拽手柄，顺序存 `localStorage.gofor.home.blockOrder`。
+
+### 构建期插件的数据边界
+
+构建期插件不能 `import '@gofor/store'`；用 `pluginStore(host.store)`（或 `context.store`）
+调用宿主授权的能力。宿主按 pluginId 维护 allowlist，越权调用运行期抛错。
+`pnpm check:boundaries` 检查 52 个插件源文件，发现直接 import store 直接失败。
+
 - `Task` 与 `@gofor/core/domain` 同形（id/title/subjectId/done/due/optional/subtasks/tags/sortKey/
   createdAt/updatedAt），定义在 `@gofor/contracts`，插件不需要依赖 monorepo 源码。
 - 插件**不能** import Dexie、`@gofor/store`、`@gofor/core`；数据走宿主 API / 数据契约。
+- 构建期插件的数据访问走 `PluginStoreLike`（`host.store` / `context.store`），宿主按 id 授权；
+  扫描 apply 还会按 payload 前缀二次过滤，不能借别的域写库。
 - 数据 provider 有 owner；插件禁用时该契约变成 `missing`，消费者必须显示未安装，
   不能继续读数据。归属表见 `DECISIONS/0013`。
 - 外部插件页面/主题/数据 query/扫描 handler 都在 `gofor.renderer` 里按名字导出；

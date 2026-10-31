@@ -2,12 +2,13 @@ import { dateKey, type ScanBatch, type ScanResult } from '@gofor/core/domain';
 import type { ScanDispatchSummary } from '@gofor/plugin-api';
 // TODO(debug-clock): 上线前删除（调试时钟入口，改回 `systemClock`）。
 import { appClock } from '@gofor/plugin-kit';
-import { db, updateScanBatchStatus } from '@gofor/store';
+import type { PluginStoreApi } from '@gofor/plugin-kit/store';
 import { Button, Card, Checkbox, EmptyState } from '@gofor/ui';
 import { useMemo, useState } from 'react';
 
 export interface ScanReviewProps {
   batch: ScanBatch;
+  store: PluginStoreApi;
   /** 应用/丢弃后回调，让上层刷新列表。 */
   onSettled: () => void;
   /** 宿主注入：按结果 owner 分发给各插件处理。 */
@@ -30,7 +31,7 @@ const KIND_LABEL: Record<ScanResult['kind'], string> = {
  * 为什么不用"自动应用 + 撤销"：撤销要维护反向补丁，且用户不一定回来看；
  * 一次确认的成本很低，错写的成本很高。
  */
-export function ScanReview({ batch, onSettled, applyScan }: ScanReviewProps) {
+export function ScanReview({ batch, onSettled, applyScan, store }: ScanReviewProps) {
   /** 只存"用户取消掉的" targetId，默认全选，避免每扫一次都点一堆。 */
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -67,7 +68,7 @@ export function ScanReview({ batch, onSettled, applyScan }: ScanReviewProps) {
       );
       // 缺插件/处理器出错时不标 applied：重新启用后还能再点一次。
       if (missing.length === 0 && summary.errors.length === 0) {
-        await updateScanBatchStatus(db, batch.id, 'applied', now);
+        await store.updateScanBatchStatus(batch.id, 'applied', now);
       }
       const parts = summary.parts.map((part) => `${part.handled} 项${part.name}`);
       const notices = [
@@ -90,7 +91,7 @@ export function ScanReview({ batch, onSettled, applyScan }: ScanReviewProps) {
   const discard = async () => {
     setBusy(true);
     try {
-      await updateScanBatchStatus(db, batch.id, 'discarded', appClock.now());
+      await store.updateScanBatchStatus(batch.id, 'discarded', appClock.now());
       onSettled();
     } finally {
       setBusy(false);
